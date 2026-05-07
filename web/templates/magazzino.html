@@ -1,0 +1,313 @@
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestionale Magazzino — Catalogo</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <script src="/static/js/htmx.min.js" defer></script>
+  <style>
+    .page-header{padding:2rem 2rem 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem}
+    .page-header h1{font-size:1.5rem;font-weight:600;margin:0}
+    .main-content{padding:1.5rem 2rem}
+    .tabs{display:flex;gap:.5rem;border-bottom:1px solid var(--c-border);margin-bottom:1.5rem}
+    .tab{padding:.55rem 1rem;border-radius:8px 8px 0 0;font-size:.875rem;font-weight:500;cursor:pointer;border:1px solid transparent;text-decoration:none;color:var(--c-text-2)}
+    .tab.active,.tab:hover{background:var(--c-surface);border-color:var(--c-border);color:var(--c-text)}
+    .section-box{background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:1.5rem;margin-bottom:2rem}
+    .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+    .section-title{font-size:1rem;font-weight:600;margin:0}
+    table{width:100%;border-collapse:collapse;font-size:0.875rem}
+    th{text-align:left;padding:.6rem .75rem;background:var(--c-surface);border-bottom:2px solid var(--c-border);color:var(--c-text-2);font-weight:500}
+    td{padding:.6rem .75rem;border-bottom:1px solid var(--c-border);color:var(--c-text);vertical-align:middle}
+    tr:last-child td{border-bottom:none}
+    .badge-ok{display:inline-block;padding:.2rem .55rem;border-radius:99px;background:#dcfce7;color:#166534;font-size:.7rem;font-weight:600}
+    .badge-low{display:inline-block;padding:.2rem .55rem;border-radius:99px;background:#fee2e2;color:#b91c1c;font-size:.7rem;font-weight:600}
+    .product-img{width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid var(--c-border)}
+    .product-img-placeholder{width:40px;height:40px;border-radius:6px;background:var(--c-border);display:inline-flex;align-items:center;justify-content:center;color:var(--c-text-2);font-size:.6rem}
+    .btn-icon{background:none;border:1px solid var(--c-border);border-radius:6px;padding:.3rem .5rem;cursor:pointer;color:var(--c-text-2);font-size:.75rem;line-height:1}
+    .btn-icon:hover{background:var(--c-surface);color:var(--c-text)}
+    .btn-danger{border-color:#fca5a5;color:#b91c1c}
+    .btn-danger:hover{background:#fee2e2}
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:center;justify-content:center}
+    .modal-overlay.open{display:flex}
+    .modal{background:var(--c-bg);border:1px solid var(--c-border);border-radius:16px;padding:2rem;width:100%;max-width:540px;max-height:90vh;overflow-y:auto}
+    .modal h2{margin:0 0 1.5rem;font-size:1.1rem;font-weight:600}
+    .field-group{margin-bottom:1rem}
+    .field-group label{display:block;font-size:.8rem;font-weight:500;color:var(--c-text-2);margin-bottom:.35rem}
+    .field-group input,.field-group select,.field-group textarea{width:100%;padding:.55rem .75rem;border:1px solid var(--c-border);border-radius:8px;background:var(--c-bg);color:var(--c-text);font-size:.875rem;font-family:inherit}
+    .field-group input:focus,.field-group select:focus,.field-group textarea:focus{outline:none;border-color:var(--c-accent)}
+    .field-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+    .form-actions{display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.5rem}
+    .empty-state{text-align:center;padding:3rem 1rem;color:var(--c-text-2)}
+    .cat-row{display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--c-border)}
+    .cat-row:last-child{border-bottom:none}
+    .cat-name{flex:1;font-size:.875rem}
+    .cat-edit-form{display:flex;gap:.5rem;flex:1}
+    .cat-edit-form input{flex:1;padding:.3rem .6rem;border:1px solid var(--c-accent);border-radius:6px;font-size:.875rem}
+    .nav-links{display:flex;gap:.5rem;flex-wrap:wrap}
+    .nav-links a{padding:.4rem .9rem;border-radius:8px;font-size:.875rem;font-weight:500;text-decoration:none;color:var(--c-text-2);border:1px solid var(--c-border);transition:background .15s}
+    .nav-links a:hover,.nav-links a.active{background:var(--c-accent);color:#fff;border-color:var(--c-accent)}
+    .htmx-indicator{opacity:0;transition:opacity .2s}
+    .htmx-request .htmx-indicator,.htmx-request.htmx-indicator{opacity:1}
+  </style>
+</head>
+<body class="dash-body">
+
+  <nav class="navbar">
+    <div class="nav-brand">
+      <div class="logo-icon logo-icon--sm">
+        <img src="/static/img/logo-icon.svg" alt="Logo" class="logo-image">
+      </div>
+      <span class="logo-text">Gestionale Magazzino</span>
+      {{if .BrandName}}
+      <div class="brand-divider"></div>
+      <div class="brand-logo">
+        {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}" class="brand-image">{{end}}
+        <span class="brand-name">{{.BrandName}}</span>
+      </div>
+      {{end}}
+    </div>
+    <div class="nav-user">
+      <div class="nav-links">
+        <a href="/dashboard">Dashboard</a>
+        <a href="/prodotti" class="active">Prodotti</a>
+        {{if .IsAdmin}}<a href="/admin">Admin</a>{{end}}
+      </div>
+      <span class="user-chip" style="margin-left:.75rem">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        {{.Username}}
+      </span>
+      <form method="POST" action="/logout" style="margin:0">
+        <button type="submit" class="btn btn-ghost" title="Esci">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </form>
+    </div>
+  </nav>
+
+  <div class="page-header">
+    <h1>Catalogo &amp; Magazzino</h1>
+  </div>
+
+  <div class="main-content">
+
+    <!-- ── TABS ── -->
+    <div class="tabs">
+      <a href="/prodotti" class="tab{{if eq .Partial "prodotti"}} active{{end}}">Prodotti</a>
+      <a href="/categorie" class="tab{{if eq .Partial "categorie"}} active{{end}}" hx-get="/categorie" hx-target="#main-panel" hx-swap="innerHTML" hx-push-url="/categorie">Categorie</a>
+      <a href="/lotti/new" class="tab" hx-get="/lotti/new" hx-target="#modal-body" hx-swap="innerHTML" onclick="document.getElementById('modal').classList.add('open');return false;">Carico merce</a>
+    </div>
+
+    <div id="main-panel">
+      {{if eq .Partial "prodotti"}}
+      <!-- ── Lista prodotti ── -->
+      <div class="section-header">
+        <span class="section-title">{{len .Prodotti}} prodotti</span>
+        <button class="btn btn-primary" style="font-size:.875rem"
+          hx-get="/prodotti/new"
+          hx-target="#modal-body"
+          hx-swap="innerHTML"
+          onclick="document.getElementById('modal').classList.add('open')">
+          + Nuovo prodotto
+        </button>
+      </div>
+      {{if .Prodotti}}
+      <table>
+        <thead>
+          <tr>
+            <th style="width:48px"></th>
+            <th>Codice</th>
+            <th>Nome</th>
+            <th>Categoria</th>
+            <th>Scorta att.</th>
+            <th>Scorta min.</th>
+            <th style="width:100px"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Prodotti}}
+          <tr id="prod-row-{{.ID}}">
+            <td>
+              {{if .ImmagineBLOB}}
+              <img src="/prodotti/{{.ID}}/immagine" class="product-img" alt="{{.Nome}}" loading="lazy">
+              {{else}}
+              <span class="product-img-placeholder">—</span>
+              {{end}}
+            </td>
+            <td>{{if .CodiceArticolo}}{{.CodiceArticolo}}{{else}}<span style="opacity:.4">—</span>{{end}}</td>
+            <td><strong>{{.Nome}}</strong>{{if .Descrizione}}<br><span style="font-size:.75rem;opacity:.6">{{.Descrizione}}</span>{{end}}</td>
+            <td>{{.CategoriaName}}</td>
+            <td>
+              {{if lt .ScortaRimanente .ScortaMinima}}
+              <span class="badge-low">{{.ScortaRimanente}}</span>
+              {{else}}
+              <span class="badge-ok">{{.ScortaRimanente}}</span>
+              {{end}}
+            </td>
+            <td>{{.ScortaMinima}}</td>
+            <td style="text-align:right;white-space:nowrap">
+              <button class="btn-icon" title="Modifica"
+                hx-get="/prodotti/{{.ID}}/edit"
+                hx-target="#modal-body"
+                hx-swap="innerHTML"
+                onclick="document.getElementById('modal').classList.add('open')">&#9998;</button>
+              <button class="btn-icon btn-danger" title="Elimina"
+                hx-delete="/prodotti/{{.ID}}"
+                hx-confirm="Eliminare il prodotto {{.Nome}}?"
+                hx-target="#prod-row-{{.ID}}"
+                hx-swap="delete">&#10005;</button>
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="empty-state">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+        <p style="margin-top:.75rem">Nessun prodotto. Clicca "+ Nuovo prodotto" per iniziare.</p>
+      </div>
+      {{end}}
+
+      {{else if eq .Partial "categorie"}}
+      <!-- ── Categorie ── -->
+      <div id="categorie-list">
+        {{template "categorie-partial" .}}
+      </div>
+
+      {{else if eq .Partial "prodotto-form"}}
+      <!-- ── Form prodotto (fragment) ── -->
+      {{template "prodotto-form-partial" .}}
+
+      {{else if eq .Partial "lotto-form"}}
+      <!-- ── Form lotto (fragment) ── -->
+      {{template "lotto-form-partial" .}}
+
+      {{end}}
+    </div>
+
+  </div>
+
+  <!-- ── Modal ── -->
+  <div id="modal" class="modal-overlay" onclick="if(event.target===this)this.classList.remove('open')">
+    <div class="modal" id="modal-body">
+    </div>
+  </div>
+
+</body>
+</html>
+
+{{define "categorie-partial"}}
+<div class="section-header">
+  <span class="section-title">Categorie</span>
+</div>
+<div id="cat-list">
+  {{range .Categorie}}
+  <div class="cat-row" id="cat-{{.ID}}">
+    <span class="cat-name">{{.Nome}}</span>
+    <button class="btn-icon" onclick="startEditCat({{.ID}}, '{{.Nome}}')" title="Modifica">&#9998;</button>
+    <button class="btn-icon btn-danger" title="Elimina"
+      hx-delete="/categorie/{{.ID}}"
+      hx-confirm="Eliminare la categoria {{.Nome}}?"
+      hx-target="#cat-list"
+      hx-swap="innerHTML">&#10005;</button>
+  </div>
+  {{else}}
+  <p style="color:var(--c-text-2);font-size:.875rem">Nessuna categoria.</p>
+  {{end}}
+</div>
+<form hx-post="/categorie" hx-target="#cat-list" hx-swap="innerHTML" style="display:flex;gap:.5rem;margin-top:1rem">
+  <input type="text" name="nome" placeholder="Nuova categoria" required style="flex:1;padding:.45rem .75rem;border:1px solid var(--c-border);border-radius:8px;font-size:.875rem">
+  <button type="submit" class="btn btn-primary" style="font-size:.875rem">Aggiungi</button>
+</form>
+<script>
+function startEditCat(id, nome) {
+  const row = document.getElementById('cat-' + id);
+  if (!row) return;
+  row.innerHTML = '<form class="cat-edit-form" hx-put="/categorie/' + id + '" hx-target="#cat-list" hx-swap="innerHTML">' +
+    '<input type="text" name="nome" value="' + nome.replace(/"/g,'&quot;') + '" required autofocus>' +
+    '<button type="submit" class="btn-icon" title="Salva">&#10003;</button>' +
+    '</form>' +
+    '<button class="btn-icon" onclick="htmx.ajax(\'GET\',\'/categorie\',{target:\'#cat-list\',swap:\'innerHTML\'})" title="Annulla">&#10005;</button>';
+  htmx.process(row);
+}
+</script>
+{{end}}
+
+{{define "prodotto-form-partial"}}
+<h2>{{if .Prodotto.ID}}Modifica prodotto{{else}}Nuovo prodotto{{end}}</h2>
+<form method="POST" action="{{if .Prodotto.ID}}/prodotti/{{.Prodotto.ID}}{{else}}/prodotti{{end}}" enctype="multipart/form-data">
+  <div class="field-row">
+    <div class="field-group">
+      <label>Codice articolo</label>
+      <input type="text" name="codice_articolo" value="{{.Prodotto.CodiceArticolo}}" placeholder="es. ART-001">
+    </div>
+    <div class="field-group">
+      <label>Categoria</label>
+      <select name="categoria_id">
+        <option value="0">— Nessuna —</option>
+        {{range .Categorie}}
+        <option value="{{.ID}}"{{if eq .ID $.Prodotto.CategoriaID}} selected{{end}}>{{.Nome}}</option>
+        {{end}}
+      </select>
+    </div>
+  </div>
+  <div class="field-group">
+    <label>Nome <span style="color:#b91c1c">*</span></label>
+    <input type="text" name="nome" value="{{.Prodotto.Nome}}" required autofocus>
+  </div>
+  <div class="field-group">
+    <label>Descrizione</label>
+    <textarea name="descrizione" rows="3" placeholder="Descrizione opzionale">{{.Prodotto.Descrizione}}</textarea>
+  </div>
+  <div class="field-row">
+    <div class="field-group">
+      <label>Scorta minima</label>
+      <input type="number" name="scorta_minima" value="{{.Prodotto.ScortaMinima}}" min="0">
+    </div>
+    <div class="field-group">
+      <label>Immagine</label>
+      <input type="file" name="immagine" accept="image/*">
+    </div>
+  </div>
+  <div class="form-actions">
+    <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal').classList.remove('open')">Annulla</button>
+    <button type="submit" class="btn btn-primary">{{if .Prodotto.ID}}Salva modifiche{{else}}Crea prodotto{{end}}</button>
+  </div>
+</form>
+{{end}}
+
+{{define "lotto-form-partial"}}
+<h2>Carico merce — Nuovo lotto</h2>
+<form method="POST" action="/lotti">
+  <div class="field-group">
+    <label>Prodotto <span style="color:#b91c1c">*</span></label>
+    <select name="prodotto_id" required>
+      <option value="">— Seleziona prodotto —</option>
+      {{range .Prodotti}}
+      <option value="{{.ID}}">{{if .CodiceArticolo}}[{{.CodiceArticolo}}] {{end}}{{.Nome}}</option>
+      {{end}}
+    </select>
+  </div>
+  <div class="field-row">
+    <div class="field-group">
+      <label>Data acquisto</label>
+      <input type="date" name="data_acquisto">
+    </div>
+    <div class="field-group">
+      <label>Quantità <span style="color:#b91c1c">*</span></label>
+      <input type="number" name="quantita" min="1" required>
+    </div>
+  </div>
+  <div class="field-group">
+    <label>Costo unitario (€)</label>
+    <input type="text" name="costo_unitario" placeholder="0.00">
+  </div>
+  <div class="form-actions">
+    <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal').classList.remove('open')">Annulla</button>
+    <button type="submit" class="btn btn-primary">Registra lotto</button>
+  </div>
+</form>
+{{end}}

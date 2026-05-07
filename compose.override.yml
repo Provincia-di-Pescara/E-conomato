@@ -1,0 +1,6 @@
+services:
+  magazzino:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: magazzino:local

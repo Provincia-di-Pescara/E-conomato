@@ -1,0 +1,25 @@
+# GoPulley — .gitignore
+
+# Configurazione locale con credenziali — MAI committare!
+.env
+docker-compose.override.yml
+
+# Binario compilato
+gopulley
+*.exe
+
+# Database e upload locali
+*.db
+uploads/
+tmp-uploads/
+tmp-test.db
+
+# Cartella dati locale (bind mount — non versionare mai i file caricati)
+/data/
+
+# Go build cache
+/vendor/
+
+# OS
+.DS_Store
+Thumbs.db

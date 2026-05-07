@@ -1,0 +1,61 @@
+# Magazzino — Podman / Docker Compose
+# Utilizzo:
+#   1. cp .env.example .env
+#   2. Adatta .env al tuo ambiente
+#   3. podman compose up -d   (oppure: docker compose up -d)
+#
+# L'immagine viene scaricata automaticamente da ghcr.io.
+# Per compilare dal sorgente: podman compose up -d --build
+
+services:
+  magazzino:
+    image: ghcr.io/mirkochipdotcom/magazzino:latest
+    container_name: magazzino
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - APP_PORT=${APP_PORT:-8080}
+      - SESSION_SECRET
+      - SECURE_COOKIES
+      # LDAP
+      - LDAP_HOST
+      - LDAP_BASE_DN
+      - LDAP_USER_DN_TEMPLATE
+      - LDAP_TLS_SKIP_VERIFY
+      - LDAP_STARTTLS
+      - LDAP_BIND_DN
+      - LDAP_BIND_PASSWORD
+      - LDAP_REQUIRED_GROUP
+      # Gruppi AD → ruoli
+      - LDAP_ADMIN_GROUP
+      - LDAP_MAGAZZINIERE_GROUP
+      - LDAP_FUNZIONARIO_GROUP
+      - ADMIN_USERS
+      # Database
+      - DB_PATH=${DB_PATH:-/data/magazzino.db}
+      - UPLOAD_DIR=${UPLOAD_DIR:-/data/uploads}
+      # Branding
+      - BRAND_NAME
+      - BRAND_LOGO
+      # Sessione
+      - LOGIN_SESSION_TTL_HOURS
+      # SMTP (notifiche scorte)
+      - SMTP_SERVER
+      - SMTP_PORT
+      - SMTP_SECURITY
+      - SMTP_USER
+      - SMTP_PASSWORD
+      - SMTP_FROM
+      - SMTP_USER_AUTH
+      # Log
+      - LOG_LEVEL
+    volumes:
+      # Se DATA_DIR è definito (es. ./data) fa bind mount, altrimenti usa il volume named
+      - ${DATA_DIR:-magazzino_data}:/data:rw,Z
+
+volumes:
+  magazzino_data:

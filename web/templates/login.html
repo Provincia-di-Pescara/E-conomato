@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GoPulley — Login</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+
+<body class="auth-body">
+
+  <div class="auth-card">
+    <div class="auth-logo">
+      <img src="/static/img/logo-icon.svg" alt="GoPulley Logo" class="logo-image">
+      <span class="logo-text">GoPulley</span>
+      {{if .BrandName}}
+      <div class="brand-divider"></div>
+      <div class="brand-logo">
+        {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}" class="brand-image">{{end}}
+        <span class="brand-name">{{.BrandName}}</span>
+      </div>
+      {{end}}
+    </div>
+
+    <h1 class="auth-title">{{t "login.title"}}</h1>
+    <p class="auth-subtitle">{{t "login.subtitle"}}{{if .MockMode}} <span class="badge-dev">{{t "login.dev_mode"}}
+      </span>{{end}}</p>
+
+    <form hx-post="/login" hx-target="#login-error" hx-swap="outerHTML" hx-indicator="#spinner" class="auth-form">
+
+      <div class="field-group">
+        <label for="username">{{t "login.username"}}</label>
+        <input type="text" id="username" name="username" autocomplete="username" placeholder="{{t "login.username_placeholder"}}" required
+          autofocus />
+      </div>
+
+      <div class="field-group">
+        <label for="password">{{t "login.password"}}</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" placeholder="********"
+          required />
+      </div>
+
+      <p id="login-error" class="error-msg" aria-live="polite"></p>
+
+      <button type="submit" class="btn btn-primary btn-full">
+        <span id="spinner" class="htmx-indicator spinner-ring"></span>
+        {{t "login.signin"}}
+      </button>
+    </form>
+  </div>
+
+  <div class="version-tag">
+    <a href="https://github.com/mirkochipdotcom/GoPulley" target="_blank" rel="noopener">{{.Version}}</a>
+  </div>
+
+  <script src="/static/js/htmx.min.js"></script>
+</body>
+
+</html>
