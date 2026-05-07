@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestionale Magazzino — Dashboard Utente</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <style>
+    .page-header{padding:2rem 2rem 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem}
+    .page-header h1{font-size:1.5rem;font-weight:600;margin:0}
+    .main-content{padding:1.5rem 2rem}
+    .dashboard-grid{display:grid;grid-template-columns:2fr 1fr;gap:2rem;align-items:flex-start}
+    @media(max-width:1024px){.dashboard-grid{grid-template-columns:1fr}}
+    .section-title{font-size:1rem;font-weight:600;margin:0 0 1rem}
+    .products-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem;margin-bottom:2rem}
+    .product-card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:1rem;transition:border-color .15s,box-shadow .15s}
+    .product-card:hover{border-color:var(--c-accent);box-shadow:var(--shadow-glow)}
+    .product-name{font-weight:600;font-size:.95rem;margin-bottom:.25rem;color:var(--c-text)}
+    .product-category{font-size:.75rem;color:var(--c-text-2);margin-bottom:.5rem}
+    .product-stock{display:flex;align-items:center;gap:.5rem;margin-bottom:1rem;font-size:.85rem}
+    .stock-badge{background:var(--c-surface-2);padding:.15rem .5rem;border-radius:4px;color:var(--c-text-2)}
+    .cart-sticky{position:sticky;top:2rem;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:1.5rem;max-height:calc(100vh - 120px);overflow-y:auto}
+    .cart-row{display:flex;gap:.5rem;align-items:center;margin-bottom:.75rem;padding-bottom:.75rem;border-bottom:1px solid var(--c-border)}
+    .cart-row:last-of-type{border-bottom:none;padding-bottom:0}
+    .cart-product-name{flex:1;font-size:.9rem}
+    .cart-qta-input{width:70px;padding:.4rem .5rem;border:1px solid var(--c-border);border-radius:6px;background:var(--c-bg);color:var(--c-text);font-size:.85rem}
+    .cart-btn-remove{background:none;border:none;cursor:pointer;color:var(--c-danger);padding:.2rem;font-size:.85rem;opacity:.7;transition:opacity .15s}
+    .cart-btn-remove:hover{opacity:1}
+    .submit-button{width:100%;margin-top:1rem}
+    .orders-section{margin-top:3rem}
+    table{width:100%;border-collapse:collapse;font-size:0.875rem;margin-top:1rem}
+    th{text-align:left;padding:.6rem .75rem;background:var(--c-surface);border-bottom:2px solid var(--c-border);color:var(--c-text-2);font-weight:500}
+    td{padding:.6rem .75rem;border-bottom:1px solid var(--c-border);color:var(--c-text);vertical-align:middle}
+    tr:last-child td{border-bottom:none}
+    .badge-role{display:inline-block;padding:.2rem .55rem;border-radius:99px;font-size:.7rem;font-weight:600}
+    .badge-role.badge-user{background:rgba(99,102,241,0.15);color:var(--c-accent);border:1px solid rgba(99,102,241,0.3)}
+    .badge-role.badge-funzionario{background:rgba(139,92,246,0.15);color:var(--c-accent-2);border:1px solid rgba(139,92,246,0.3)}
+    .badge-stato{display:inline-block;padding:.2rem .55rem;border-radius:99px;font-size:.7rem;font-weight:600}
+    .badge-stato.badge-bozza{background:rgba(245,158,11,0.14);color:var(--c-warn);border:1px solid rgba(245,158,11,0.28)}
+    .badge-stato.badge-pending{background:rgba(245,158,11,0.14);color:var(--c-warn);border:1px solid rgba(245,158,11,0.28)}
+    .badge-stato.badge-approved{background:rgba(99,102,241,0.15);color:var(--c-accent);border:1px solid rgba(99,102,241,0.3)}
+    .badge-stato.badge-ready{background:rgba(34,197,94,0.15);color:var(--c-success);border:1px solid rgba(34,197,94,0.3)}
+    .badge-stato.badge-delivered{background:rgba(34,197,94,0.15);color:var(--c-success);border:1px solid rgba(34,197,94,0.3)}
+    .badge-stato.badge-rejected{background:rgba(239,68,68,0.12);color:var(--c-danger);border:1px solid rgba(239,68,68,0.25)}
+    .empty-state{text-align:center;padding:3rem 1rem;color:var(--c-text-2)}
+    .btn-sm{padding:.35rem .75rem;font-size:.8rem;border-radius:6px}
+    .btn-primary{background:linear-gradient(135deg,var(--c-accent),var(--c-accent-2));color:#fff;border:none;font-weight:500}
+    .btn-primary:hover{background:linear-gradient(135deg,var(--c-accent-h),var(--c-accent));box-shadow:var(--shadow-glow)}
+    .btn-primary:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+    .btn-link{background:none;border:none;color:var(--c-accent);cursor:pointer;font-size:.85rem;padding:.3rem 0;text-decoration:underline;transition:color .15s}
+    .btn-link:hover{color:var(--c-accent-2)}
+    .qta-input-wrapper{display:flex;align-items:center;gap:.3rem;font-size:.85rem}
+    .qta-input-wrapper input{width:50px;padding:.3rem .4rem;border:1px solid var(--c-border);border-radius:4px;background:var(--c-bg);color:var(--c-text);font-family:inherit}
+  </style>
+</head>
+<body class="dash-body">
+
+  <nav class="navbar">
+    <div class="nav-brand">
+      <div class="logo-icon logo-icon--sm">
+        <img src="/static/img/logo-icon.svg" alt="Logo" class="logo-image">
+      </div>
+      <span class="logo-text">Gestionale Magazzino</span>
+      {{if .BrandName}}
+      <div class="brand-divider"></div>
+      <div class="brand-logo">
+        {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}" class="brand-image">{{end}}
+        <span class="brand-name">{{.BrandName}}</span>
+      </div>
+      {{end}}
+    </div>
+    <div class="nav-user">
+      <span class="user-chip">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        {{.Username}}
+        <span class="badge-role badge-{{.Role}}">{{.Role}}</span>
+      </span>
+      <form method="POST" action="/logout" style="margin:0">
+        <button type="submit" class="btn btn-ghost" title="Esci">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </form>
+    </div>
+  </nav>
+
+  <div class="page-header">
+    <h1>Dashboard Ordini</h1>
+  </div>
+
+  <div class="main-content">
+
+    <!-- ── CATALOG + CART LAYOUT ── -->
+    <div class="dashboard-grid">
+
+      <!-- LEFT: CATALOG GRID -->
+      <section>
+        <p class="section-title">📦 Catalogo prodotti</p>
+        {{if .Prodotti}}
+        <div class="products-grid">
+          {{range .Prodotti}}
+          <div class="product-card" id="prod-card-{{.ID}}">
+            <div class="product-name">{{.Nome}}</div>
+            <div class="product-category">{{.CategoriaNome}}</div>
+            <div class="product-stock">
+              <span>Disponibile:</span>
+              <span class="stock-badge">{{.Disponibile}}</span>
+            </div>
+            {{if gt .Disponibile 0}}
+            <form style="display:flex;gap:.4rem;align-items:flex-end">
+              <div style="flex:1">
+                <label style="display:block;font-size:.75rem;color:var(--c-text-2);margin-bottom:.3rem">Quantità</label>
+                <input type="number" id="qta-prod-{{.ID}}" name="qta" min="1" max="{{.Disponibile}}" value="1" class="mock-input" style="width:100%;padding:.4rem .5rem;border:1px solid var(--c-border);border-radius:6px;background:var(--c-bg);color:var(--c-text);font-size:.85rem">
+              </div>
+              <button type="button" class="btn btn-primary btn-sm"
+                      hx-post="/ordini/righe/{{.ID}}?cart=carrello-content"
+                      hx-target="#carrello-content"
+                      hx-swap="outerHTML"
+                      hx-include="#qta-prod-{{.ID}}"
+                      style="padding:.4rem .6rem;white-space:nowrap">
+                [+]
+              </button>
+            </form>
+            {{else}}
+            <button type="button" class="btn btn-sm" disabled style="width:100%;opacity:.4;cursor:not-allowed">Esaurito</button>
+            {{end}}
+          </div>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="empty-state">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+          <p style="margin-top:.75rem">Nessun prodotto disponibile.</p>
+        </div>
+        {{end}}
+      </section>
+
+      <!-- RIGHT: CART (STICKY) -->
+      <aside>
+        <div class="cart-sticky">
+          <p class="section-title">🛒 Carrello</p>
+
+          {{if .Bozza}}
+            <div id="carrello-content">
+              {{range .Bozza.Righe}}
+              <div class="cart-row" id="cart-row-{{.ID}}">
+                <span class="cart-product-name">{{.ProdottoNome}}</span>
+                <input type="number" min="1" value="{{.QtaRichiesta}}"
+                       class="cart-qta-input"
+                       name="qta"
+                       hx-post="/ordini/righe/{{.ProdottoID}}?cart=carrello-content"
+                       hx-target="#carrello-content"
+                       hx-swap="outerHTML"
+                       hx-trigger="change">
+                <button type="button" class="cart-btn-remove"
+                        hx-delete="/ordini/righe/{{.ProdottoID}}?cart=carrello-content"
+                        hx-target="#carrello-content"
+                        hx-swap="outerHTML"
+                        title="Rimuovi">✕</button>
+              </div>
+              {{end}}
+            </div>
+            {{if .Bozza.ID}}
+            <form>
+              <button type="button" class="btn btn-primary submit-button"
+                      hx-post="/ordini/{{.Bozza.ID}}/invia"
+                      hx-target="body"
+                      hx-push-url="true">
+                Invia Ordine
+              </button>
+            </form>
+            {{end}}
+          {{else}}
+          <div id="carrello-content">
+            <p class="empty-state">Carrello vuoto</p>
+          </div>
+          {{end}}
+        </div>
+      </aside>
+
+    </div>
+
+    <!-- ── ORDER HISTORY ── -->
+    {{if .Ordini}}
+    <section class="orders-section">
+      <p class="section-title">📋 I miei ordini</p>
+      <table>
+        <thead>
+          <tr>
+            <th>ID Ordine</th>
+            <th>Data</th>
+            <th>Prodotti</th>
+            <th>Stato</th>
+            <th>Note funzionario</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Ordini}}
+          <tr>
+            <td><strong>#{{.Ordine.ID}}</strong></td>
+            <td>{{fmtDate .Ordine.DataCreazione}}</td>
+            <td>{{len .Righe}}</td>
+            <td><span class="badge-stato badge-{{.Ordine.Stato}}">{{.Ordine.Stato}}</span></td>
+            <td>{{if .Ordine.NoteFunzionario}}{{.Ordine.NoteFunzionario}}{{else}}<span style="opacity:.4">—</span>{{end}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </section>
+    {{end}}
+
+  </div>
+
+  <script src="/static/js/htmx.min.js"></script>
+</body>
+</html>
