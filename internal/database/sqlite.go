@@ -119,6 +119,10 @@ func migrate(conn *sql.DB) error {
 			FOREIGN KEY(lotto_id)       REFERENCES lotti_acquisto(id)
 		);
 	`)
+	if err != nil {
+		return err
+	}
+	_, err = conn.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_righe_ordine_uniq ON righe_ordine(ordine_id, prodotto_id)`)
 	return err
 }
 
@@ -151,6 +155,16 @@ func (db *DB) GetAllUtenti() ([]models.Utente, error) {
 		out = append(out, u)
 	}
 	return out, rows.Err()
+}
+
+// GetSettoreIDByUsername restituisce il settore_id dell'utente, o "" se non assegnato.
+func (db *DB) GetSettoreIDByUsername(username string) (string, error) {
+	var s sql.NullString
+	err := db.conn.QueryRow(`SELECT settore_id FROM utenti WHERE username = ?`, username).Scan(&s)
+	if err != nil {
+		return "", err
+	}
+	return s.String, nil
 }
 
 // ── Categorie ────────────────────────────────────────────────────────────────
@@ -189,6 +203,38 @@ func (db *DB) UpdateCategoria(id int64, nome string) error {
 func (db *DB) DeleteCategoria(id int64) error {
 	_, err := db.conn.Exec(`DELETE FROM categorie WHERE id=?`, id)
 	return err
+}
+
+// GetCatalogo restituisce prodotti con disponibilità aggregata dai lotti.
+// search filtra per nome o codice (case-insensitive). categoriaID=0 = tutte le categorie.
+func (db *DB) GetCatalogo(search string, categoriaID int64) ([]models.ProdottoCatalogo, error) {
+	rows, err := db.conn.Query(`
+		SELECT p.id, COALESCE(p.codice_articolo,''), p.nome, COALESCE(p.descrizione,''),
+		       COALESCE(p.categoria_id,0), COALESCE(c.nome,''), p.scorta_minima,
+		       COALESCE(SUM(l.quantita_rimanente),0)
+		FROM prodotti p
+		LEFT JOIN categorie c ON c.id = p.categoria_id
+		LEFT JOIN lotti_acquisto l ON l.prodotto_id = p.id
+		WHERE (? = '' OR LOWER(p.nome) LIKE '%'||LOWER(?)||'%'
+		              OR LOWER(COALESCE(p.codice_articolo,'')) LIKE '%'||LOWER(?)||'%')
+		  AND (? = 0 OR p.categoria_id = ?)
+		GROUP BY p.id
+		ORDER BY p.nome
+	`, search, search, search, categoriaID, categoriaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.ProdottoCatalogo
+	for rows.Next() {
+		var p models.ProdottoCatalogo
+		if err := rows.Scan(&p.ID, &p.CodiceArticolo, &p.Nome, &p.Descrizione,
+			&p.CategoriaID, &p.CategoriaNome, &p.ScortaMinima, &p.Disponibile); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 // ── Prodotti ─────────────────────────────────────────────────────────────────
@@ -352,6 +398,108 @@ func (db *DB) GetProdottiSottoSoglia() ([]ProdottoRow, error) {
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+func (db *DB) getRigheConProdotto(ordineID int64) ([]models.RigaConProdotto, error) {
+	rows, err := db.conn.Query(`
+		SELECT r.id, r.ordine_id, r.prodotto_id, r.qta_richiesta, r.qta_approvata,
+		       r.qta_evasa, r.stato_riga, p.nome, COALESCE(p.codice_articolo,'')
+		FROM righe_ordine r
+		JOIN prodotti p ON p.id = r.prodotto_id
+		WHERE r.ordine_id = ?
+		ORDER BY r.id
+	`, ordineID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.RigaConProdotto
+	for rows.Next() {
+		var r models.RigaConProdotto
+		if err := rows.Scan(&r.ID, &r.OrdineID, &r.ProdottoID, &r.QtaRichiesta, &r.QtaApprovata,
+			&r.QtaEvasa, &r.StatoRiga, &r.ProdottoNome, &r.ProdottoCodice); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// GetOrCreateBozza restituisce l'ID dell'ordine bozza dell'utente, creandolo se non esiste.
+// Errore se l'utente non ha settore_id assegnato.
+func (db *DB) GetOrCreateBozza(username string) (int64, error) {
+	var existing int64
+	err := db.conn.QueryRow(
+		`SELECT id FROM ordini WHERE utente_username = ? AND stato = 'bozza' LIMIT 1`, username,
+	).Scan(&existing)
+	if err == nil {
+		return existing, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, err
+	}
+	settoreID, err := db.GetSettoreIDByUsername(username)
+	if err != nil {
+		return 0, err
+	}
+	if settoreID == "" {
+		return 0, fmt.Errorf("utente %s senza settore assegnato", username)
+	}
+	res, err := db.conn.Exec(
+		`INSERT INTO ordini (utente_username, settore_id, stato) VALUES (?, ?, 'bozza')`,
+		username, settoreID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// GetBozzaConRighe restituisce l'ordine bozza con righe, o nil se non esiste.
+func (db *DB) GetBozzaConRighe(username string) (*models.OrdineConRighe, error) {
+	var o models.Ordine
+	err := db.conn.QueryRow(`
+		SELECT id, utente_username, settore_id, data_creazione, stato, COALESCE(note_funzionario,'')
+		FROM ordini WHERE utente_username = ? AND stato = 'bozza' LIMIT 1
+	`, username).Scan(&o.ID, &o.UtenteUsername, &o.SettoreID, &o.DataCreazione, &o.Stato, &o.NoteFunzionario)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	righe, err := db.getRigheConProdotto(o.ID)
+	if err != nil {
+		return nil, err
+	}
+	return &models.OrdineConRighe{Ordine: o, Righe: righe}, nil
+}
+
+// UpsertRigaBozza inserisce o aggiorna la quantità di un prodotto nella bozza.
+// Se qta <= 0 rimuove la riga.
+func (db *DB) UpsertRigaBozza(ordineID, prodottoID int64, qta int) error {
+	if qta <= 0 {
+		_, err := db.conn.Exec(
+			`DELETE FROM righe_ordine WHERE ordine_id = ? AND prodotto_id = ?`,
+			ordineID, prodottoID,
+		)
+		return err
+	}
+	_, err := db.conn.Exec(`
+		INSERT INTO righe_ordine (ordine_id, prodotto_id, qta_richiesta)
+		VALUES (?, ?, ?)
+		ON CONFLICT(ordine_id, prodotto_id) DO UPDATE SET qta_richiesta = excluded.qta_richiesta
+	`, ordineID, prodottoID, qta)
+	return err
+}
+
+// DeleteRigaBozza rimuove un prodotto dalla bozza.
+func (db *DB) DeleteRigaBozza(ordineID, prodottoID int64) error {
+	_, err := db.conn.Exec(
+		`DELETE FROM righe_ordine WHERE ordine_id = ? AND prodotto_id = ?`,
+		ordineID, prodottoID,
+	)
+	return err
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
