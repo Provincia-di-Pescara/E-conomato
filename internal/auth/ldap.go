@@ -30,7 +30,14 @@ func Authenticate(username, password string, cfg *config.Config) (bool, string, 
 
 	// ── MOCK / DEV MODE ─────────────────────────────────────────────────────
 	if cfg.LDAPHost == "mock" {
-		return true, "admin", nil
+		isAdminMock := false
+		for _, adminUser := range strings.Split(cfg.AdminUsers, ";") {
+			if strings.EqualFold(strings.TrimSpace(adminUser), username) {
+				isAdminMock = true
+				break
+			}
+		}
+		return true, resolveRole(isAdminMock, false, false), nil
 	}
 
 	// ── TLS CONFIG ──────────────────────────────────────────────────────────
