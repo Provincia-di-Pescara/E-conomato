@@ -417,6 +417,92 @@ func (a *App) handleInviaOrdine(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, a.dashboardURL(a.getRole(r)), http.StatusSeeOther)
 }
 
+// -- Funzionario Handlers ──────────────────────────────────────────────────────
+
+// GET /dashboard/funzionario
+func (a *App) handleDashboardFunzionario(w http.ResponseWriter, r *http.Request) {
+	username := a.getUsername(r)
+	settoreID, _ := a.db.GetSettoreIDByUsername(username)
+	daApprovare, _ := a.db.GetOrdiniSettore(settoreID)
+	bozza, _ := a.db.GetBozzaConRighe(username)
+	categorie, _ := a.db.GetAllCategorie()
+	prodotti, _ := a.db.GetCatalogo(r.URL.Query().Get("q"), 0)
+	mieiOrdini, _ := a.db.GetOrdiniUtente(username)
+	a.render(w, r, "dashboard-funzionario", map[string]any{
+		"Username":    username,
+		"Role":        a.getRole(r),
+		"IsAdmin":     false,
+		"DaApprovare": daApprovare,
+		"Bozza":       bozza,
+		"Categorie":   categorie,
+		"Prodotti":    prodotti,
+		"MieiOrdini":  mieiOrdini,
+		"Version":     AppVersion,
+		"BrandName":   a.cfg.BrandName,
+		"BrandLogo":   a.cfg.BrandLogoPath,
+	})
+}
+
+// POST /ordini/{id}/approva
+func (a *App) handleApprovaOrdine(w http.ResponseWriter, r *http.Request) {
+	ordineID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", 400)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", 400)
+		return
+	}
+	qtaPerRiga := map[int64]int{}
+	for key, vals := range r.Form {
+		if !strings.HasPrefix(key, "riga_") || len(vals) == 0 {
+			continue
+		}
+		rigaID, err := strconv.ParseInt(strings.TrimPrefix(key, "riga_"), 10, 64)
+		if err != nil {
+			continue
+		}
+		qta, err := strconv.Atoi(vals[0])
+		if err != nil || qta < 0 {
+			continue
+		}
+		qtaPerRiga[rigaID] = qta
+	}
+	if err := a.db.ApprovaOrdine(ordineID, qtaPerRiga, r.FormValue("note")); err != nil {
+		logger.Error("approva ordine %d: %v", ordineID, err)
+		http.Error(w, "errore interno", 500)
+		return
+	}
+	logger.Info("ordine %d approvato da %s", ordineID, a.getUsername(r))
+	http.Redirect(w, r, "/dashboard/funzionario", http.StatusSeeOther)
+}
+
+// POST /ordini/{id}/rifiuta
+func (a *App) handleRifiutaOrdine(w http.ResponseWriter, r *http.Request) {
+	ordineID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", 400)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", 400)
+		return
+	}
+	note := strings.TrimSpace(r.FormValue("note"))
+	if note == "" {
+		http.Error(w, "motivazione obbligatoria", 400)
+		return
+	}
+	if err := a.db.RifiutaOrdine(ordineID, note); err != nil {
+		logger.Error("rifiuta ordine %d: %v", ordineID, err)
+		http.Error(w, "errore interno", 500)
+		return
+	}
+	logger.Info("ordine %d rifiutato da %s", ordineID, a.getUsername(r))
+	http.Redirect(w, r, "/dashboard/funzionario", http.StatusSeeOther)
+}
+
 // GET /dashboard/scorte — HTMX partial: prodotti sotto soglia
 func (a *App) handleDashboardScorte(w http.ResponseWriter, r *http.Request) {
 scorte, err := a.db.GetProdottiSottoSoglia()
