@@ -286,6 +286,137 @@ a.render(w, r, "dashboard", map[string]any{
 })
 }
 
+// GET /dashboard — utente/funzionario landing
+func (a *App) handleDashboardUtente(w http.ResponseWriter, r *http.Request) {
+	if a.getRole(r) == "funzionario" {
+		http.Redirect(w, r, "/dashboard/funzionario", http.StatusSeeOther)
+		return
+	}
+	username := a.getUsername(r)
+	bozza, _ := a.db.GetBozzaConRighe(username)
+	categorie, _ := a.db.GetAllCategorie()
+	prodotti, _ := a.db.GetCatalogo(r.URL.Query().Get("q"), 0)
+	ordini, _ := a.db.GetOrdiniUtente(username)
+	a.render(w, r, "dashboard-utente", map[string]any{
+		"Username":  username,
+		"Role":      a.getRole(r),
+		"IsAdmin":   false,
+		"Bozza":     bozza,
+		"Categorie": categorie,
+		"Prodotti":  prodotti,
+		"Ordini":    ordini,
+		"Version":   AppVersion,
+		"BrandName": a.cfg.BrandName,
+		"BrandLogo": a.cfg.BrandLogoPath,
+	})
+}
+
+// renderCarrello writes an HTMX-swappable cart fragment.
+func (a *App) renderCarrello(w http.ResponseWriter, targetID string, bozza *models.OrdineConRighe) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if bozza == nil || len(bozza.Righe) == 0 {
+		fmt.Fprintf(w, `<div id="%s"><p class="empty-state">Carrello vuoto</p></div>`, targetID)
+		return
+	}
+	fmt.Fprintf(w, `<div id="%s">`, targetID)
+	for _, r := range bozza.Righe {
+		fmt.Fprintf(w,
+			`<div class="cart-row" style="display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem">
+			  <span style="flex:1;font-size:.9rem">%s</span>
+			  <input type="number" min="1" value="%d" name="qta" style="width:60px"
+			         hx-post="/ordini/righe/%d?cart=%s" hx-target="#%s" hx-swap="outerHTML" hx-trigger="change">
+			  <button hx-delete="/ordini/righe/%d?cart=%s" hx-target="#%s" hx-swap="outerHTML"
+			          style="background:none;border:none;cursor:pointer;color:#c00">✕</button>
+			</div>`,
+			template.HTMLEscapeString(r.ProdottoNome), r.QtaRichiesta,
+			r.ProdottoID, targetID, targetID,
+			r.ProdottoID, targetID, targetID,
+		)
+	}
+	fmt.Fprintf(w,
+		`<form hx-post="/ordini/%d/invia" hx-target="body" hx-push-url="true" style="margin-top:1rem">
+		  <button type="submit" class="btn-primary" style="width:100%%">Invia Ordine</button>
+		</form></div>`,
+		bozza.ID,
+	)
+}
+
+// POST /ordini/righe/{prodotto_id} — upsert riga bozza (HTMX)
+func (a *App) handleUpsertRigaBozza(w http.ResponseWriter, r *http.Request) {
+	prodottoID, err := strconv.ParseInt(r.PathValue("prodotto_id"), 10, 64)
+	if err != nil {
+		http.Error(w, "prodotto_id non valido", 400)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", 400)
+		return
+	}
+	qta, err := strconv.Atoi(r.FormValue("qta"))
+	if err != nil {
+		http.Error(w, "quantità non valida", 400)
+		return
+	}
+	username := a.getUsername(r)
+	bozzaID, err := a.db.GetOrCreateBozza(username)
+	if err != nil {
+		logger.Error("get/create bozza: %v", err)
+		http.Error(w, "settore non assegnato — contattare l'amministratore", 400)
+		return
+	}
+	if err := a.db.UpsertRigaBozza(bozzaID, prodottoID, qta); err != nil {
+		logger.Error("upsert riga bozza: %v", err)
+		http.Error(w, "errore interno", 500)
+		return
+	}
+	targetID := r.URL.Query().Get("cart")
+	if targetID == "" {
+		targetID = "carrello-content"
+	}
+	bozza, _ := a.db.GetBozzaConRighe(username)
+	a.renderCarrello(w, targetID, bozza)
+}
+
+// DELETE /ordini/righe/{prodotto_id} — rimuovi riga bozza (HTMX)
+func (a *App) handleDeleteRigaBozza(w http.ResponseWriter, r *http.Request) {
+	prodottoID, err := strconv.ParseInt(r.PathValue("prodotto_id"), 10, 64)
+	if err != nil {
+		http.Error(w, "prodotto_id non valido", 400)
+		return
+	}
+	username := a.getUsername(r)
+	if bozza, _ := a.db.GetBozzaConRighe(username); bozza != nil {
+		if err := a.db.DeleteRigaBozza(bozza.ID, prodottoID); err != nil {
+			logger.Error("delete riga bozza: %v", err)
+			http.Error(w, "errore interno", 500)
+			return
+		}
+	}
+	targetID := r.URL.Query().Get("cart")
+	if targetID == "" {
+		targetID = "carrello-content"
+	}
+	bozza, _ := a.db.GetBozzaConRighe(username)
+	a.renderCarrello(w, targetID, bozza)
+}
+
+// POST /ordini/{id}/invia — conferma e invia la bozza
+func (a *App) handleInviaOrdine(w http.ResponseWriter, r *http.Request) {
+	ordineID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", 400)
+		return
+	}
+	username := a.getUsername(r)
+	if err := a.db.InviaOrdine(ordineID, username); err != nil {
+		logger.Error("invia ordine %d: %v", ordineID, err)
+		http.Error(w, "errore interno", 500)
+		return
+	}
+	logger.Info("ordine %d inviato da %s", ordineID, username)
+	http.Redirect(w, r, a.dashboardURL(a.getRole(r)), http.StatusSeeOther)
+}
+
 // GET /dashboard/scorte — HTMX partial: prodotti sotto soglia
 func (a *App) handleDashboardScorte(w http.ResponseWriter, r *http.Request) {
 scorte, err := a.db.GetProdottiSottoSoglia()
