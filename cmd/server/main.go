@@ -71,7 +71,7 @@ return t.Format("02 Jan 2006 15:04")
 },
 }
 
-names := []string{"login", "dashboard", "admin", "magazzino"}
+names := []string{"login", "dashboard", "admin", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino"}
 a.templates = make(map[string]*template.Template, len(names))
 for _, name := range names {
 path := filepath.Join(baseDir, name+".html")
@@ -168,10 +168,23 @@ http.Error(w, "Accesso negato", http.StatusForbidden)
 
 // -- Handlers -----------------------------------------------------------------
 
+func (a *App) dashboardURL(role string) string {
+switch role {
+case "funzionario":
+return "/dashboard/funzionario"
+case "magazziniere":
+return "/dashboard/magazzino"
+case "admin":
+return "/admin"
+default:
+return "/dashboard"
+}
+}
+
 // GET /
 func (a *App) handleRoot(w http.ResponseWriter, r *http.Request) {
 if a.getUsername(r) != "" {
-http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+http.Redirect(w, r, a.dashboardURL(a.getRole(r)), http.StatusSeeOther)
 return
 }
 http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -238,7 +251,7 @@ if err := sess.Save(r, w); err != nil {
 logger.Error("session save: %v", err)
 }
 
-w.Header().Set("HX-Redirect", "/dashboard")
+w.Header().Set("HX-Redirect", a.dashboardURL(role))
 w.WriteHeader(http.StatusOK)
 }
 
@@ -769,9 +782,25 @@ http.Error(w, "method not allowed", 405)
 })
 mux.HandleFunc("/logout", app.handleLogout)
 
-// Dashboard (magazziniere + admin)
-mux.HandleFunc("/dashboard", app.requireRole("magazziniere", "funzionario", "user")(app.handleDashboard))
+// Dashboard per ruolo
+mux.HandleFunc("/dashboard", app.requireRole("user", "funzionario")(app.handleDashboardUtente))
+mux.HandleFunc("/dashboard/funzionario", app.requireRole("funzionario")(app.handleDashboardFunzionario))
+mux.HandleFunc("/dashboard/magazzino", app.requireRole("magazziniere")(app.handleDashboardMagazzino))
 mux.HandleFunc("/dashboard/scorte", app.requireRole("magazziniere")(app.handleDashboardScorte))
+
+// Bozza / carrello
+mux.HandleFunc("POST /ordini/righe/{prodotto_id}", app.requireRole("user", "funzionario")(app.handleUpsertRigaBozza))
+mux.HandleFunc("DELETE /ordini/righe/{prodotto_id}", app.requireRole("user", "funzionario")(app.handleDeleteRigaBozza))
+mux.HandleFunc("POST /ordini/{id}/invia", app.requireRole("user", "funzionario")(app.handleInviaOrdine))
+
+// Azioni funzionario
+mux.HandleFunc("POST /ordini/{id}/approva", app.requireRole("funzionario")(app.handleApprovaOrdine))
+mux.HandleFunc("POST /ordini/{id}/rifiuta", app.requireRole("funzionario")(app.handleRifiutaOrdine))
+
+// Azioni magazziniere
+mux.HandleFunc("POST /ordini/{id}/prepara", app.requireRole("magazziniere")(app.handlePreparaOrdine))
+mux.HandleFunc("POST /ordini/{id}/pronto", app.requireRole("magazziniere")(app.handleSegnaPronte))
+mux.HandleFunc("POST /ordini/{id}/consegna", app.requireRole("magazziniere")(app.handleConsegnaOrdine))
 
 // Admin area
 mux.HandleFunc("/admin", app.requireRole("admin")(app.handleAdminDashboard))
