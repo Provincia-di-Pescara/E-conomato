@@ -528,6 +528,73 @@ func (a *App) handleRifiutaOrdine(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/dashboard/funzionario", http.StatusSeeOther)
 }
 
+// -- Magazziniere Handlers ────────────────────────────────────────────────────
+
+// GET /dashboard/magazzino
+func (a *App) handleDashboardMagazzino(w http.ResponseWriter, r *http.Request) {
+	scorte, _ := a.db.GetProdottiSottoSoglia()
+	ordini, _ := a.db.GetOrdiniAttivi()
+	a.render(w, r, "dashboard-magazzino", map[string]any{
+		"Username":  a.getUsername(r),
+		"Role":      a.getRole(r),
+		"IsAdmin":   false,
+		"Scorte":    scorte,
+		"Ordini":    ordini,
+		"Version":   AppVersion,
+		"BrandName": a.cfg.BrandName,
+		"BrandLogo": a.cfg.BrandLogoPath,
+	})
+}
+
+// POST /ordini/{id}/prepara
+func (a *App) handlePreparaOrdine(w http.ResponseWriter, r *http.Request) {
+	ordineID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", 400)
+		return
+	}
+	if err := a.db.PreparaOrdineFIFO(ordineID); err != nil {
+		logger.Error("prepara FIFO ordine %d: %v", ordineID, err)
+		http.Error(w, "errore interno", 500)
+		return
+	}
+	logger.Info("ordine %d in preparazione (FIFO) da %s", ordineID, a.getUsername(r))
+	http.Redirect(w, r, "/dashboard/magazzino", http.StatusSeeOther)
+}
+
+// POST /ordini/{id}/pronto
+func (a *App) handleSegnaPronte(w http.ResponseWriter, r *http.Request) {
+	ordineID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", 400)
+		return
+	}
+	utenteUsername, err := a.db.SegnaOrdinePronte(ordineID)
+	if err != nil {
+		logger.Error("segna pronto ordine %d: %v", ordineID, err)
+		http.Error(w, "errore interno", 500)
+		return
+	}
+	logger.Info("ordine %d pronto, notifica a %s (email TODO)", ordineID, utenteUsername)
+	http.Redirect(w, r, "/dashboard/magazzino", http.StatusSeeOther)
+}
+
+// POST /ordini/{id}/consegna
+func (a *App) handleConsegnaOrdine(w http.ResponseWriter, r *http.Request) {
+	ordineID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", 400)
+		return
+	}
+	if err := a.db.ConsegnaOrdine(ordineID); err != nil {
+		logger.Error("consegna ordine %d: %v", ordineID, err)
+		http.Error(w, "errore interno", 500)
+		return
+	}
+	logger.Info("ordine %d ritirato, confermato da %s", ordineID, a.getUsername(r))
+	http.Redirect(w, r, "/dashboard/magazzino", http.StatusSeeOther)
+}
+
 // GET /dashboard/scorte — HTMX partial: prodotti sotto soglia
 func (a *App) handleDashboardScorte(w http.ResponseWriter, r *http.Request) {
 scorte, err := a.db.GetProdottiSottoSoglia()
