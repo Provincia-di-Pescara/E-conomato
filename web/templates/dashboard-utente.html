@@ -115,7 +115,7 @@
                 <input type="number" id="qta-prod-{{.ID}}" name="qta" min="1" max="{{.Disponibile}}" value="1" class="mock-input" style="width:100%;padding:.4rem .5rem;border:1px solid var(--c-border);border-radius:6px;background:var(--c-bg);color:var(--c-text);font-size:.85rem">
               </div>
               <button type="button" class="btn btn-primary btn-sm"
-                      hx-post="/ordini/righe/{{.ID}}?cart=carrello-content"
+                      hx-post="/bozza/righe/{{.ID}}?cart=carrello-content"
                       hx-target="#carrello-content"
                       hx-swap="outerHTML"
                       hx-include="#qta-prod-{{.ID}}"
@@ -150,12 +150,12 @@
                 <input type="number" min="1" value="{{.QtaRichiesta}}"
                        class="cart-qta-input"
                        name="qta"
-                       hx-post="/ordini/righe/{{.ProdottoID}}?cart=carrello-content"
+                       hx-post="/bozza/righe/{{.ProdottoID}}?cart=carrello-content"
                        hx-target="#carrello-content"
                        hx-swap="outerHTML"
                        hx-trigger="change">
                 <button type="button" class="cart-btn-remove"
-                        hx-delete="/ordini/righe/{{.ProdottoID}}?cart=carrello-content"
+                        hx-delete="/bozza/righe/{{.ProdottoID}}?cart=carrello-content"
                         hx-target="#carrello-content"
                         hx-swap="outerHTML"
                         title="Rimuovi">✕</button>

@@ -1098,8 +1098,8 @@ mux.HandleFunc("/dashboard/magazzino", app.requireRole("magazziniere")(app.handl
 mux.HandleFunc("/dashboard/scorte", app.requireRole("magazziniere")(app.handleDashboardScorte))
 
 // Bozza / carrello
-mux.HandleFunc("POST /ordini/righe/{prodotto_id}", app.requireRole("user", "funzionario")(app.handleUpsertRigaBozza))
-mux.HandleFunc("DELETE /ordini/righe/{prodotto_id}", app.requireRole("user", "funzionario")(app.handleDeleteRigaBozza))
+mux.HandleFunc("POST /bozza/righe/{prodotto_id}", app.requireRole("user", "funzionario")(app.handleUpsertRigaBozza))
+mux.HandleFunc("DELETE /bozza/righe/{prodotto_id}", app.requireRole("user", "funzionario")(app.handleDeleteRigaBozza))
 mux.HandleFunc("POST /ordini/{id}/invia", app.requireRole("user", "funzionario")(app.handleInviaOrdine))
 
 // Azioni funzionario
