@@ -422,7 +422,12 @@ func (a *App) handleInviaOrdine(w http.ResponseWriter, r *http.Request) {
 // GET /dashboard/funzionario
 func (a *App) handleDashboardFunzionario(w http.ResponseWriter, r *http.Request) {
 	username := a.getUsername(r)
-	settoreID, _ := a.db.GetSettoreIDByUsername(username)
+	settoreID, err := a.db.GetSettoreIDByUsername(username)
+	if err != nil {
+		logger.Error("get settore for %s: %v", username, err)
+		http.Error(w, "errore interno", 500)
+		return
+	}
 	daApprovare, _ := a.db.GetOrdiniSettore(settoreID)
 	bozza, _ := a.db.GetBozzaConRighe(username)
 	categorie, _ := a.db.GetAllCategorie()
@@ -448,6 +453,16 @@ func (a *App) handleApprovaOrdine(w http.ResponseWriter, r *http.Request) {
 	ordineID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		http.Error(w, "id non valido", 400)
+		return
+	}
+	username := a.getUsername(r)
+	settoreID, err := a.db.GetSettoreIDByUsername(username)
+	if err != nil || settoreID == "" {
+		http.Error(w, "settore non assegnato", 403)
+		return
+	}
+	if err := a.db.VerificaOrdineSettore(ordineID, settoreID); err != nil {
+		http.Error(w, "ordine non trovato o non autorizzato", 403)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -483,6 +498,16 @@ func (a *App) handleRifiutaOrdine(w http.ResponseWriter, r *http.Request) {
 	ordineID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		http.Error(w, "id non valido", 400)
+		return
+	}
+	username := a.getUsername(r)
+	settoreID, err := a.db.GetSettoreIDByUsername(username)
+	if err != nil || settoreID == "" {
+		http.Error(w, "settore non assegnato", 403)
+		return
+	}
+	if err := a.db.VerificaOrdineSettore(ordineID, settoreID); err != nil {
+		http.Error(w, "ordine non trovato o non autorizzato", 403)
 		return
 	}
 	if err := r.ParseForm(); err != nil {

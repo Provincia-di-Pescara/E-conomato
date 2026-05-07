@@ -547,6 +547,21 @@ func (db *DB) GetOrdiniSettore(settoreID string) ([]models.OrdineConRighe, error
 	return db.scanOrdini(rows)
 }
 
+// VerificaOrdineSettore restituisce un errore se l'ordine non appartiene al settore indicato.
+func (db *DB) VerificaOrdineSettore(ordineID int64, settoreID string) error {
+	var count int
+	err := db.conn.QueryRow(
+		`SELECT COUNT(*) FROM ordini WHERE id = ? AND settore_id = ?`, ordineID, settoreID,
+	).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return fmt.Errorf("ordine %d non appartiene al settore %s", ordineID, settoreID)
+	}
+	return nil
+}
+
 // GetOrdiniAttivi restituisce ordini in lavorazione per il magazzino.
 func (db *DB) GetOrdiniAttivi() ([]models.OrdineConRighe, error) {
 	rows, err := db.conn.Query(`
