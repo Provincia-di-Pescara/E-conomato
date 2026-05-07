@@ -78,3 +78,28 @@ type MovimentoMagazzino struct {
 	CostoTotale      float64
 	DataMovimento    time.Time
 }
+
+// OrdineConRighe aggrega un ordine con le sue righe per le viste.
+type OrdineConRighe struct {
+	Ordine
+	Righe []RigaConProdotto
+}
+
+// RigaConProdotto aggrega una riga ordine con i dati del prodotto associato.
+type RigaConProdotto struct {
+	RigaOrdine
+	ProdottoNome   string
+	ProdottoCodice string
+}
+
+// ProdottoCatalogo rappresenta un prodotto nel catalogo con disponibilità calcolata.
+type ProdottoCatalogo struct {
+	ID             int64
+	CodiceArticolo string
+	Nome           string
+	Descrizione    string
+	CategoriaID    int64
+	CategoriaNome  string
+	ScortaMinima   int
+	Disponibile    int
+}
