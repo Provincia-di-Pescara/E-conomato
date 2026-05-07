@@ -560,6 +560,191 @@ func (db *DB) GetOrdiniAttivi() ([]models.OrdineConRighe, error) {
 	return db.scanOrdini(rows)
 }
 
+// ── order actions ────────────────────────────────────────────────────────────
+
+// InviaOrdine transita la bozza a in_approvazione o in_preparazione (auto-approvazione).
+func (db *DB) InviaOrdine(ordineID int64, username string) error {
+	var funzionario sql.NullString
+	err := db.conn.QueryRow(`
+		SELECT s.funzionario_username FROM settori s
+		JOIN ordini o ON o.settore_id = s.id WHERE o.id = ?
+	`, ordineID).Scan(&funzionario)
+	if err != nil {
+		return err
+	}
+	stato := "in_approvazione"
+	if funzionario.Valid && funzionario.String == username {
+		stato = "in_preparazione"
+	}
+	_, err = db.conn.Exec(
+		`UPDATE ordini SET stato = ? WHERE id = ? AND stato = 'bozza'`,
+		stato, ordineID,
+	)
+	return err
+}
+
+// ApprovaOrdine aggiorna le quantità approvate e transita l'ordine ad 'approvato'.
+// qtaPerRiga mappa riga_ordine.id → quantità approvata.
+func (db *DB) ApprovaOrdine(ordineID int64, qtaPerRiga map[int64]int, note string) error {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for rigaID, qta := range qtaPerRiga {
+		if _, err = tx.Exec(
+			`UPDATE righe_ordine SET qta_approvata = ? WHERE id = ? AND ordine_id = ?`,
+			qta, rigaID, ordineID,
+		); err != nil {
+			return err
+		}
+	}
+	if _, err = tx.Exec(
+		`UPDATE ordini SET stato = 'approvato', note_funzionario = ? WHERE id = ?`,
+		note, ordineID,
+	); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// RifiutaOrdine transita l'ordine a 'rifiutato' con nota obbligatoria.
+func (db *DB) RifiutaOrdine(ordineID int64, note string) error {
+	_, err := db.conn.Exec(
+		`UPDATE ordini SET stato = 'rifiutato', note_funzionario = ? WHERE id = ? AND stato = 'in_approvazione'`,
+		note, ordineID,
+	)
+	return err
+}
+
+// PreparaOrdineFIFO scarica i lotti FIFO per ogni riga, crea movimenti_magazzino
+// e transita l'ordine a 'in_preparazione'.
+func (db *DB) PreparaOrdineFIFO(ordineID int64) error {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.Query(`
+		SELECT id, prodotto_id, COALESCE(qta_approvata, qta_richiesta)
+		FROM righe_ordine WHERE ordine_id = ?
+	`, ordineID)
+	if err != nil {
+		return err
+	}
+	type riga struct {
+		id           int64
+		prodottoID   int64
+		qtaDaEvadere int
+	}
+	var righe []riga
+	for rows.Next() {
+		var r riga
+		if err := rows.Scan(&r.id, &r.prodottoID, &r.qtaDaEvadere); err != nil {
+			rows.Close()
+			return err
+		}
+		righe = append(righe, r)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, r := range righe {
+		qtaResidua := r.qtaDaEvadere
+		qtaEvasa := 0
+
+		lotti, err := tx.Query(`
+			SELECT id, quantita_rimanente, costo_unitario FROM lotti_acquisto
+			WHERE prodotto_id = ? AND quantita_rimanente > 0
+			ORDER BY data_acquisto ASC
+		`, r.prodottoID)
+		if err != nil {
+			return err
+		}
+		type lotto struct {
+			id        int64
+			rimanente int
+			costoUnit float64
+		}
+		var ls []lotto
+		for lotti.Next() {
+			var l lotto
+			if err := lotti.Scan(&l.id, &l.rimanente, &l.costoUnit); err != nil {
+				lotti.Close()
+				return err
+			}
+			ls = append(ls, l)
+		}
+		lotti.Close()
+
+		for _, l := range ls {
+			if qtaResidua <= 0 {
+				break
+			}
+			prelevato := l.rimanente
+			if prelevato > qtaResidua {
+				prelevato = qtaResidua
+			}
+			costo := float64(prelevato) * l.costoUnit
+			if _, err = tx.Exec(
+				`INSERT INTO movimenti_magazzino (riga_ordine_id, lotto_id, quantita_prelevata, costo_totale) VALUES (?,?,?,?)`,
+				r.id, l.id, prelevato, costo,
+			); err != nil {
+				return err
+			}
+			if _, err = tx.Exec(
+				`UPDATE lotti_acquisto SET quantita_rimanente = quantita_rimanente - ? WHERE id = ?`,
+				prelevato, l.id,
+			); err != nil {
+				return err
+			}
+			qtaResidua -= prelevato
+			qtaEvasa += prelevato
+		}
+
+		statoRiga := "evasa"
+		if qtaEvasa == 0 {
+			statoRiga = "in_attesa"
+		} else if qtaEvasa < r.qtaDaEvadere {
+			statoRiga = "evasa_parziale"
+		}
+		if _, err = tx.Exec(
+			`UPDATE righe_ordine SET qta_evasa = ?, stato_riga = ? WHERE id = ?`,
+			qtaEvasa, statoRiga, r.id,
+		); err != nil {
+			return err
+		}
+	}
+
+	if _, err = tx.Exec(`UPDATE ordini SET stato = 'in_preparazione' WHERE id = ?`, ordineID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// SegnaOrdinePronte transita l'ordine a 'pronto'. Restituisce l'username per notifica email.
+func (db *DB) SegnaOrdinePronte(ordineID int64) (string, error) {
+	var username string
+	if err := db.conn.QueryRow(`SELECT utente_username FROM ordini WHERE id = ?`, ordineID).Scan(&username); err != nil {
+		return "", err
+	}
+	_, err := db.conn.Exec(
+		`UPDATE ordini SET stato = 'pronto' WHERE id = ? AND stato = 'in_preparazione'`, ordineID,
+	)
+	return username, err
+}
+
+// ConsegnaOrdine transita l'ordine a 'ritirato'.
+func (db *DB) ConsegnaOrdine(ordineID int64) error {
+	_, err := db.conn.Exec(
+		`UPDATE ordini SET stato = 'ritirato' WHERE id = ? AND stato = 'pronto'`, ordineID,
+	)
+	return err
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 func nullableStr(s string) interface{} {
