@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestionale Magazzino — Dashboard Magazziniere</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <style>
+    .page-header{padding:2rem 2rem 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem}
+    .page-header h1{font-size:1.5rem;font-weight:600;margin:0}
+    .page-header-badge{display:inline-block;background:var(--c-surface-2);padding:.35rem .75rem;border-radius:99px;font-size:.75rem;color:var(--c-text-2);font-weight:500}
+    .main-content{padding:1.5rem 2rem}
+    .alert-banner{background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.28);border-radius:8px;padding:1rem;margin-bottom:2rem;display:flex;align-items:center;gap:1rem;color:var(--c-warn)}
+    .alert-icon{font-size:1.25rem;flex-shrink:0}
+    .alert-text{flex:1;font-size:.9rem}
+    .alert-link{color:var(--c-accent);text-decoration:underline;cursor:pointer}
+    .section-title{font-size:1rem;font-weight:600;margin:0 0 1rem;display:flex;align-items:center;gap:.5rem}
+    .section-count{display:inline-block;background:var(--c-accent);color:#fff;padding:.15rem .4rem;border-radius:99px;font-size:.65rem;font-weight:600}
+    .orders-container{display:flex;flex-direction:column;gap:1.5rem}
+    .order-card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;overflow:hidden;transition:border-color .15s,box-shadow .15s}
+    .order-card:hover{border-color:var(--c-accent);box-shadow:var(--shadow-glow)}
+    .order-header{background:var(--c-surface-2);padding:1rem;border-bottom:1px solid var(--c-border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem}
+    .order-meta{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;font-size:.85rem}
+    .order-id{font-weight:600;color:var(--c-text);font-size:.95rem}
+    .order-info{color:var(--c-text-2);font-size:.85rem}
+    .order-info strong{color:var(--c-text)}
+    .order-content{padding:1rem}
+    .order-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-bottom:1rem}
+    .order-table th{text-align:left;padding:.5rem .75rem;background:transparent;border-bottom:1px solid var(--c-border);color:var(--c-text-2);font-weight:500;font-size:.75rem}
+    .order-table td{padding:.5rem .75rem;border-bottom:1px solid var(--c-border);color:var(--c-text);vertical-align:middle}
+    .order-table tr:last-child td{border-bottom:none}
+    .order-footer{padding:1rem;border-top:1px solid var(--c-border);background:var(--c-surface-2);display:flex;justify-content:flex-end}
+    .badge-stato{display:inline-block;padding:.2rem .55rem;border-radius:99px;font-size:.7rem;font-weight:600}
+    .badge-stato.badge-approvato{background:rgba(99,102,241,0.15);color:var(--c-accent);border:1px solid rgba(99,102,241,0.3)}
+    .badge-stato.badge-in_preparazione{background:rgba(245,158,11,0.14);color:var(--c-warn);border:1px solid rgba(245,158,11,0.28)}
+    .badge-stato.badge-pronto{background:rgba(34,197,94,0.15);color:var(--c-success);border:1px solid rgba(34,197,94,0.3)}
+    .badge-role{display:inline-block;padding:.2rem .55rem;border-radius:99px;font-size:.7rem;font-weight:600}
+    .badge-role.badge-magazziniere{background:rgba(99,102,241,0.15);color:var(--c-accent);border:1px solid rgba(99,102,241,0.3)}
+    .empty-state{text-align:center;padding:3rem 1rem;color:var(--c-text-2)}
+    .btn{padding:.4rem .75rem;border:none;border-radius:6px;font-weight:500;cursor:pointer;transition:all .15s;font-size:.85rem}
+    .btn-primary{background:linear-gradient(135deg,var(--c-accent),var(--c-accent-2));color:#fff}
+    .btn-primary:hover{background:linear-gradient(135deg,var(--c-accent-h),var(--c-accent));box-shadow:var(--shadow-glow)}
+    .btn-success{background:linear-gradient(135deg,var(--c-success),#16a34a);color:#fff}
+    .btn-success:hover{background:linear-gradient(135deg,#22c55e,#15803d);box-shadow:var(--shadow-glow)}
+    .btn-secondary{background:rgba(100,116,139,0.15);color:var(--c-text);border:1px solid rgba(100,116,139,0.25)}
+    .btn-secondary:hover{background:rgba(100,116,139,0.25);box-shadow:var(--shadow-glow)}
+    .nav-links{display:flex;gap:2rem;align-items:center}
+    .nav-link{color:var(--c-text-2);text-decoration:none;font-size:.9rem;font-weight:500;transition:color .15s}
+    .nav-link:hover{color:var(--c-accent)}
+  </style>
+</head>
+<body class="dash-body">
+
+  <nav class="navbar">
+    <div class="nav-brand">
+      <div class="logo-icon logo-icon--sm">
+        <img src="/static/img/logo-icon.svg" alt="Logo" class="logo-image">
+      </div>
+      <span class="logo-text">Gestionale Magazzino</span>
+      {{if .BrandName}}
+      <div class="brand-divider"></div>
+      <div class="brand-logo">
+        {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}" class="brand-image">{{end}}
+        <span class="brand-name">{{.BrandName}}</span>
+      </div>
+      {{end}}
+    </div>
+    <div style="display:flex;gap:2rem;align-items:center;flex:1;margin-left:2rem">
+      <div class="nav-links">
+        <a href="/prodotti" class="nav-link">Prodotti</a>
+        <a href="/categorie" class="nav-link">Categorie</a>
+        <a href="/lotti" class="nav-link">Carico merce</a>
+      </div>
+    </div>
+    <div class="nav-user">
+      <span class="user-chip">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        {{.Username}}
+        <span class="badge-role badge-{{.Role}}">{{.Role}}</span>
+      </span>
+      <form method="POST" action="/logout" style="margin:0">
+        <button type="submit" class="btn btn-ghost" title="Esci">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </form>
+    </div>
+  </nav>
+
+  <div class="page-header">
+    <h1>Dashboard Magazziniere</h1>
+  </div>
+
+  <div class="main-content">
+
+    <!-- ── LOW-STOCK ALERT BANNER ── -->
+    {{if .Scorte}}
+    <div class="alert-banner">
+      <div class="alert-icon">⚠</div>
+      <div class="alert-text">
+        {{len .Scorte}} prodotto{{if ne (len .Scorte) 1}}i{{end}} sotto scorta minima —
+        <a href="/prodotti" class="alert-link">Gestisci prodotti</a>
+      </div>
+    </div>
+    {{end}}
+
+    <!-- ── FULFILLMENT QUEUE ── -->
+    <section>
+      <p class="section-title">
+        📦 Ordini da evadere
+        {{if .Ordini}}<span class="section-count">{{len .Ordini}}</span>{{end}}
+      </p>
+
+      {{if .Ordini}}
+      <div class="orders-container">
+        {{range .Ordini}}
+        <div class="order-card">
+          <div class="order-header">
+            <div class="order-meta">
+              <span class="order-id">#{{.Ordine.ID}}</span>
+              <span class="order-info">da <strong>{{.Ordine.UtenteUsername}}</strong></span>
+              <span class="order-info">settore: <strong>{{.Ordine.SettoreID}}</strong></span>
+              <span class="order-info">{{fmtDate .Ordine.DataCreazione}}</span>
+              <span class="badge-stato badge-{{.Ordine.Stato}}">{{.Ordine.Stato}}</span>
+            </div>
+          </div>
+
+          <div class="order-content">
+            <table class="order-table">
+              <thead>
+                <tr>
+                  <th>Prodotto</th>
+                  <th style="text-align:center">Approvato</th>
+                  <th style="text-align:center">Evaso</th>
+                  <th style="text-align:center">Stato</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{range .Righe}}
+                <tr>
+                  <td>{{.ProdottoNome}}</td>
+                  <td style="text-align:center">
+                    {{if .QtaApprovata}}{{.QtaApprovata}}{{else}}{{.QtaRichiesta}}{{end}}
+                  </td>
+                  <td style="text-align:center">{{.QtaEvasa}}</td>
+                  <td style="text-align:center">
+                    <span class="badge-stato" style="font-size:.65rem;padding:.15rem .4rem">{{.StatoRiga}}</span>
+                  </td>
+                </tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="order-footer">
+            {{if eq .Ordine.Stato "approvato"}}
+            <form method="POST" action="/ordini/{{.Ordine.ID}}/prepara" style="margin:0">
+              <button type="submit" class="btn btn-primary">Inizia preparazione</button>
+            </form>
+            {{else if eq .Ordine.Stato "in_preparazione"}}
+            <form method="POST" action="/ordini/{{.Ordine.ID}}/pronto" style="margin:0">
+              <button type="submit" class="btn btn-success">Segna come Pronto</button>
+            </form>
+            {{else if eq .Ordine.Stato "pronto"}}
+            <form method="POST" action="/ordini/{{.Ordine.ID}}/consegna" style="margin:0">
+              <button type="submit" class="btn btn-secondary">Consegna effettuata</button>
+            </form>
+            {{end}}
+          </div>
+        </div>
+        {{end}}
+      </div>
+      {{else}}
+      <div class="empty-state">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+        <p style="margin-top:.75rem">Nessun ordine da evadere.</p>
+      </div>
+      {{end}}
+    </section>
+
+  </div>
+
+  <script src="/static/js/htmx.min.js"></script>
+</body>
+</html>
