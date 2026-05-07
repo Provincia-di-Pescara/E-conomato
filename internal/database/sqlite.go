@@ -502,6 +502,64 @@ func (db *DB) DeleteRigaBozza(ordineID, prodottoID int64) error {
 	return err
 }
 
+// scanOrdini is a helper that scans rows into OrdineConRighe, fetching righe for each ordine.
+func (db *DB) scanOrdini(rows *sql.Rows) ([]models.OrdineConRighe, error) {
+	defer rows.Close()
+	var out []models.OrdineConRighe
+	for rows.Next() {
+		var o models.Ordine
+		if err := rows.Scan(&o.ID, &o.UtenteUsername, &o.SettoreID, &o.DataCreazione,
+			&o.Stato, &o.NoteFunzionario); err != nil {
+			return nil, err
+		}
+		righe, err := db.getRigheConProdotto(o.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, models.OrdineConRighe{Ordine: o, Righe: righe})
+	}
+	return out, rows.Err()
+}
+
+// GetOrdiniUtente restituisce tutti gli ordini (escluso bozza) dell'utente, dal più recente.
+func (db *DB) GetOrdiniUtente(username string) ([]models.OrdineConRighe, error) {
+	rows, err := db.conn.Query(`
+		SELECT id, utente_username, settore_id, data_creazione, stato, COALESCE(note_funzionario,'')
+		FROM ordini WHERE utente_username = ? AND stato != 'bozza'
+		ORDER BY data_creazione DESC
+	`, username)
+	if err != nil {
+		return nil, err
+	}
+	return db.scanOrdini(rows)
+}
+
+// GetOrdiniSettore restituisce ordini in_approvazione del settore, dal più vecchio.
+func (db *DB) GetOrdiniSettore(settoreID string) ([]models.OrdineConRighe, error) {
+	rows, err := db.conn.Query(`
+		SELECT id, utente_username, settore_id, data_creazione, stato, COALESCE(note_funzionario,'')
+		FROM ordini WHERE settore_id = ? AND stato = 'in_approvazione'
+		ORDER BY data_creazione ASC
+	`, settoreID)
+	if err != nil {
+		return nil, err
+	}
+	return db.scanOrdini(rows)
+}
+
+// GetOrdiniAttivi restituisce ordini in lavorazione per il magazzino.
+func (db *DB) GetOrdiniAttivi() ([]models.OrdineConRighe, error) {
+	rows, err := db.conn.Query(`
+		SELECT id, utente_username, settore_id, data_creazione, stato, COALESCE(note_funzionario,'')
+		FROM ordini WHERE stato IN ('approvato','in_preparazione','pronto')
+		ORDER BY data_creazione ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	return db.scanOrdini(rows)
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 func nullableStr(s string) interface{} {
