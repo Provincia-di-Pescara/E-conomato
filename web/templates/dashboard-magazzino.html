@@ -3,295 +3,278 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gestionale — Magazziniere</title>
+  <title>E-conomato — Magazziniere</title>
   <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/style.css" />
-  <style>
-    :root { --font: 'DM Sans', system-ui, sans-serif; }
-
-    .alert-strip {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      background: rgba(245,158,11,0.08);
-      border: 1px solid rgba(245,158,11,0.2);
-      border-radius: 6px;
-      padding: 0.7rem 1rem;
-      margin-bottom: 1.5rem;
-      font-size: 0.85rem;
-      color: var(--c-warn);
-    }
-    .alert-strip svg { flex-shrink: 0; opacity: 0.8; }
-    .alert-strip a { color: var(--c-accent); text-decoration: underline; }
-
-    .order-card {
-      background: var(--c-surface);
-      border: 1px solid var(--c-border);
-      border-radius: 8px;
-      margin-bottom: 1rem;
-      overflow: hidden;
-      transition: border-color 0.12s;
-    }
-    .order-card:hover { border-color: rgba(255,255,255,0.1); }
-
-    .order-card-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      padding: 0.85rem 1rem;
-      border-bottom: 1px solid var(--c-border);
-    }
-
-    .order-meta {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-      font-size: 0.85rem;
-    }
-    .order-id { font-weight: 600; }
-    .order-dim { color: var(--c-text-3); font-size: 0.8rem; }
-
-    .order-card-body { padding: 0 1rem; }
-
-    .order-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.82rem;
-    }
-    .order-table th {
-      text-align: left;
-      padding: 0.5rem 0.5rem;
-      border-bottom: 1px solid var(--c-border);
-      color: var(--c-text-3);
-      font-weight: 500;
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .order-table td {
-      padding: 0.5rem 0.5rem;
-      border-bottom: 1px solid var(--c-border);
-      vertical-align: middle;
-    }
-    .order-table tbody tr:last-child td { border-bottom: none; }
-
-    .order-card-foot {
-      display: flex;
-      justify-content: flex-end;
-      padding: 0.75rem 1rem;
-      border-top: 1px solid var(--c-border);
-      gap: 0.5rem;
-    }
-
-    .btn-action {
-      padding: 0.45rem 1rem;
-      border: none;
-      border-radius: 4px;
-      font-size: 0.82rem;
-      font-weight: 600;
-      cursor: pointer;
-      font-family: inherit;
-      transition: background 0.12s, opacity 0.12s;
-    }
-    .btn-action-primary {
-      background: var(--c-accent);
-      color: #fff;
-    }
-    .btn-action-primary:hover { background: var(--c-accent-h); }
-
-    .btn-action-success {
-      background: rgba(34,197,94,0.15);
-      color: var(--c-success);
-      border: 1px solid rgba(34,197,94,0.25);
-    }
-    .btn-action-success:hover { background: rgba(34,197,94,0.25); }
-
-    .btn-action-secondary {
-      background: var(--c-surface-2);
-      color: var(--c-text-2);
-      border: 1px solid var(--c-border-2);
-    }
-    .btn-action-secondary:hover { background: rgba(255,255,255,0.06); }
-
-    .queue-count {
-      display: inline-block;
-      background: var(--c-accent);
-      color: #fff;
-      font-size: 0.62rem;
-      padding: 0.12rem 0.4rem;
-      border-radius: 99px;
-      font-weight: 700;
-      margin-left: 0.4rem;
-      line-height: 1.5;
-      vertical-align: middle;
-    }
-  </style>
 </head>
-<body class="dash-body">
-<div class="app-shell">
+<body>
 
-  <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <div class="sidebar-logo">
-      <div class="sidebar-logo-inner">
-        <img src="/static/img/logo-icon.svg" alt="Logo">
-        <span class="sidebar-logo-text">Gestionale</span>
-      </div>
-      {{if .BrandName}}
-      <div class="sidebar-brand">
-        {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}">{{end}}
-        <span class="sidebar-brand-name">{{.BrandName}}</span>
-      </div>
-      {{end}}
+<div class="ec-app">
+
+  <!-- ═════════ Sidebar ═════════ -->
+  <nav class="ec-side">
+    <div class="ec-side__brand">
+      <span class="ec-brandmark" aria-label="E-conomato">
+        <img src="/static/img/logo-icon.svg" alt="" class="ec-brandmark__icon" />
+        <span class="ec-brandmark__word">-conomato</span>
+      </span>
     </div>
 
-    <nav class="sidebar-nav">
-      <div class="sidebar-section-label">Coda</div>
-      <button class="sidebar-item active" onclick="showView('ordini',this)">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-        Ordini da evadere
-        {{if .Ordini}}<span class="sidebar-badge">{{len .Ordini}}</span>{{end}}
-      </button>
+    <div class="ec-side__ente">
+      <div class="ec-side__ente-logo">
+        {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}">
+        {{else}}<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/></svg>{{end}}
+      </div>
+      <div style="min-width:0">
+        <div class="ec-side__ente-name">{{if .BrandName}}{{.BrandName}}{{else}}Ente Pubblico{{end}}</div>
+        <div class="ec-side__ente-sub">Provincia di Pescara</div>
+      </div>
+    </div>
 
-      <div class="sidebar-section-label">Gestione</div>
-      <a href="/prodotti" class="sidebar-item">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-        Prodotti
-      </a>
-      <a href="/categorie" class="sidebar-item">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
-        Categorie
-      </a>
-      <a href="/lotti" class="sidebar-item">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="12" y1="2" x2="12" y2="15"/><polyline points="5 9 12 2 19 9"/><path d="M5 12H2a1 1 0 00-1 1v8a1 1 0 001 1h20a1 1 0 001-1v-8a1 1 0 00-1-1h-3"/></svg>
-        Carico merce
-      </a>
-    </nav>
+    <div class="ec-side__group-label">Magazziniere</div>
+    <a href="/dashboard/magazzino" class="ec-side__link is-active">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h11v8H3V7Z"/><path d="M14 10h4l3 3v2h-7V10Z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg>
+      <span>Ordini</span>
+      {{if .Ordini}}<span class="ec-side__badge">{{len .Ordini}}</span>{{end}}
+    </a>
+    <a href="/prodotti" class="ec-side__link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>
+      <span>Prodotti</span>
+    </a>
+    <a href="/lotti/new" class="ec-side__link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4V7Z"/><path d="M3 7l9 4 9-4"/></svg>
+      <span>Carico merce</span>
+    </a>
+    <a href="/dashboard/scorte" class="ec-side__link" hx-get="/dashboard/scorte" hx-target="#scorte-table" hx-swap="innerHTML">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V8"/><path d="M10 20V4"/><path d="M16 20v-8"/><path d="M22 20H2"/></svg>
+      <span>Scorte</span>
+      {{if .Scorte}}<span class="ec-side__badge">{{len .Scorte}}</span>{{end}}
+    </a>
 
-    <div class="sidebar-footer">
-      <div class="sidebar-user-info">
-        <div class="sidebar-avatar">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        </div>
-        <div style="overflow:hidden;min-width:0">
-          <div class="sidebar-user-name">{{.Username}}</div>
-          <div class="sidebar-user-role">{{.Role}}</div>
-        </div>
+    <div class="ec-side__group-label">Generale</div>
+    <button class="ec-side__link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2H4.5L6 16Z"/><path d="M10 21h4"/></svg>
+      <span>Notifiche</span>
+    </button>
+    <button class="ec-side__link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg>
+      <span>Impostazioni</span>
+    </button>
+
+    <div class="ec-side__foot">
+      <span class="ec-avatar" style="width:36px;height:36px;font-size:13px">{{initials .Username}}</span>
+      <div style="min-width:0;flex:1">
+        <div class="ec-side__foot-name">{{.Username}}</div>
+        <div class="ec-side__foot-sub">{{.Role}}</div>
       </div>
       <form method="POST" action="/logout" style="margin:0">
-        <button type="submit" class="sidebar-logout">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          Esci
+        <button type="submit" class="ec-side__link" style="width:32px;padding:6px;color:#8590A8" title="Esci">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h11"/></svg>
         </button>
       </form>
     </div>
-  </aside>
+  </nav>
 
-  <!-- MAIN -->
-  <main class="sidebar-main">
+  <!-- ═════════ Main ═════════ -->
+  <div class="ec-main">
 
-    <div id="view-ordini">
-      <div class="page-topbar" style="display:flex;align-items:center;gap:0.5rem">
-        <h1 class="page-title">
-          Ordini da evadere
-          {{if .Ordini}}<span class="queue-count">{{len .Ordini}}</span>{{end}}
-        </h1>
+    <header class="ec-topbar">
+      <div class="ec-topbar__title">
+        {{if .BrandName}}{{.BrandName}}{{else}}Provincia di Pescara{{end}}
+        <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
+        <b>Ordini da evadere</b>
       </div>
-      <div class="page-content">
+      <div class="ec-topbar__right">
+        <button class="ec-iconbtn" title="Notifiche">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2H4.5L6 16Z"/><path d="M10 21h4"/></svg>
+          {{if .Scorte}}<span class="ec-iconbtn__count">{{len .Scorte}}</span>{{end}}
+        </button>
+        <a href="/lotti/new" class="ec-iconbtn" title="Nuovo carico merce">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+        </a>
+      </div>
+    </header>
 
-        {{if .Scorte}}
-        <div class="alert-strip">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          {{len .Scorte}} prodotto{{if ne (len .Scorte) 1}}i{{end}} sotto scorta —
-          <a href="/prodotti">Gestisci prodotti</a>
-        </div>
-        {{end}}
+    <main class="ec-content">
 
-        {{if .Ordini}}
+      <header class="ec-secthead">
         <div>
-          {{range .Ordini}}
-          <div class="order-card">
-            <div class="order-card-head">
-              <div class="order-meta">
-                <span class="order-id">#{{.Ordine.ID}}</span>
-                <span class="order-dim">da <strong style="color:var(--c-text-2)">{{.Ordine.UtenteUsername}}</strong></span>
-                {{if .Ordine.SettoreID}}<span class="order-dim">settore {{.Ordine.SettoreID}}</span>{{end}}
-                <span class="order-dim">{{fmtDate .Ordine.DataCreazione}}</span>
-                <span class="badge-stato badge-{{.Ordine.Stato}}">{{.Ordine.Stato}}</span>
-              </div>
-            </div>
+          <div class="ec-secthead__kicker">Area magazzino</div>
+          <h1 class="ec-secthead__title">Centro evasione ordini</h1>
+          <p class="ec-secthead__sub">Gestisci il flusso fisico dei materiali: prepara, scarica con logica FIFO e consegna agli uffici.</p>
+        </div>
+        <div class="ec-secthead__right">
+          <a href="/lotti/new" class="ec-btn ec-btn--primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            Nuovo carico merce
+          </a>
+        </div>
+      </header>
 
-            <div class="order-card-body">
-              <table class="order-table">
-                <thead>
-                  <tr>
-                    <th>Prodotto</th>
-                    <th style="text-align:center">Approvato</th>
-                    <th style="text-align:center">Evaso</th>
-                    <th style="text-align:center">Stato</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {{range .Righe}}
-                  <tr>
-                    <td>{{.ProdottoNome}}</td>
-                    <td style="text-align:center;color:var(--c-text-2)">
-                      {{if .QtaApprovata}}{{.QtaApprovata}}{{else}}{{.QtaRichiesta}}{{end}}
-                    </td>
-                    <td style="text-align:center">{{.QtaEvasa}}</td>
-                    <td style="text-align:center">
-                      <span class="badge-stato" style="font-size:.62rem">{{.StatoRiga}}</span>
-                    </td>
-                  </tr>
+      <div class="ec-stats">
+        <div class="ec-stat">
+          <div class="ec-stat__label">Ordini in coda</div>
+          <div class="ec-stat__value">{{if .Ordini}}{{len .Ordini}}{{else}}0{{end}}</div>
+          <div class="ec-stat__delta">ordini approvati o in lavorazione</div>
+        </div>
+        <div class="ec-stat ec-stat--red">
+          <div class="ec-stat__label">Scorte sotto soglia</div>
+          <div class="ec-stat__value">{{if .Scorte}}{{len .Scorte}}{{else}}0{{end}}</div>
+          <div class="ec-stat__delta">articoli da rifornire</div>
+        </div>
+        <div class="ec-stat ec-stat--teal">
+          <div class="ec-stat__label">Logica scarico</div>
+          <div class="ec-stat__value" style="font-size:18px;margin-top:8px">FIFO</div>
+          <div class="ec-stat__delta">First In, First Out</div>
+        </div>
+        <div class="ec-stat ec-stat--gold">
+          <div class="ec-stat__label">Operatore</div>
+          <div class="ec-stat__value" style="font-size:16px;margin-top:8px">{{.Username}}</div>
+          <div class="ec-stat__delta">turno attivo</div>
+        </div>
+      </div>
+
+      {{if .Scorte}}
+      <div class="ec-alert">
+        <div class="ec-alert__icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2L12 3Z"/><path d="M12 10v5"/><path d="M12 18v.5"/></svg>
+        </div>
+        <div style="flex:1">
+          <div class="ec-alert__title">{{len .Scorte}} articoli sotto la soglia minima</div>
+          <div class="ec-alert__sub">Valuta nuovi lotti di acquisto prima che le scorte si esauriscano.</div>
+        </div>
+        <a href="/prodotti" class="ec-btn ec-btn--gold ec-btn--sm">
+          Vai ai prodotti
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+        </a>
+      </div>
+      {{end}}
+
+      <!-- Lista ordini -->
+      {{if .Ordini}}
+      <div class="ec-stack">
+        {{range .Ordini}}
+        {{$tot := 0}}{{range .Righe}}{{if .QtaApprovata}}{{$tot = add $tot (derefInt .QtaApprovata)}}{{else}}{{$tot = add $tot .QtaRichiesta}}{{end}}{{end}}
+        <div class="ec-order">
+          <header class="ec-order__head">
+            <span class="ec-order__id">#{{.Ordine.ID}}</span>
+            <span class="ec-order__meta">
+              <b>{{.Ordine.UtenteUsername}}</b>
+              {{if .Ordine.SettoreID}} · {{.Ordine.SettoreID}}{{end}}
+               · {{fmtDate .Ordine.DataCreazione}}
+            </span>
+            <span class="ec-pill ec-pill--{{statoTone .Ordine.Stato}}">{{statoLabel .Ordine.Stato}}</span>
+          </header>
+
+          <div class="ec-order__body">
+            <div class="ec-order__rows">
+              {{range .Righe}}
+              <div class="ec-order__row">
+                <div class="ec-prod-img ec-prod-img--sm ec-prod-img--cat-default">
+                  <img src="/prodotti/{{.ProdottoID}}/immagine" alt="" onerror="this.style.display='none'">
+                </div>
+                <div>
+                  <div class="ec-order__row-name">{{.ProdottoNome}}</div>
+                  <div class="ec-order__row-meta">Evaso: <b>{{.QtaEvasa}} pz</b></div>
+                </div>
+                <span class="ec-order__row-qty">{{if .QtaApprovata}}{{.QtaApprovata}}{{else}}{{.QtaRichiesta}}{{end}} pz</span>
+                <span style="width:110px;text-align:right">
+                  {{if eq .StatoRiga "evasa"}}
+                    <span class="ec-pill ec-pill--teal">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg>
+                      Evasa
+                    </span>
+                  {{else if eq .StatoRiga "evasa_parziale"}}
+                    <span class="ec-pill ec-pill--amber">Parziale</span>
+                  {{else}}
+                    <span class="ec-pill ec-pill--neutral">In attesa</span>
                   {{end}}
-                </tbody>
-              </table>
-            </div>
-
-            <div class="order-card-foot">
-              {{if eq .Ordine.Stato "approvato"}}
-              <form method="POST" action="/ordini/{{.Ordine.ID}}/prepara" style="margin:0">
-                <button type="submit" class="btn-action btn-action-primary">Inizia preparazione</button>
-              </form>
-              {{else if eq .Ordine.Stato "in_preparazione"}}
-              <form method="POST" action="/ordini/{{.Ordine.ID}}/pronto" style="margin:0">
-                <button type="submit" class="btn-action btn-action-success">Segna come Pronto</button>
-              </form>
-              {{else if eq .Ordine.Stato "pronto"}}
-              <form method="POST" action="/ordini/{{.Ordine.ID}}/consegna" style="margin:0">
-                <button type="submit" class="btn-action btn-action-secondary">Consegna effettuata</button>
-              </form>
+                </span>
+              </div>
               {{end}}
             </div>
           </div>
-          {{end}}
-        </div>
-        {{else}}
-        <div class="empty-sm">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-          <p>Nessun ordine da evadere.</p>
+
+          <footer class="ec-order__foot">
+            <div style="font-size:12px;color:var(--ec-ink-500)">
+              {{len .Righe}} articoli · <b class="mono" style="color:var(--ec-ink-900)">{{$tot}} pz</b> da evadere
+            </div>
+            <div class="ec-order__foot-spacer"></div>
+
+            {{if eq .Ordine.Stato "approvato"}}
+            <form method="POST" action="/ordini/{{.Ordine.ID}}/prepara" style="margin:0">
+              <button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4V7Z"/></svg>
+                Prepara (FIFO)
+              </button>
+            </form>
+            {{else if eq .Ordine.Stato "in_preparazione"}}
+            <form method="POST" action="/ordini/{{.Ordine.ID}}/pronto" style="margin:0">
+              <button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4V7Z"/></svg>
+                Segna come pronto
+              </button>
+            </form>
+            {{else if eq .Ordine.Stato "pronto"}}
+            <form method="POST" action="/ordini/{{.Ordine.ID}}/consegna" style="margin:0">
+              <button type="submit" class="ec-btn ec-btn--teal ec-btn--sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg>
+                Consegna effettuata
+              </button>
+            </form>
+            {{end}}
+          </footer>
         </div>
         {{end}}
-
       </div>
-    </div>
+      {{else}}
+      <div class="ec-empty">
+        <div class="ec-empty__icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg>
+        </div>
+        <div class="ec-empty__title">Nessun ordine in coda</div>
+        <div class="ec-empty__hint">Quando un funzionario approva una richiesta, l'ordine arriva qui.</div>
+      </div>
+      {{end}}
 
-  </main>
+      <!-- Scorte (sezione collassabile) -->
+      {{if .Scorte}}
+      <section style="margin-top:32px">
+        <h2 style="font-size:18px;font-weight:600;margin:0 0 14px;color:var(--ec-navy-900)">Prodotti sotto soglia</h2>
+        <div id="scorte-table">
+          <table class="ec-table">
+            <thead>
+              <tr>
+                <th>Codice</th>
+                <th>Articolo</th>
+                <th>Categoria</th>
+                <th style="text-align:right">Giacenza</th>
+                <th style="text-align:right">Scorta min.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .Scorte}}
+              <tr>
+                <td class="mono">{{if .CodiceArticolo}}{{.CodiceArticolo}}{{else}}—{{end}}</td>
+                <td><strong>{{.Nome}}</strong></td>
+                <td><span class="ec-pill ec-pill--navy">{{.CategoriaName}}</span></td>
+                <td class="mono" style="text-align:right;color:var(--ec-red-700);font-weight:700">{{.ScortaRimanente}}</td>
+                <td class="mono" style="text-align:right;color:var(--ec-ink-500)">{{.ScortaMinima}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {{end}}
+
+    </main>
+  </div>
 </div>
 
 <script src="/static/js/htmx.min.js"></script>
-<script>
-  function showView(name, btn) {
-    document.querySelectorAll('.sidebar-item').forEach(function(el) {
-      el.classList.remove('active');
-    });
-    if (btn) btn.classList.add('active');
-  }
-</script>
 </body>
 </html>

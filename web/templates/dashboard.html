@@ -6,73 +6,90 @@
   <title>E-conomato — Dashboard</title>
   <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/style.css" />
-  <style>
-    .page-header{padding:2rem 2rem 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem}
-    .page-header h1{font-size:1.5rem;font-weight:600;margin:0}
-    .main-content{padding:1.5rem 2rem}
-    .section-title{font-size:1rem;font-weight:600;margin:0 0 1rem}
-    table{width:100%;border-collapse:collapse;font-size:0.875rem}
-    th{text-align:left;padding:.6rem .75rem;background:var(--c-surface);border-bottom:2px solid var(--c-border);color:var(--c-text-2);font-weight:500}
-    td{padding:.6rem .75rem;border-bottom:1px solid var(--c-border);color:var(--c-text)}
-    tr:last-child td{border-bottom:none}
-    .badge-low{display:inline-block;padding:.2rem .55rem;border-radius:99px;background:#fee2e2;color:#b91c1c;font-size:.7rem;font-weight:600}
-    .empty-state{text-align:center;padding:3rem 1rem;color:var(--c-text-2)}
-    .nav-links{display:flex;gap:.5rem;flex-wrap:wrap}
-    .nav-links a{padding:.4rem .9rem;border-radius:8px;font-size:.875rem;font-weight:500;text-decoration:none;color:var(--c-text-2);border:1px solid var(--c-border);transition:background .15s}
-    .nav-links a:hover,.nav-links a.active{background:var(--c-accent);color:#fff;border-color:var(--c-accent)}
-    .section-box{background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:1.5rem;margin-bottom:2rem}
-  </style>
 </head>
-<body class="dash-body">
+<body>
 
-  <nav class="navbar">
-    <div class="nav-brand">
-      <div class="logo-icon logo-icon--sm">
-        <img src="/static/img/logo-icon.svg" alt="Logo" class="logo-image">
-      </div>
-      <span class="logo-text">E-conomato</span>
-      {{if .BrandName}}
-      <div class="brand-divider"></div>
-      <div class="brand-logo">
-        {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}" class="brand-image">{{end}}
-        <span class="brand-name">{{.BrandName}}</span>
-      </div>
-      {{end}}
-    </div>
-    <div class="nav-user">
-      <div class="nav-links">
-        <a href="/dashboard" class="active">Dashboard</a>
-        <a href="/prodotti">Prodotti</a>
+<div class="ec-app">
 
-      </div>
-      <span class="user-chip" style="margin-left:.75rem">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        {{.Username}}
-        <span style="font-size:.65rem;opacity:.6;margin-left:.3rem">({{.Role}})</span>
+  <nav class="ec-side">
+    <div class="ec-side__brand">
+      <span class="ec-brandmark" aria-label="E-conomato">
+        <img src="/static/img/logo-icon.svg" alt="" class="ec-brandmark__icon" />
+        <span class="ec-brandmark__word">-conomato</span>
       </span>
+    </div>
+
+    <div class="ec-side__ente">
+      <div class="ec-side__ente-logo">
+        {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}">
+        {{else}}<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/></svg>{{end}}
+      </div>
+      <div style="min-width:0">
+        <div class="ec-side__ente-name">{{if .BrandName}}{{.BrandName}}{{else}}Ente Pubblico{{end}}</div>
+        <div class="ec-side__ente-sub">Provincia di Pescara</div>
+      </div>
+    </div>
+
+    <div class="ec-side__group-label">Panoramica</div>
+    <a href="/dashboard" class="ec-side__link is-active">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v10h-6v-6h-6v6H3V11Z"/></svg>
+      <span>Dashboard</span>
+    </a>
+    <a href="/prodotti" class="ec-side__link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>
+      <span>Prodotti</span>
+    </a>
+
+    <div class="ec-side__foot">
+      <span class="ec-avatar" style="width:36px;height:36px;font-size:13px">{{initials .Username}}</span>
+      <div style="min-width:0;flex:1">
+        <div class="ec-side__foot-name">{{.Username}}</div>
+        <div class="ec-side__foot-sub">{{.Role}}</div>
+      </div>
       <form method="POST" action="/logout" style="margin:0">
-        <button type="submit" class="btn btn-ghost" title="Esci">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <button type="submit" class="ec-side__link" style="width:32px;padding:6px;color:#8590A8" title="Esci">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h11"/></svg>
         </button>
       </form>
     </div>
   </nav>
 
-  <div class="page-header">
-    <h1>Dashboard</h1>
-  </div>
-
-  <div class="main-content">
-    <div class="section-box">
-      <p class="section-title">&#9888;&#65039; Prodotti sotto soglia minima</p>
-      <div id="scorte-container" hx-get="/dashboard/scorte" hx-trigger="load" hx-swap="innerHTML">
-        <p style="color:var(--c-text-2);font-size:.875rem">Caricamento...</p>
+  <div class="ec-main">
+    <header class="ec-topbar">
+      <div class="ec-topbar__title">
+        {{if .BrandName}}{{.BrandName}}{{else}}Provincia di Pescara{{end}}
+        <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
+        <b>Dashboard</b>
       </div>
-    </div>
-  </div>
+    </header>
 
-  <script src="/static/js/htmx.min.js"></script>
+    <main class="ec-content">
+      <header class="ec-secthead">
+        <div>
+          <div class="ec-secthead__kicker">Panoramica</div>
+          <h1 class="ec-secthead__title">Benvenuto, {{.Username}}</h1>
+          <p class="ec-secthead__sub">Controllo rapido sulle scorte sotto soglia. Per le funzionalità complete, accedi all'area dedicata al tuo ruolo.</p>
+        </div>
+      </header>
+
+      <div class="ec-card" style="padding:18px 20px">
+        <div class="ec-card-head" style="border-bottom:0;padding:0 0 14px">
+          <div>
+            <div class="ec-card-head__title">Prodotti sotto soglia minima</div>
+            <div class="ec-card-head__sub">Aggiornati in tempo reale dal magazzino.</div>
+          </div>
+        </div>
+        <div id="scorte-container" hx-get="/dashboard/scorte" hx-trigger="load" hx-swap="innerHTML">
+          <p style="color:var(--ec-ink-500);font-size:14px">Caricamento…</p>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="/static/js/htmx.min.js"></script>
 </body>
 </html>

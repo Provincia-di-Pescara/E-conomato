@@ -69,6 +69,13 @@ funcs := template.FuncMap{
 "fmtDate": func(t time.Time) string {
 return t.Format("02 Jan 2006 15:04")
 },
+"initials": initials,
+"derefInt": derefInt,
+"statoLabel": statoLabel,
+"statoTone":  statoTone,
+"add":        func(a, b int) int { return a + b },
+"sub":        func(a, b int) int { return a - b },
+"mul":        func(a, b int) int { return a * b },
 }
 
 names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino"}
@@ -93,9 +100,90 @@ return i18n.ResolveLocale(r.Header.Get("Accept-Language"))
 
 func (a *App) localizedTemplateFuncs(locale string) template.FuncMap {
 return template.FuncMap{
-"t":       func(key string, args ...any) string { return i18n.T(locale, key, args...) },
-"fmtDate": func(t time.Time) string { return t.Format("02 Jan 2006 15:04") },
+"t":            func(key string, args ...any) string { return i18n.T(locale, key, args...) },
+"fmtDate":      func(t time.Time) string { return t.Format("02 Jan 2006 15:04") },
+"brandLogoSrc": brandLogoSrc,
+"initials":     initials,
+"derefInt":     derefInt,
+"statoLabel":   statoLabel,
+"statoTone":    statoTone,
+"add":          func(a, b int) int { return a + b },
+"sub":          func(a, b int) int { return a - b },
+"mul":          func(a, b int) int { return a * b },
 }
+}
+
+// initials returns up to 2 uppercase characters from the username,
+// for the sidebar avatar. Falls back to "·" if the username is empty.
+func initials(s string) string {
+s = strings.TrimSpace(s)
+if s == "" {
+return "·"
+}
+parts := strings.FieldsFunc(s, func(r rune) bool { return r == '.' || r == ' ' || r == '-' || r == '_' })
+var out []rune
+for _, p := range parts {
+if len(out) >= 2 {
+break
+}
+if p == "" {
+continue
+}
+out = append(out, []rune(strings.ToUpper(p))[0])
+}
+if len(out) == 0 {
+out = []rune(strings.ToUpper(s))
+if len(out) > 2 {
+out = out[:2]
+}
+}
+return string(out)
+}
+
+// derefInt dereferences a *int for template comparisons; nil → 0.
+func derefInt(p *int) int {
+if p == nil {
+return 0
+}
+return *p
+}
+
+// statoLabel maps order status codes to human-readable Italian labels.
+func statoLabel(stato string) string {
+switch stato {
+case "in_approvazione":
+return "In approvazione"
+case "approvato":
+return "Approvato"
+case "in_preparazione":
+return "In preparazione"
+case "pronto":
+return "Pronto al ritiro"
+case "ritirato":
+return "Ritirato"
+case "rifiutato":
+return "Rifiutato"
+case "bozza":
+return "Bozza"
+}
+return stato
+}
+
+// statoTone maps order status codes to ec-pill tones.
+func statoTone(stato string) string {
+switch stato {
+case "in_approvazione":
+return "amber"
+case "approvato", "in_preparazione":
+return "sky"
+case "pronto":
+return "teal"
+case "ritirato":
+return "muted"
+case "rifiutato":
+return "red"
+}
+return "neutral"
 }
 
 func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data any) {
@@ -151,10 +239,6 @@ http.Redirect(w, r, "/login", http.StatusSeeOther)
 return
 }
 role := a.getRole(r)
-if role == "admin" {
-next(w, r)
-return
-}
 for _, allowed := range roles {
 if role == allowed {
 next(w, r)
@@ -174,8 +258,6 @@ case "funzionario":
 return "/dashboard/funzionario"
 case "magazziniere":
 return "/dashboard/magazzino"
-case "admin":
-return "/admin"
 default:
 return "/dashboard"
 }
@@ -257,7 +339,7 @@ w.WriteHeader(http.StatusOK)
 
 func (a *App) renderError(w http.ResponseWriter, r *http.Request, msgKey string, args ...any) {
 msg := i18n.T(a.requestLocale(r), msgKey, args...)
-fmt.Fprintf(w, `<p id="login-error" class="error-msg">%s</p>`, template.HTMLEscapeString(msg))
+fmt.Fprintf(w, `<p id="login-error" class="ec-auth__error">%s</p>`, template.HTMLEscapeString(msg))
 }
 
 // POST /logout
@@ -309,34 +391,64 @@ func (a *App) handleDashboardUtente(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// renderCarrello writes an HTMX-swappable cart fragment.
+// renderCarrello writes an HTMX-swappable cart fragment that fits the
+// ec-cart design system. The host template owns the <aside class="ec-cart">
+// wrapper and the static head; this fragment replaces the inner body+foot
+// (#{targetID}).
 func (a *App) renderCarrello(w http.ResponseWriter, targetID string, bozza *models.OrdineConRighe) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if bozza == nil || len(bozza.Righe) == 0 {
-		fmt.Fprintf(w, `<div id="%s"><p class="empty-state">Carrello vuoto</p></div>`, targetID)
+		fmt.Fprintf(w, `<div id="%s">
+  <div class="ec-cart__empty">
+    <div class="ec-cart__empty-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.5l2.5 11h11l2-8H6.5"/><path d="M9 21a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M18 21a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/></svg>
+    </div>
+    <div class="ec-cart__empty-title">Carrello vuoto</div>
+    <div>Aggiungi prodotti dal catalogo</div>
+  </div>
+</div>`, targetID)
 		return
 	}
-	fmt.Fprintf(w, `<div id="%s">`, targetID)
+	totalPz := 0
+	for _, r := range bozza.Righe {
+		totalPz += r.QtaRichiesta
+	}
+	fmt.Fprintf(w, `<div id="%s"><div class="ec-cart__body">`, targetID)
 	for _, r := range bozza.Righe {
 		fmt.Fprintf(w,
-			`<div class="cart-row" style="display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem">
-			  <span style="flex:1;font-size:.9rem">%s</span>
-			  <input type="number" min="1" value="%d" name="qta" style="width:60px"
-			         hx-post="/ordini/righe/%d?cart=%s" hx-target="#%s" hx-swap="outerHTML" hx-trigger="change">
-			  <button hx-delete="/ordini/righe/%d?cart=%s" hx-target="#%s" hx-swap="outerHTML"
-			          style="background:none;border:none;cursor:pointer;color:#c00">✕</button>
-			</div>`,
+			`<div class="ec-cart__row">
+  <div class="ec-prod-img ec-prod-img--sm ec-prod-img--cat-default">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>
+  </div>
+  <div>
+    <div class="ec-cart__row-name">%s</div>
+    <input type="number" min="1" value="%d" name="qta"
+           class="ec-cart__row-qty"
+           hx-post="/bozza/righe/%d?cart=%s" hx-target="#%s" hx-swap="outerHTML" hx-trigger="change">
+  </div>
+  <button type="button" class="ec-cart__row-remove"
+          hx-delete="/bozza/righe/%d?cart=%s" hx-target="#%s" hx-swap="outerHTML"
+          aria-label="Rimuovi">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
+  </button>
+</div>`,
 			template.HTMLEscapeString(r.ProdottoNome), r.QtaRichiesta,
 			r.ProdottoID, targetID, targetID,
 			r.ProdottoID, targetID, targetID,
 		)
 	}
-	fmt.Fprintf(w,
-		`<form hx-post="/ordini/%d/invia" hx-target="body" hx-push-url="true" style="margin-top:1rem">
-		  <button type="submit" class="btn-primary" style="width:100%%">Invia Ordine</button>
-		</form></div>`,
-		bozza.ID,
-	)
+	fmt.Fprintf(w, `</div>
+<div class="ec-cart__foot">
+  <div class="ec-cart__totals">
+    <span>Totale articoli</span>
+    <span class="ec-mono mono">%d pz · %d prodotti</span>
+  </div>
+  <button type="button" class="ec-btn ec-btn--primary ec-btn--lg ec-btn--block"
+          hx-post="/ordini/%d/invia" hx-target="body" hx-push-url="true">
+    <span style="flex:1;text-align:left">Invia richiesta</span>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+  </button>
+</div></div>`, totalPz, len(bozza.Righe), bozza.ID)
 }
 
 // POST /ordini/righe/{prodotto_id} — upsert riga bozza (HTMX)
@@ -600,16 +712,16 @@ return
 }
 w.Header().Set("Content-Type", "text/html; charset=utf-8")
 if len(scorte) == 0 {
-fmt.Fprint(w, `<div class="empty-state"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><p style="margin-top:.75rem">Nessun prodotto sotto soglia</p></div>`)
+fmt.Fprint(w, `<div class="ec-empty"><div class="ec-empty__icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg></div><div class="ec-empty__title">Nessun prodotto sotto soglia</div><div class="ec-empty__hint">Tutte le giacenze sono a posto.</div></div>`)
 return
 }
-fmt.Fprint(w, `<table><thead><tr><th>Codice</th><th>Nome</th><th>Categoria</th><th>Scorta att.</th><th>Scorta min.</th></tr></thead><tbody>`)
+fmt.Fprint(w, `<table class="ec-table"><thead><tr><th>Codice</th><th>Articolo</th><th>Categoria</th><th style="text-align:right">Giacenza</th><th style="text-align:right">Scorta min.</th></tr></thead><tbody>`)
 for _, p := range scorte {
 codice := "—"
 if p.CodiceArticolo != "" {
 codice = template.HTMLEscapeString(p.CodiceArticolo)
 }
-fmt.Fprintf(w, `<tr><td>%s</td><td><strong>%s</strong></td><td>%s</td><td><span class="badge-low">%d</span></td><td>%d</td></tr>`,
+fmt.Fprintf(w, `<tr><td class="mono">%s</td><td><strong>%s</strong></td><td><span class="ec-pill ec-pill--navy">%s</span></td><td class="mono" style="text-align:right;color:var(--ec-red-700);font-weight:700">%d</td><td class="mono" style="text-align:right;color:var(--ec-ink-500)">%d</td></tr>`,
 codice,
 template.HTMLEscapeString(p.Nome),
 template.HTMLEscapeString(p.CategoriaName),
@@ -618,17 +730,6 @@ p.ScortaMinima,
 )
 }
 fmt.Fprint(w, `</tbody></table>`)
-}
-
-
-a.render(w, r, "admin", map[string]any{
-"Username":  a.getUsername(r),
-"Role":      a.getRole(r),
-"Utenti":    utenti,
-"Version":   AppVersion,
-"BrandName": a.cfg.BrandName,
-"BrandLogo": a.cfg.BrandLogoPath,
-})
 }
 
 // ── Categorie ────────────────────────────────────────────────────────────────
@@ -1098,9 +1199,6 @@ mux.HandleFunc("POST /ordini/{id}/rifiuta", app.requireRole("funzionario")(app.h
 mux.HandleFunc("POST /ordini/{id}/prepara", app.requireRole("magazziniere")(app.handlePreparaOrdine))
 mux.HandleFunc("POST /ordini/{id}/pronto", app.requireRole("magazziniere")(app.handleSegnaPronte))
 mux.HandleFunc("POST /ordini/{id}/consegna", app.requireRole("magazziniere")(app.handleConsegnaOrdine))
-
-// Admin area
-mux.HandleFunc("/admin", app.requireRole("admin")(app.handleAdminDashboard))
 
 // Categorie (magazziniere only for writes)
 mux.HandleFunc("GET /categorie", app.requireRole("magazziniere")(app.handleListCategorie))

@@ -56,3 +56,15 @@
 - [ ] **Docker Compose:** Definire i volumi per la persistenza del database SQLite.
 - [ ] **Script di Backup:** Creare uno script bash per il dump giornaliero del database.
 - [ ] **Test di Carico:** Verificare le prestazioni con l'upload di numerose immagini nel DB.
+
+## 10. UI Redesign — Residui dal bundle Claude Design
+*Il redesign generale (design system `ec-*`, app-shell sidebar+topbar, login split, dashboard utente/funzionario/magazziniere, anagrafica prodotti) è stato applicato. Restano da implementare le schermate del bundle non ancora cablate al backend.*
+
+- [ ] **Schermata Notifiche:** Endpoint `/notifiche` con elenco filtrato (Tutte / Non lette / Ordini / Scorte), stato letto/non-letto persistito, mark-all-as-read e chip filtri come da `app.jsx → NotificheScreen`.
+- [ ] **Schermata Impostazioni:** Endpoint `/impostazioni` con tab Account (profilo LDAP read-only + lingua/fuso), Notifiche (switch email per cambio stato / nuove approvazioni / riepilogo settimanale), Sicurezza (ultimo accesso, sessioni attive, esporta cronologia, logout globale) e Sistema (solo magazziniere: parametri FIFO, evasione parziale, soglia globale, backup DB, integrazioni LDAP/SMTP).
+- [ ] **Modale Anteprima FIFO:** Endpoint che, dato un `ordine_id`, restituisce la simulazione dei prelievi per lotto (senza commit) e il costo totale per settore. Da renderizzare in `ec-modal--wide` aperto dalla card del magazziniere — vedi `magazzino.jsx → FifoModal`.
+- [ ] **Reportistica (Tab Magazziniere):** Tab `/report` con KPI (spesa anno, ordini evasi, tempo medio evasione, settori attivi), bar chart "Spesa mensile" e legenda "Spesa per settore" — richiede aggregazioni SQL su `movimenti_magazzino` per mese e per `settore_id`, più export CSV. CSS già pronto (`ec-charts`, `ec-bar`, `ec-legend`).
+- [ ] **Header carrello — count live:** Il badge `ec-cart__count` nell'header del carrello è statico (riflette solo il render iniziale). Spostarlo dentro il fragment `#carrello-content` emesso da `renderCarrello` oppure usare un secondo target HTMX (`hx-swap-oob`) per aggiornarlo a ogni mutazione.
+- [ ] **Filtri categoria — collegamento backend:** I chip categoria nel catalogo linkano a `?cat=<id>` ma `GetCatalogo` ignora il parametro. Cablare il filtro nel handler `handleDashboardUtente` (e nella variante funzionario).
+- [ ] **Avatar — colore deterministico per utente:** L'avatar `ec-avatar` usa un gradiente fisso. Generare hue stabile dall'hash dello username per distinguere visivamente gli utenti.
+- [ ] **Vista mobile:** La sidebar collassa solo sotto 860px nascondendola. Aggiungere drawer/burger toggle per mobile.

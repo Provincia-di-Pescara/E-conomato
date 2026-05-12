@@ -29,15 +29,14 @@ func Authenticate(username, password string, cfg *config.Config) (bool, string, 
 	}
 
 	// ── MOCK / DEV MODE ─────────────────────────────────────────────────────
+	// Per facilitare i test, in mock mode il ruolo viene dedotto da suffissi
+	// nello username: ".magazziniere" e ".magazzino" → magazziniere;
+	// ".funzionario" → funzionario; tutti gli altri → user.
 	if cfg.LDAPHost == "mock" {
-		isAdminMock := false
-		for _, adminUser := range strings.Split(cfg.AdminUsers, ";") {
-			if strings.EqualFold(strings.TrimSpace(adminUser), username) {
-				isAdminMock = true
-				break
-			}
-		}
-		return true, resolveRole(false, false), nil
+		u := strings.ToLower(username)
+		isMag := strings.HasSuffix(u, ".magazziniere") || strings.HasSuffix(u, ".magazzino")
+		isFun := strings.HasSuffix(u, ".funzionario")
+		return true, resolveRole(isMag, isFun), nil
 	}
 
 	// ── TLS CONFIG ──────────────────────────────────────────────────────────
@@ -81,17 +80,6 @@ func Authenticate(username, password string, cfg *config.Config) (bool, string, 
 			return false, "", nil // credenziali errate → login fallito
 		}
 		return false, "", fmt.Errorf("ldap bind (%s): %w", userDN, err)
-	}
-
-	// ── EXPLICIT ADMIN LIST CHECK ───────────────────────────────────────────
-	isAdmin := false
-	if cfg.AdminUsers != "" {
-		for _, adminUser := range strings.Split(cfg.AdminUsers, ";") {
-			if strings.EqualFold(strings.TrimSpace(adminUser), username) {
-				isAdmin = true
-				break
-			}
-		}
 	}
 
 	// ── GROUP MEMBERSHIP CHECK ───────────────────────────────────────────────
@@ -227,12 +215,6 @@ func Authenticate(username, password string, cfg *config.Config) (bool, string, 
 		}
 	}
 
-	if !isAdmin && adminGroup != "" {
-		if checkNestedMembership(adminGroup, userFullDN) {
-			isAdmin = true
-		}
-	}
-
 	if !isMagazziniere && magazziniereGroup != "" {
 		if checkNestedMembership(magazziniereGroup, userFullDN) {
 			isMagazziniere = true
@@ -254,11 +236,9 @@ func Authenticate(username, password string, cfg *config.Config) (bool, string, 
 }
 
 // resolveRole maps LDAP group flags to a single role string.
-// Precedence: admin > magazziniere > funzionario > user.
-func resolveRole(isAdmin, isMagazziniere, isFunzionario bool) string {
+// Precedence: magazziniere > funzionario > user.
+func resolveRole(isMagazziniere, isFunzionario bool) string {
 	switch {
-	case isAdmin:
-		return "admin"
 	case isMagazziniere:
 		return "magazziniere"
 	case isFunzionario:

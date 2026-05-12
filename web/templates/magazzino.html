@@ -3,311 +3,353 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>E-conomato — Catalogo</title>
+  <title>E-conomato — Anagrafica</title>
   <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/style.css" />
   <script src="/static/js/htmx.min.js" defer></script>
-  <style>
-    .page-header{padding:2rem 2rem 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem}
-    .page-header h1{font-size:1.5rem;font-weight:600;margin:0}
-    .main-content{padding:1.5rem 2rem}
-    .tabs{display:flex;gap:.5rem;border-bottom:1px solid var(--c-border);margin-bottom:1.5rem}
-    .tab{padding:.55rem 1rem;border-radius:8px 8px 0 0;font-size:.875rem;font-weight:500;cursor:pointer;border:1px solid transparent;text-decoration:none;color:var(--c-text-2)}
-    .tab.active,.tab:hover{background:var(--c-surface);border-color:var(--c-border);color:var(--c-text)}
-    .section-box{background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:1.5rem;margin-bottom:2rem}
-    .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
-    .section-title{font-size:1rem;font-weight:600;margin:0}
-    table{width:100%;border-collapse:collapse;font-size:0.875rem}
-    th{text-align:left;padding:.6rem .75rem;background:var(--c-surface);border-bottom:2px solid var(--c-border);color:var(--c-text-2);font-weight:500}
-    td{padding:.6rem .75rem;border-bottom:1px solid var(--c-border);color:var(--c-text);vertical-align:middle}
-    tr:last-child td{border-bottom:none}
-    .badge-ok{display:inline-block;padding:.2rem .55rem;border-radius:99px;background:#dcfce7;color:#166534;font-size:.7rem;font-weight:600}
-    .badge-low{display:inline-block;padding:.2rem .55rem;border-radius:99px;background:#fee2e2;color:#b91c1c;font-size:.7rem;font-weight:600}
-    .product-img{width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid var(--c-border)}
-    .product-img-placeholder{width:40px;height:40px;border-radius:6px;background:var(--c-border);display:inline-flex;align-items:center;justify-content:center;color:var(--c-text-2);font-size:.6rem}
-    .btn-icon{background:none;border:1px solid var(--c-border);border-radius:6px;padding:.3rem .5rem;cursor:pointer;color:var(--c-text-2);font-size:.75rem;line-height:1}
-    .btn-icon:hover{background:var(--c-surface);color:var(--c-text)}
-    .btn-danger{border-color:#fca5a5;color:#b91c1c}
-    .btn-danger:hover{background:#fee2e2}
-    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:center;justify-content:center}
-    .modal-overlay.open{display:flex}
-    .modal{background:var(--c-bg);border:1px solid var(--c-border);border-radius:16px;padding:2rem;width:100%;max-width:540px;max-height:90vh;overflow-y:auto}
-    .modal h2{margin:0 0 1.5rem;font-size:1.1rem;font-weight:600}
-    .field-group{margin-bottom:1rem}
-    .field-group label{display:block;font-size:.8rem;font-weight:500;color:var(--c-text-2);margin-bottom:.35rem}
-    .field-group input,.field-group select,.field-group textarea{width:100%;padding:.55rem .75rem;border:1px solid var(--c-border);border-radius:8px;background:var(--c-bg);color:var(--c-text);font-size:.875rem;font-family:inherit}
-    .field-group input:focus,.field-group select:focus,.field-group textarea:focus{outline:none;border-color:var(--c-accent)}
-    .field-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
-    .form-actions{display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.5rem}
-    .empty-state{text-align:center;padding:3rem 1rem;color:var(--c-text-2)}
-    .cat-row{display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--c-border)}
-    .cat-row:last-child{border-bottom:none}
-    .cat-name{flex:1;font-size:.875rem}
-    .cat-edit-form{display:flex;gap:.5rem;flex:1}
-    .cat-edit-form input{flex:1;padding:.3rem .6rem;border:1px solid var(--c-accent);border-radius:6px;font-size:.875rem}
-    .nav-links{display:flex;gap:.5rem;flex-wrap:wrap}
-    .nav-links a{padding:.4rem .9rem;border-radius:8px;font-size:.875rem;font-weight:500;text-decoration:none;color:var(--c-text-2);border:1px solid var(--c-border);transition:background .15s}
-    .nav-links a:hover,.nav-links a.active{background:var(--c-accent);color:#fff;border-color:var(--c-accent)}
-    .htmx-indicator{opacity:0;transition:opacity .2s}
-    .htmx-request .htmx-indicator,.htmx-request.htmx-indicator{opacity:1}
-  </style>
 </head>
-<body class="dash-body">
+<body>
 
-  <nav class="navbar">
-    <div class="nav-brand">
-      <div class="logo-icon logo-icon--sm">
-        <img src="/static/img/logo-icon.svg" alt="Logo" class="logo-image">
-      </div>
-      <span class="logo-text">E-conomato</span>
-      {{if .BrandName}}
-      <div class="brand-divider"></div>
-      <div class="brand-logo">
-        {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}" class="brand-image">{{end}}
-        <span class="brand-name">{{.BrandName}}</span>
-      </div>
-      {{end}}
-    </div>
-    <div class="nav-user">
-      <div class="nav-links">
-        <a href="/dashboard">Dashboard</a>
-        <a href="/prodotti" class="active">Prodotti</a>
+<div class="ec-app">
 
-      </div>
-      <span class="user-chip" style="margin-left:.75rem">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        {{.Username}}
+  <!-- ═════════ Sidebar ═════════ -->
+  <nav class="ec-side">
+    <div class="ec-side__brand">
+      <span class="ec-brandmark" aria-label="E-conomato">
+        <img src="/static/img/logo-icon.svg" alt="" class="ec-brandmark__icon" />
+        <span class="ec-brandmark__word">-conomato</span>
       </span>
+    </div>
+
+    <div class="ec-side__ente">
+      <div class="ec-side__ente-logo">
+        {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}">
+        {{else}}<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/></svg>{{end}}
+      </div>
+      <div style="min-width:0">
+        <div class="ec-side__ente-name">{{if .BrandName}}{{.BrandName}}{{else}}Ente Pubblico{{end}}</div>
+        <div class="ec-side__ente-sub">Provincia di Pescara</div>
+      </div>
+    </div>
+
+    <div class="ec-side__group-label">Magazziniere</div>
+    <a href="/dashboard/magazzino" class="ec-side__link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h11v8H3V7Z"/><path d="M14 10h4l3 3v2h-7V10Z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg>
+      <span>Ordini</span>
+    </a>
+    <a href="/prodotti" class="ec-side__link is-active">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>
+      <span>Prodotti</span>
+    </a>
+    <a href="/categorie" class="ec-side__link" hx-get="/categorie" hx-target="#main-panel" hx-swap="innerHTML" hx-push-url="/categorie">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h7l2 2h9v12H3V6Z"/></svg>
+      <span>Categorie</span>
+    </a>
+    <button class="ec-side__link"
+      hx-get="/lotti/new" hx-target="#modal-body" hx-swap="innerHTML"
+      onclick="document.getElementById('modal').classList.add('is-open')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V9"/><path d="M7 14l5-5 5 5"/><path d="M4 4h16"/></svg>
+      <span>Carico merce</span>
+    </button>
+
+    <div class="ec-side__group-label">Generale</div>
+    <button class="ec-side__link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2H4.5L6 16Z"/><path d="M10 21h4"/></svg>
+      <span>Notifiche</span>
+    </button>
+    <button class="ec-side__link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg>
+      <span>Impostazioni</span>
+    </button>
+
+    <div class="ec-side__foot">
+      <span class="ec-avatar" style="width:36px;height:36px;font-size:13px">{{initials .Username}}</span>
+      <div style="min-width:0;flex:1">
+        <div class="ec-side__foot-name">{{.Username}}</div>
+        <div class="ec-side__foot-sub">{{.Role}}</div>
+      </div>
       <form method="POST" action="/logout" style="margin:0">
-        <button type="submit" class="btn btn-ghost" title="Esci">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <button type="submit" class="ec-side__link" style="width:32px;padding:6px;color:#8590A8" title="Esci">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h11"/></svg>
         </button>
       </form>
     </div>
   </nav>
 
-  <div class="page-header">
-    <h1>Catalogo &amp; Magazzino</h1>
-  </div>
+  <!-- ═════════ Main ═════════ -->
+  <div class="ec-main">
 
-  <div class="main-content">
-
-    <!-- ── TABS ── -->
-    <div class="tabs">
-      <a href="/prodotti" class="tab{{if eq .Partial "prodotti"}} active{{end}}">Prodotti</a>
-      <a href="/categorie" class="tab{{if eq .Partial "categorie"}} active{{end}}" hx-get="/categorie" hx-target="#main-panel" hx-swap="innerHTML" hx-push-url="/categorie">Categorie</a>
-      <a href="/lotti/new" class="tab" hx-get="/lotti/new" hx-target="#modal-body" hx-swap="innerHTML" onclick="document.getElementById('modal').classList.add('open');return false;">Carico merce</a>
-    </div>
-
-    <div id="main-panel">
-      {{if eq .Partial "prodotti"}}
-      <!-- ── Lista prodotti ── -->
-      <div class="section-header">
-        <span class="section-title">{{len .Prodotti}} prodotti</span>
-        <button class="btn btn-primary" style="font-size:.875rem"
-          hx-get="/prodotti/new"
-          hx-target="#modal-body"
-          hx-swap="innerHTML"
-          onclick="document.getElementById('modal').classList.add('open')">
-          + Nuovo prodotto
-        </button>
+    <header class="ec-topbar">
+      <div class="ec-topbar__title">
+        {{if .BrandName}}{{.BrandName}}{{else}}Provincia di Pescara{{end}}
+        <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
+        <b>Anagrafica prodotti</b>
       </div>
-      {{if .Prodotti}}
-      <table>
-        <thead>
-          <tr>
-            <th style="width:48px"></th>
-            <th>Codice</th>
-            <th>Nome</th>
-            <th>Categoria</th>
-            <th>Scorta att.</th>
-            <th>Scorta min.</th>
-            <th style="width:100px"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {{range .Prodotti}}
-          <tr id="prod-row-{{.ID}}">
-            <td>
-              {{if .ImmagineBLOB}}
-              <img src="/prodotti/{{.ID}}/immagine" class="product-img" alt="{{.Nome}}" loading="lazy">
-              {{else}}
-              <span class="product-img-placeholder">—</span>
+    </header>
+
+    <main class="ec-content">
+
+      <header class="ec-secthead">
+        <div>
+          <div class="ec-secthead__kicker">Catalogo</div>
+          <h1 class="ec-secthead__title">Prodotti, categorie e lotti</h1>
+          <p class="ec-secthead__sub">Gestione anagrafica del magazzino. Le foto sono salvate come BLOB nel database SQLite.</p>
+        </div>
+        <div class="ec-secthead__right">
+          <button class="ec-btn ec-btn--ghost"
+            hx-get="/lotti/new" hx-target="#modal-body" hx-swap="innerHTML"
+            onclick="document.getElementById('modal').classList.add('is-open')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V9"/><path d="M7 14l5-5 5 5"/><path d="M4 4h16"/></svg>
+            Carico merce
+          </button>
+          <button class="ec-btn ec-btn--primary"
+            hx-get="/prodotti/new" hx-target="#modal-body" hx-swap="innerHTML"
+            onclick="document.getElementById('modal').classList.add('is-open')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            Nuovo prodotto
+          </button>
+        </div>
+      </header>
+
+      <div class="ec-tabs">
+        <a href="/prodotti" class="ec-tab {{if eq .Partial "prodotti"}}is-active{{end}}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7"/></svg>
+          Prodotti
+          {{if .Prodotti}}<span class="ec-tab__badge">{{len .Prodotti}}</span>{{end}}
+        </a>
+        <a href="/categorie" class="ec-tab {{if eq .Partial "categorie"}}is-active{{end}}"
+           hx-get="/categorie" hx-target="#main-panel" hx-swap="innerHTML" hx-push-url="/categorie">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h7l2 2h9v12H3V6Z"/></svg>
+          Categorie
+          {{if .Categorie}}<span class="ec-tab__badge">{{len .Categorie}}</span>{{end}}
+        </a>
+      </div>
+
+      <div id="main-panel">
+        {{if eq .Partial "prodotti"}}
+          {{if .Prodotti}}
+          <table class="ec-table">
+            <thead>
+              <tr>
+                <th style="width:64px"></th>
+                <th>Codice</th>
+                <th>Articolo</th>
+                <th>Categoria</th>
+                <th style="text-align:right">Giacenza</th>
+                <th style="text-align:right">Scorta min.</th>
+                <th style="width:90px"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .Prodotti}}
+              <tr id="prod-row-{{.ID}}">
+                <td>
+                  <div class="ec-prod-img ec-prod-img--sm ec-prod-img--cat-default">
+                    {{if .ImmagineBLOB}}<img src="/prodotti/{{.ID}}/immagine" alt="{{.Nome}}" loading="lazy">
+                    {{else}}<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7"/></svg>{{end}}
+                  </div>
+                </td>
+                <td class="mono">{{if .CodiceArticolo}}{{.CodiceArticolo}}{{else}}<span style="opacity:.4">—</span>{{end}}</td>
+                <td>
+                  <strong>{{.Nome}}</strong>
+                  {{if .Descrizione}}<div style="font-size:11.5px;color:var(--ec-ink-500);margin-top:2px;max-width:36ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{.Descrizione}}</div>{{end}}
+                </td>
+                <td><span class="ec-pill ec-pill--navy">{{.CategoriaName}}</span></td>
+                <td class="mono" style="text-align:right{{if lt .ScortaRimanente .ScortaMinima}};color:var(--ec-red-700);font-weight:700{{end}}">{{.ScortaRimanente}}</td>
+                <td class="mono" style="text-align:right;color:var(--ec-ink-500)">{{.ScortaMinima}}</td>
+                <td style="text-align:right;white-space:nowrap">
+                  <button class="ec-btn ec-btn--ghost ec-btn--sm" title="Modifica"
+                    hx-get="/prodotti/{{.ID}}/edit"
+                    hx-target="#modal-body" hx-swap="innerHTML"
+                    onclick="document.getElementById('modal').classList.add('is-open')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l6 6-10 10H4v-6L14 4Z"/></svg>
+                  </button>
+                  <button class="ec-btn ec-btn--danger ec-btn--sm" title="Elimina"
+                    hx-delete="/prodotti/{{.ID}}"
+                    hx-confirm="Eliminare il prodotto {{.Nome}}?"
+                    hx-target="#prod-row-{{.ID}}" hx-swap="delete">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
+                  </button>
+                </td>
+              </tr>
               {{end}}
-            </td>
-            <td>{{if .CodiceArticolo}}{{.CodiceArticolo}}{{else}}<span style="opacity:.4">—</span>{{end}}</td>
-            <td><strong>{{.Nome}}</strong>{{if .Descrizione}}<br><span style="font-size:.75rem;opacity:.6">{{.Descrizione}}</span>{{end}}</td>
-            <td>{{.CategoriaName}}</td>
-            <td>
-              {{if lt .ScortaRimanente .ScortaMinima}}
-              <span class="badge-low">{{.ScortaRimanente}}</span>
-              {{else}}
-              <span class="badge-ok">{{.ScortaRimanente}}</span>
-              {{end}}
-            </td>
-            <td>{{.ScortaMinima}}</td>
-            <td style="text-align:right;white-space:nowrap">
-              <button class="btn-icon" title="Modifica"
-                hx-get="/prodotti/{{.ID}}/edit"
-                hx-target="#modal-body"
-                hx-swap="innerHTML"
-                onclick="document.getElementById('modal').classList.add('open')">&#9998;</button>
-              <button class="btn-icon btn-danger" title="Elimina"
-                hx-delete="/prodotti/{{.ID}}"
-                hx-confirm="Eliminare il prodotto {{.Nome}}?"
-                hx-target="#prod-row-{{.ID}}"
-                hx-swap="delete">&#10005;</button>
-            </td>
-          </tr>
+            </tbody>
+          </table>
+          {{else}}
+          <div class="ec-empty">
+            <div class="ec-empty__icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4V7Z"/><path d="M3 7l9 4 9-4"/><path d="M12 11v10"/></svg>
+            </div>
+            <div class="ec-empty__title">Nessun prodotto</div>
+            <div class="ec-empty__hint">Clicca "Nuovo prodotto" per iniziare l'anagrafica.</div>
+          </div>
           {{end}}
-        </tbody>
-      </table>
-      {{else}}
-      <div class="empty-state">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
-        <p style="margin-top:.75rem">Nessun prodotto. Clicca "+ Nuovo prodotto" per iniziare.</p>
+
+        {{else if eq .Partial "categorie"}}
+        <div id="categorie-list">
+          {{template "categorie-partial" .}}
+        </div>
+
+        {{else if eq .Partial "prodotto-form"}}
+        {{template "prodotto-form-partial" .}}
+
+        {{else if eq .Partial "lotto-form"}}
+        {{template "lotto-form-partial" .}}
+        {{end}}
       </div>
-      {{end}}
 
-      {{else if eq .Partial "categorie"}}
-      <!-- ── Categorie ── -->
-      <div id="categorie-list">
-        {{template "categorie-partial" .}}
-      </div>
-
-      {{else if eq .Partial "prodotto-form"}}
-      <!-- ── Form prodotto (fragment) ── -->
-      {{template "prodotto-form-partial" .}}
-
-      {{else if eq .Partial "lotto-form"}}
-      <!-- ── Form lotto (fragment) ── -->
-      {{template "lotto-form-partial" .}}
-
-      {{end}}
-    </div>
-
+    </main>
   </div>
+</div>
 
-  <!-- ── Modal ── -->
-  <div id="modal" class="modal-overlay" onclick="if(event.target===this)this.classList.remove('open')">
-    <div class="modal" id="modal-body">
-    </div>
-  </div>
+<!-- ═════════ Modal ═════════ -->
+<div id="modal" class="ec-modal-bg" style="display:none"
+     onclick="if(event.target===this)this.classList.remove('is-open')">
+  <div class="ec-modal" id="modal-body"></div>
+</div>
+
+<style>
+  #modal { display: none; }
+  #modal.is-open { display: flex; }
+</style>
 
 </body>
 </html>
 
 {{define "categorie-partial"}}
-<div class="section-header">
-  <span class="section-title">Categorie</span>
-</div>
-<div id="cat-list">
-  {{range .Categorie}}
-  <div class="cat-row" id="cat-{{.ID}}">
-    <span class="cat-name">{{.Nome}}</span>
-    <button class="btn-icon" data-id="{{.ID}}" data-nome="{{.Nome}}" onclick="startEditCat(this.dataset.id, this.dataset.nome)" title="Modifica">&#9998;</button>
-    <button class="btn-icon btn-danger" title="Elimina"
-      hx-delete="/categorie/{{.ID}}"
-      hx-confirm="Eliminare la categoria {{.Nome}}?"
-      hx-target="#cat-list"
-      hx-swap="innerHTML">&#10005;</button>
+<div class="ec-card">
+  <div class="ec-card-head">
+    <div>
+      <div class="ec-card-head__title">Categorie</div>
+      <div class="ec-card-head__sub">Tassonomia gestita dal magazzino — usata in catalogo e filtri.</div>
+    </div>
+    <span class="ec-pill ec-pill--navy">{{len .Categorie}} totali</span>
   </div>
-  {{else}}
-  <p style="color:var(--c-text-2);font-size:.875rem">Nessuna categoria.</p>
-  {{end}}
+  <div id="cat-list" style="padding:8px 14px">
+    {{range .Categorie}}
+    <div id="cat-{{.ID}}" style="display:flex;align-items:center;gap:10px;padding:10px 6px;border-bottom:1px solid var(--ec-line-2)">
+      <span style="flex:1;font-size:14px">{{.Nome}}</span>
+      <button class="ec-btn ec-btn--ghost ec-btn--sm"
+              data-id="{{.ID}}" data-nome="{{.Nome}}"
+              onclick="startEditCat(this.dataset.id, this.dataset.nome)" title="Modifica">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l6 6-10 10H4v-6L14 4Z"/></svg>
+      </button>
+      <button class="ec-btn ec-btn--danger ec-btn--sm" title="Elimina"
+              hx-delete="/categorie/{{.ID}}"
+              hx-confirm="Eliminare la categoria {{.Nome}}?"
+              hx-target="#cat-list" hx-swap="innerHTML">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
+      </button>
+    </div>
+    {{else}}
+    <p style="color:var(--ec-ink-500);font-size:14px;padding:10px 6px">Nessuna categoria.</p>
+    {{end}}
+  </div>
+  <form hx-post="/categorie" hx-target="#cat-list" hx-swap="innerHTML"
+        style="display:flex;gap:10px;padding:14px;border-top:1px solid var(--ec-line)">
+    <input type="text" name="nome" placeholder="Nuova categoria" required class="ec-input" style="flex:1">
+    <button type="submit" class="ec-btn ec-btn--primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+      Aggiungi
+    </button>
+  </form>
 </div>
-<form hx-post="/categorie" hx-target="#cat-list" hx-swap="innerHTML" style="display:flex;gap:.5rem;margin-top:1rem">
-  <input type="text" name="nome" placeholder="Nuova categoria" required style="flex:1;padding:.45rem .75rem;border:1px solid var(--c-border);border-radius:8px;font-size:.875rem">
-  <button type="submit" class="btn btn-primary" style="font-size:.875rem">Aggiungi</button>
-</form>
 <script>
 function startEditCat(id, nome) {
-  const row = document.getElementById('cat-' + id);
+  var row = document.getElementById('cat-' + id);
   if (!row) return;
-  row.innerHTML = '<form class="cat-edit-form" hx-put="/categorie/' + id + '" hx-target="#cat-list" hx-swap="innerHTML">' +
-    '<input type="text" name="nome" value="' + nome.replace(/"/g,'&quot;') + '" required autofocus>' +
-    '<button type="submit" class="btn-icon" title="Salva">&#10003;</button>' +
+  row.innerHTML = '<form class="ec-row" hx-put="/categorie/' + id + '" hx-target="#cat-list" hx-swap="innerHTML" style="flex:1;gap:8px">' +
+    '<input type="text" name="nome" value="' + nome.replace(/"/g,'&quot;') + '" required autofocus class="ec-input" style="flex:1">' +
+    '<button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">Salva</button>' +
     '</form>' +
-    '<button class="btn-icon" onclick="htmx.ajax(\'GET\',\'/categorie\',{target:\'#cat-list\',swap:\'innerHTML\'})" title="Annulla">&#10005;</button>';
-  htmx.process(row);
+    '<button class="ec-btn ec-btn--ghost ec-btn--sm" onclick="htmx.ajax(\'GET\',\'/categorie\',{target:\'#cat-list\',swap:\'innerHTML\'})">Annulla</button>';
+  if (window.htmx) htmx.process(row);
 }
 </script>
 {{end}}
 
 {{define "prodotto-form-partial"}}
-<h2>{{if .Prodotto.ID}}Modifica prodotto{{else}}Nuovo prodotto{{end}}</h2>
+<div class="ec-modal__head">
+  <div class="ec-modal__title">{{if .Prodotto.ID}}Modifica prodotto{{else}}Nuovo prodotto{{end}}</div>
+  <div class="ec-modal__sub">Le immagini vengono salvate come BLOB nel database SQLite — max 10 MB.</div>
+</div>
 <form method="POST" action="{{if .Prodotto.ID}}/prodotti/{{.Prodotto.ID}}{{else}}/prodotti{{end}}" enctype="multipart/form-data">
-  <div class="field-row">
-    <div class="field-group">
-      <label>Codice articolo</label>
-      <input type="text" name="codice_articolo" value="{{.Prodotto.CodiceArticolo}}" placeholder="es. ART-001">
+  <div class="ec-formgrid">
+    <div>
+      <label class="ec-label">Codice articolo</label>
+      <input type="text" name="codice_articolo" value="{{.Prodotto.CodiceArticolo}}" placeholder="es. C0560" class="ec-input mono">
     </div>
-    <div class="field-group">
-      <label>Categoria</label>
-      <select name="categoria_id">
+    <div>
+      <label class="ec-label">Categoria</label>
+      <select name="categoria_id" class="ec-select">
         <option value="0">— Nessuna —</option>
         {{range .Categorie}}
         <option value="{{.ID}}"{{if eq .ID $.Prodotto.CategoriaID}} selected{{end}}>{{.Nome}}</option>
         {{end}}
       </select>
     </div>
-  </div>
-  <div class="field-group">
-    <label>Nome <span style="color:#b91c1c">*</span></label>
-    <input type="text" name="nome" value="{{.Prodotto.Nome}}" required autofocus>
-  </div>
-  <div class="field-group">
-    <label>Descrizione</label>
-    <textarea name="descrizione" rows="3" placeholder="Descrizione opzionale">{{.Prodotto.Descrizione}}</textarea>
-  </div>
-  <div class="field-row">
-    <div class="field-group">
-      <label>Scorta minima</label>
-      <input type="number" name="scorta_minima" value="{{.Prodotto.ScortaMinima}}" min="0">
+    <div style="grid-column:1 / -1">
+      <label class="ec-label">Nome *</label>
+      <input type="text" name="nome" value="{{.Prodotto.Nome}}" required autofocus class="ec-input">
     </div>
-    <div class="field-group">
-      <label>Immagine</label>
-      <input type="file" name="immagine" accept="image/*">
+    <div style="grid-column:1 / -1">
+      <label class="ec-label">Descrizione</label>
+      <textarea name="descrizione" rows="3" placeholder="Descrizione opzionale" class="ec-textarea">{{.Prodotto.Descrizione}}</textarea>
+    </div>
+    <div>
+      <label class="ec-label">Scorta minima</label>
+      <input type="number" name="scorta_minima" value="{{.Prodotto.ScortaMinima}}" min="0" class="ec-input mono">
+    </div>
+    <div>
+      <label class="ec-label">Immagine</label>
+      <input type="file" name="immagine" accept="image/*" class="ec-input" style="padding:7px 10px">
     </div>
   </div>
-  <div class="form-actions">
-    <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal').classList.remove('open')">Annulla</button>
-    <button type="submit" class="btn btn-primary">{{if .Prodotto.ID}}Salva modifiche{{else}}Crea prodotto{{end}}</button>
+  <div class="ec-modal__foot">
+    <button type="button" class="ec-btn ec-btn--ghost" onclick="document.getElementById('modal').classList.remove('is-open')">Annulla</button>
+    <button type="submit" class="ec-btn ec-btn--primary">{{if .Prodotto.ID}}Salva modifiche{{else}}Crea prodotto{{end}}</button>
   </div>
 </form>
 {{end}}
 
 {{define "lotto-form-partial"}}
-<h2>Carico merce — Nuovo lotto</h2>
+<div class="ec-modal__head">
+  <div class="ec-modal__title">Carico merce — Nuovo lotto</div>
+  <div class="ec-modal__sub">Il lotto entra nel calcolo FIFO con data acquisto crescente.</div>
+</div>
 <form method="POST" action="/lotti">
-  <div class="field-group">
-    <label>Prodotto <span style="color:#b91c1c">*</span></label>
-    <select name="prodotto_id" required>
-      <option value="">— Seleziona prodotto —</option>
-      {{range .Prodotti}}
-      <option value="{{.ID}}">{{if .CodiceArticolo}}[{{.CodiceArticolo}}] {{end}}{{.Nome}}</option>
-      {{end}}
-    </select>
-  </div>
-  <div class="field-row">
-    <div class="field-group">
-      <label>Data acquisto</label>
-      <input type="date" name="data_acquisto">
+  <div class="ec-formgrid">
+    <div style="grid-column:1 / -1">
+      <label class="ec-label">Prodotto *</label>
+      <select name="prodotto_id" required class="ec-select">
+        <option value="">— Seleziona prodotto —</option>
+        {{range .Prodotti}}
+        <option value="{{.ID}}">{{if .CodiceArticolo}}[{{.CodiceArticolo}}] {{end}}{{.Nome}}</option>
+        {{end}}
+      </select>
     </div>
-    <div class="field-group">
-      <label>Quantità <span style="color:#b91c1c">*</span></label>
-      <input type="number" name="quantita" min="1" required>
+    <div>
+      <label class="ec-label">Data acquisto</label>
+      <input type="date" name="data_acquisto" class="ec-input">
+    </div>
+    <div>
+      <label class="ec-label">Quantità *</label>
+      <input type="number" name="quantita" min="1" required class="ec-input mono">
+    </div>
+    <div style="grid-column:1 / -1">
+      <label class="ec-label">Costo unitario (€)</label>
+      <input type="text" name="costo_unitario" placeholder="0.00" class="ec-input mono">
     </div>
   </div>
-  <div class="field-group">
-    <label>Costo unitario (€)</label>
-    <input type="text" name="costo_unitario" placeholder="0.00">
-  </div>
-  <div class="form-actions">
-    <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal').classList.remove('open')">Annulla</button>
-    <button type="submit" class="btn btn-primary">Registra lotto</button>
+  <div class="ec-modal__foot">
+    <button type="button" class="ec-btn ec-btn--ghost" onclick="document.getElementById('modal').classList.remove('is-open')">Annulla</button>
+    <button type="submit" class="ec-btn ec-btn--primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg>
+      Registra lotto
+    </button>
   </div>
 </form>
 {{end}}

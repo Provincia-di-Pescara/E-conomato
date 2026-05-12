@@ -3,502 +3,426 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gestionale — Funzionario</title>
+  <title>E-conomato — Funzionario</title>
   <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/style.css" />
-  <style>
-    :root { --font: 'DM Sans', system-ui, sans-serif; }
-
-    /* Approval cards */
-    .approval-card {
-      background: var(--c-surface);
-      border: 1px solid var(--c-border);
-      border-radius: 8px;
-      margin-bottom: 1rem;
-      overflow: hidden;
-    }
-
-    .approval-card summary {
-      list-style: none;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 1rem;
-      cursor: pointer;
-      user-select: none;
-      gap: 1rem;
-    }
-    .approval-card summary::-webkit-details-marker { display: none; }
-    .approval-card[open] summary { border-bottom: 1px solid var(--c-border); }
-
-    .approval-meta {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-      font-size: 0.85rem;
-    }
-    .approval-meta .order-id { font-weight: 600; }
-    .approval-meta .meta-dim { color: var(--c-text-3); }
-
-    .approval-chevron {
-      color: var(--c-text-3);
-      flex-shrink: 0;
-      transition: transform 0.2s;
-    }
-    details[open] .approval-chevron { transform: rotate(180deg); }
-
-    .approval-body { padding: 1.25rem; }
-    .approval-forms {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.5rem;
-    }
-    @media (max-width: 700px) { .approval-forms { grid-template-columns: 1fr; } }
-
-    .form-box {
-      border: 1px solid var(--c-border);
-      border-radius: 6px;
-      padding: 1rem;
-    }
-    .form-box-title {
-      font-size: 0.78rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: var(--c-text-3);
-      margin-bottom: 1rem;
-    }
-    .form-box table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.82rem;
-      margin-bottom: 0.85rem;
-    }
-    .form-box table th {
-      text-align: left;
-      padding: 0.35rem 0.5rem;
-      color: var(--c-text-3);
-      font-weight: 500;
-      font-size: 0.7rem;
-      border-bottom: 1px solid var(--c-border);
-    }
-    .form-box table td {
-      padding: 0.35rem 0.5rem;
-      border-bottom: 1px solid var(--c-border);
-    }
-    .form-box table tr:last-child td { border-bottom: none; }
-
-    .field-label {
-      display: block;
-      font-size: 0.72rem;
-      color: var(--c-text-3);
-      font-weight: 500;
-      margin-bottom: 0.3rem;
-    }
-    .form-textarea {
-      width: 100%;
-      padding: 0.4rem 0.5rem;
-      border: 1px solid var(--c-border);
-      border-radius: 4px;
-      background: var(--c-bg);
-      color: var(--c-text);
-      font-size: 0.82rem;
-      font-family: inherit;
-      min-height: 72px;
-      resize: vertical;
-      box-sizing: border-box;
-      margin-bottom: 0.75rem;
-    }
-    .form-textarea:focus { outline: none; border-color: var(--c-accent); }
-
-    .qty-cell-input {
-      width: 56px;
-      padding: 0.25rem 0.35rem;
-      border: 1px solid var(--c-border);
-      border-radius: 3px;
-      background: var(--c-bg);
-      color: var(--c-text);
-      font-size: 0.8rem;
-      text-align: center;
-    }
-
-    .btn-approve {
-      display: block;
-      width: 100%;
-      padding: 0.5rem;
-      background: var(--c-accent);
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      font-size: 0.82rem;
-      font-weight: 600;
-      cursor: pointer;
-      font-family: inherit;
-      transition: background 0.12s;
-    }
-    .btn-approve:hover { background: var(--c-accent-h); }
-
-    .btn-reject {
-      display: block;
-      width: 100%;
-      padding: 0.5rem;
-      background: rgba(239,68,68,0.1);
-      color: var(--c-danger);
-      border: 1px solid rgba(239,68,68,0.2);
-      border-radius: 4px;
-      font-size: 0.82rem;
-      font-weight: 600;
-      cursor: pointer;
-      font-family: inherit;
-      transition: background 0.12s;
-    }
-    .btn-reject:hover { background: rgba(239,68,68,0.18); }
-
-    /* Catalog + cart (same as utente) */
-    .catalog-layout {
-      display: grid;
-      grid-template-columns: 1fr 260px;
-      gap: 2rem;
-      align-items: flex-start;
-    }
-    @media (max-width: 860px) { .catalog-layout { grid-template-columns: 1fr; } }
-
-    .products-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-      gap: 0.75rem;
-    }
-    .product-card {
-      background: var(--c-surface);
-      border: 1px solid var(--c-border);
-      border-radius: 8px;
-      padding: 0.9rem;
-      transition: border-color 0.12s;
-    }
-    .product-card:hover { border-color: rgba(255,255,255,0.12); }
-    .product-name { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.15rem; }
-    .product-cat { font-size: 0.7rem; color: var(--c-text-3); margin-bottom: 0.7rem; }
-    .product-footer { display: flex; align-items: center; gap: 0.4rem; }
-    .stock-n { font-size: 0.72rem; color: var(--c-text-3); margin-right: auto; }
-    .qty-in {
-      width: 52px; padding: 0.28rem 0.4rem;
-      border: 1px solid var(--c-border); border-radius: 4px;
-      background: var(--c-bg); color: var(--c-text);
-      font-size: 0.8rem; font-family: inherit; text-align: center;
-    }
-    .btn-add {
-      padding: 0.28rem 0.6rem;
-      background: var(--c-surface-2); border: 1px solid var(--c-border-2);
-      border-radius: 4px; color: var(--c-text-2);
-      font-size: 0.78rem; font-weight: 500; cursor: pointer; font-family: inherit;
-      transition: color 0.12s, border-color 0.12s, background 0.12s;
-      white-space: nowrap;
-    }
-    .btn-add:hover { color: var(--c-accent); border-color: rgba(99,102,241,0.4); background: rgba(99,102,241,0.08); }
-
-    .cart-panel {
-      position: sticky; top: 1.5rem;
-      background: var(--c-surface); border: 1px solid var(--c-border);
-      border-radius: 8px; padding: 1.1rem;
-      max-height: calc(100vh - 3rem); overflow-y: auto;
-    }
-    .cart-head { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--c-text-3); margin-bottom: 0.85rem; }
-    .cart-row { display: flex; align-items: center; gap: 0.4rem; padding: 0.45rem 0; border-bottom: 1px solid var(--c-border); }
-    .cart-row:last-of-type { border-bottom: none; }
-    .cart-pname { flex: 1; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .cart-qty { width: 52px; padding: 0.25rem 0.3rem; border: 1px solid var(--c-border); border-radius: 4px; background: var(--c-bg); color: var(--c-text); font-size: 0.78rem; font-family: inherit; text-align: center; }
-    .cart-rm { background: none; border: none; cursor: pointer; color: var(--c-text-3); padding: 0.15rem; display: flex; align-items: center; transition: color 0.12s; }
-    .cart-rm:hover { color: var(--c-danger); }
-    .cart-empty { text-align: center; padding: 1.75rem 0; color: var(--c-text-3); font-size: 0.82rem; }
-    .btn-order {
-      display: block; width: 100%; margin-top: 0.85rem; padding: 0.55rem;
-      background: var(--c-accent); color: #fff; border: none; border-radius: 4px;
-      font-size: 0.84rem; font-weight: 600; cursor: pointer; font-family: inherit;
-      transition: background 0.12s;
-    }
-    .btn-order:hover { background: var(--c-accent-h); }
-  </style>
 </head>
-<body class="dash-body">
-<div class="app-shell">
+<body>
 
-  <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <div class="sidebar-logo">
-      <div class="sidebar-logo-inner">
-        <img src="/static/img/logo-icon.svg" alt="Logo">
-        <span class="sidebar-logo-text">Gestionale</span>
-      </div>
-      {{if .BrandName}}
-      <div class="sidebar-brand">
-        {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}">{{end}}
-        <span class="sidebar-brand-name">{{.BrandName}}</span>
-      </div>
-      {{end}}
+<div class="ec-app">
+
+  <!-- ═════════ Sidebar ═════════ -->
+  <nav class="ec-side">
+    <div class="ec-side__brand">
+      <span class="ec-brandmark" aria-label="E-conomato">
+        <img src="/static/img/logo-icon.svg" alt="" class="ec-brandmark__icon" />
+        <span class="ec-brandmark__word">-conomato</span>
+      </span>
     </div>
 
-    <nav class="sidebar-nav">
-      <button class="sidebar-item active" onclick="showView('approvazioni',this)">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-        Da approvare
-        {{if gt (len .DaApprovare) 0}}<span class="sidebar-badge">{{len .DaApprovare}}</span>{{end}}
-      </button>
-      <button class="sidebar-item" onclick="showView('miei',this)">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-        I miei ordini
-      </button>
-      <button class="sidebar-item" onclick="showView('nuovo',this)">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Nuovo ordine
-      </button>
-    </nav>
+    <div class="ec-side__ente">
+      <div class="ec-side__ente-logo">
+        {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}">
+        {{else}}<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/></svg>{{end}}
+      </div>
+      <div style="min-width:0">
+        <div class="ec-side__ente-name">{{if .BrandName}}{{.BrandName}}{{else}}Ente Pubblico{{end}}</div>
+        <div class="ec-side__ente-sub">Provincia di Pescara</div>
+      </div>
+    </div>
 
-    <div class="sidebar-footer">
-      <div class="sidebar-user-info">
-        <div class="sidebar-avatar">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        </div>
-        <div style="overflow:hidden;min-width:0">
-          <div class="sidebar-user-name">{{.Username}}</div>
-          <div class="sidebar-user-role">{{.Role}}</div>
-        </div>
+    <div class="ec-side__group-label">Funzionario</div>
+    <button class="ec-side__link is-active" data-view="approva">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6v3H9z"/><path d="M7 5H5v16h14V5h-2"/><path d="M8 11h8"/><path d="M8 15h6"/></svg>
+      <span>Da approvare</span>
+      {{if .DaApprovare}}<span class="ec-side__badge">{{len .DaApprovare}}</span>{{end}}
+    </button>
+    <button class="ec-side__link" data-view="nuovo">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+      <span>Nuovo ordine</span>
+    </button>
+    <button class="ec-side__link" data-view="miei">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v5h5"/><path d="M12 7v5l3 3"/></svg>
+      <span>I miei ordini</span>
+      {{if .MieiOrdini}}<span class="ec-side__badge">{{len .MieiOrdini}}</span>{{end}}
+    </button>
+
+    <div class="ec-side__group-label">Generale</div>
+    <button class="ec-side__link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2H4.5L6 16Z"/><path d="M10 21h4"/></svg>
+      <span>Notifiche</span>
+    </button>
+    <button class="ec-side__link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg>
+      <span>Impostazioni</span>
+    </button>
+
+    <div class="ec-side__foot">
+      <span class="ec-avatar" style="width:36px;height:36px;font-size:13px">{{initials .Username}}</span>
+      <div style="min-width:0;flex:1">
+        <div class="ec-side__foot-name">{{.Username}}</div>
+        <div class="ec-side__foot-sub">{{.Role}}</div>
       </div>
       <form method="POST" action="/logout" style="margin:0">
-        <button type="submit" class="sidebar-logout">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          Esci
+        <button type="submit" class="ec-side__link" style="width:32px;padding:6px;color:#8590A8" title="Esci">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h11"/></svg>
         </button>
       </form>
     </div>
-  </aside>
+  </nav>
 
-  <!-- MAIN -->
-  <main class="sidebar-main">
+  <!-- ═════════ Main ═════════ -->
+  <div class="ec-main">
 
-    <!-- DA APPROVARE -->
-    <div id="view-approvazioni">
-      <div class="page-topbar">
-        <h1 class="page-title">Da approvare</h1>
+    <header class="ec-topbar">
+      <div class="ec-topbar__title">
+        {{if .BrandName}}{{.BrandName}}{{else}}Provincia di Pescara{{end}}
+        <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
+        <b data-topbar-title>Richieste da approvare</b>
       </div>
-      <div class="page-content">
+      <div class="ec-topbar__right">
+        <button class="ec-iconbtn" title="Notifiche">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2H4.5L6 16Z"/><path d="M10 21h4"/></svg>
+          {{if .DaApprovare}}<span class="ec-iconbtn__count">{{len .DaApprovare}}</span>{{end}}
+        </button>
+        <button class="ec-iconbtn" title="Aiuto">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8v.5"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="ec-content">
+
+      <!-- ─── Vista: Da approvare ─── -->
+      <section data-view-section="approva">
+        <header class="ec-secthead">
+          <div>
+            <div class="ec-secthead__kicker">Area funzionario</div>
+            <h1 class="ec-secthead__title">Richieste da approvare</h1>
+            <p class="ec-secthead__sub">Esamina le richieste del tuo settore. Puoi approvare, ridurre le quantità (mai aumentarle) o rifiutare con motivazione obbligatoria.</p>
+          </div>
+        </header>
+
         {{if .DaApprovare}}
+        <div class="ec-stack">
           {{range .DaApprovare}}
-          <div class="approval-card">
-            <details>
-              <summary>
-                <div class="approval-meta">
-                  <span class="order-id">#{{.Ordine.ID}}</span>
-                  <span class="meta-dim">da {{.Ordine.UtenteUsername}}</span>
-                  <span class="meta-dim">{{fmtDate .Ordine.DataCreazione}}</span>
-                  <span class="badge-stato badge-{{.Ordine.Stato}}">{{.Ordine.Stato}}</span>
-                </div>
-                <svg class="approval-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="6 9 12 15 18 9"/></svg>
-              </summary>
+          {{$tot := 0}}{{range .Righe}}{{$tot = add $tot .QtaRichiesta}}{{end}}
+          <div class="ec-order" data-order-card>
+            <header class="ec-order__head">
+              <span class="ec-order__id">#{{.Ordine.ID}}</span>
+              <span class="ec-order__meta">
+                <b>{{.Ordine.UtenteUsername}}</b> · {{fmtDate .Ordine.DataCreazione}}
+              </span>
+              <span class="ec-pill ec-pill--{{statoTone .Ordine.Stato}}">{{statoLabel .Ordine.Stato}}</span>
+            </header>
 
-              <div class="approval-body">
-                <div class="approval-forms">
-
-                  <form method="POST" action="/ordini/{{.Ordine.ID}}/approva">
-                    <div class="form-box">
-                      <div class="form-box-title">Approva</div>
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Prodotto</th>
-                            <th style="text-align:center">Richiesta</th>
-                            <th style="text-align:center">Approva</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {{range .Righe}}
-                          <tr>
-                            <td>{{.ProdottoNome}}</td>
-                            <td style="text-align:center">{{.QtaRichiesta}}</td>
-                            <td style="text-align:center">
-                              <input type="number" name="riga_{{.ID}}"
-                                     min="0" max="{{.QtaRichiesta}}" value="{{.QtaRichiesta}}"
-                                     class="qty-cell-input">
-                            </td>
-                          </tr>
-                          {{end}}
-                        </tbody>
-                      </table>
-                      <label class="field-label">Note (opzionale)</label>
-                      <textarea class="form-textarea" name="note" placeholder="Aggiungi note..."></textarea>
-                      <button type="submit" class="btn-approve">Approva ordine</button>
+            <form method="POST" action="/ordini/{{.Ordine.ID}}/approva" data-approve-form>
+              <div class="ec-order__body">
+                <div class="ec-order__rows">
+                  {{range .Righe}}
+                  <div class="ec-order__row">
+                    <div class="ec-prod-img ec-prod-img--sm ec-prod-img--cat-default">
+                      <img src="/prodotti/{{.ProdottoID}}/immagine" alt="" onerror="this.style.display='none'">
                     </div>
-                  </form>
-
-                  <form method="POST" action="/ordini/{{.Ordine.ID}}/rifiuta">
-                    <div class="form-box">
-                      <div class="form-box-title">Rifiuta</div>
-                      <label class="field-label">Motivo <span style="color:var(--c-danger)">*</span></label>
-                      <textarea class="form-textarea" name="note"
-                                placeholder="Specifica il motivo del rifiuto..." required
-                                style="min-height:100px"></textarea>
-                      <button type="submit" class="btn-reject">Rifiuta ordine</button>
+                    <div>
+                      <div class="ec-order__row-name">{{.ProdottoNome}}</div>
+                      <div class="ec-order__row-meta">Riga #{{.ID}}</div>
                     </div>
-                  </form>
-
+                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                      <div style="font-size:11px;color:var(--ec-ink-500)">Richiesto</div>
+                      <span class="ec-order__row-qty">{{.QtaRichiesta}} pz</span>
+                    </div>
+                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                      <div style="font-size:11px;color:var(--ec-ink-500)">Approva</div>
+                      <input type="number" name="riga_{{.ID}}"
+                             min="0" max="{{.QtaRichiesta}}" value="{{.QtaRichiesta}}"
+                             class="ec-order__row-qty-input">
+                    </div>
+                  </div>
+                  {{end}}
                 </div>
               </div>
-            </details>
+
+              <!-- Pannello rifiuto (toggled) -->
+              <div class="ec-note ec-note--gold" style="display:none" data-reject-panel>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2L12 3Z"/><path d="M12 10v5"/><path d="M12 18v.5"/></svg>
+                <div style="flex:1">
+                  <div style="font-weight:600;margin-bottom:6px">Stai rifiutando l'ordine #{{.Ordine.ID}}</div>
+                  <div style="font-size:12.5px;margin-bottom:8px">Inserisci una motivazione: sarà visibile all'utente e inviata via email.</div>
+                </div>
+              </div>
+
+              <footer class="ec-order__foot">
+                <div style="font-size:12px;color:var(--ec-ink-500)">
+                  {{len .Righe}} articoli · <b class="mono" style="color:var(--ec-ink-900)">{{$tot}} pz</b> richiesti
+                </div>
+                <div class="ec-order__foot-spacer"></div>
+                <button type="button" class="ec-btn ec-btn--danger ec-btn--sm" data-toggle-reject>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
+                  Rifiuta
+                </button>
+                <button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg>
+                  Approva ordine
+                </button>
+              </footer>
+            </form>
+
+            <!-- Form di rifiuto separato -->
+            <form method="POST" action="/ordini/{{.Ordine.ID}}/rifiuta" data-reject-form style="display:none;border-top:1px solid var(--ec-line);padding:14px 18px 18px;background:var(--ec-bg-soft)">
+              <label class="ec-label" for="note-{{.Ordine.ID}}">Motivazione del rifiuto *</label>
+              <textarea id="note-{{.Ordine.ID}}" name="note" class="ec-textarea" rows="3" required
+                        placeholder="Es. quantità eccessiva, si invita a riformulare con un massimo di…"></textarea>
+              <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px">
+                <button type="button" class="ec-btn ec-btn--ghost ec-btn--sm" data-cancel-reject>Annulla</button>
+                <button type="submit" class="ec-btn ec-btn--danger ec-btn--sm">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
+                  Conferma rifiuto
+                </button>
+              </div>
+            </form>
           </div>
           {{end}}
+        </div>
         {{else}}
-        <div class="empty-sm">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-          <p>Nessun ordine da approvare.</p>
+        <div class="ec-empty">
+          <div class="ec-empty__icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg>
+          </div>
+          <div class="ec-empty__title">Tutto in ordine</div>
+          <div class="ec-empty__hint">Non ci sono richieste in attesa di approvazione nel tuo settore.</div>
         </div>
         {{end}}
-      </div>
-    </div>
+      </section>
 
-    <!-- I MIEI ORDINI -->
-    <div id="view-miei" style="display:none">
-      <div class="page-topbar">
-        <h1 class="page-title">I miei ordini</h1>
-      </div>
-      <div class="page-content">
-        {{if .MieiOrdini}}
-        <div class="d-card" style="overflow:hidden">
-          <table class="d-table">
-            <thead>
-              <tr>
-                <th>Ordine</th>
-                <th>Data</th>
-                <th>Articoli</th>
-                <th>Stato</th>
-                <th>Note</th>
-              </tr>
-            </thead>
-            <tbody>
-              {{range .MieiOrdini}}
-              <tr>
-                <td><strong>#{{.Ordine.ID}}</strong></td>
-                <td style="color:var(--c-text-2)">{{fmtDate .Ordine.DataCreazione}}</td>
-                <td>{{len .Righe}}</td>
-                <td><span class="badge-stato badge-{{.Ordine.Stato}}">{{.Ordine.Stato}}</span></td>
-                <td style="color:var(--c-text-3);font-size:.82rem">
-                  {{if .Ordine.NoteFunzionario}}{{.Ordine.NoteFunzionario}}{{else}}—{{end}}
-                </td>
-              </tr>
+      <!-- ─── Vista: Nuovo ordine personale ─── -->
+      <section data-view-section="nuovo" style="display:none">
+        <header class="ec-secthead">
+          <div>
+            <div class="ec-secthead__kicker">Nuovo ordine personale</div>
+            <h1 class="ec-secthead__title">Catalogo</h1>
+            <p class="ec-secthead__sub">Le tue richieste personali vengono auto-approvate e inoltrate al magazzino.</p>
+          </div>
+        </header>
+
+        <div class="ec-shop">
+          <div>
+            {{if .Categorie}}
+            <div class="ec-catfilter">
+              <a href="/dashboard/funzionario" class="ec-catchip is-active">
+                Tutti <span class="ec-catchip__count">{{len .Prodotti}}</span>
+              </a>
+              {{range .Categorie}}
+              <a href="/dashboard/funzionario?cat={{.ID}}" class="ec-catchip">{{.Nome}}</a>
               {{end}}
-            </tbody>
-          </table>
-        </div>
-        {{else}}
-        <div class="empty-sm">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-          <p>Nessun ordine inviato.</p>
-        </div>
-        {{end}}
-      </div>
-    </div>
+            </div>
+            {{end}}
 
-    <!-- NUOVO ORDINE -->
-    <div id="view-nuovo" style="display:none">
-      <div class="page-topbar">
-        <h1 class="page-title">Nuovo ordine</h1>
-      </div>
-      <div class="page-content">
-        <div class="catalog-layout">
-
-          <section>
             {{if .Prodotti}}
-            <div class="products-grid">
+            <div class="ec-prodgrid">
               {{range .Prodotti}}
-              <div class="product-card">
-                <div class="product-name">{{.Nome}}</div>
-                <div class="product-cat">{{.CategoriaNome}}</div>
-                {{if gt .Disponibile 0}}
-                <form class="product-footer"
-                      hx-post="/bozza/righe/{{.ID}}?cart=fn-carrello-content"
-                      hx-target="#fn-carrello-content"
-                      hx-swap="outerHTML">
-                  <span class="stock-n">{{.Disponibile}} disp.</span>
-                  <input type="number" name="qta"
-                         min="1" max="{{.Disponibile}}" value="1"
-                         class="qty-in">
-                  <button type="submit" class="btn-add">Aggiungi</button>
-                </form>
-                {{else}}
-                <div class="product-footer">
-                  <span style="font-size:.72rem;color:var(--c-danger);opacity:.65">Esaurito</span>
+              <div class="ec-prodcard">
+                <div class="ec-prod-img ec-prod-img--cat-default">
+                  <img src="/prodotti/{{.ID}}/immagine" alt="" onerror="this.style.display='none'">
+                  <span class="ec-prod-img__code">#{{.ID}}</span>
                 </div>
-                {{end}}
+                <div class="ec-prodcard__cat">{{.CategoriaNome}}</div>
+                <div class="ec-prodcard__name">{{.Nome}}</div>
+                <div class="ec-prodcard__avail">
+                  {{if gt .Disponibile 0}}
+                    <span class="ec-avail-dot ec-avail-ok"></span><span>Disponibile</span>
+                    <span style="margin-left:auto">{{.Disponibile}} pz</span>
+                  {{else}}
+                    <span class="ec-avail-dot ec-avail-out"></span><span>Esaurito</span>
+                  {{end}}
+                </div>
+                <div class="ec-prodcard__foot">
+                  {{if gt .Disponibile 0}}
+                  <form hx-post="/bozza/righe/{{.ID}}?cart=carrello-content"
+                        hx-target="#carrello-content" hx-swap="outerHTML"
+                        style="display:flex;align-items:center;gap:8px;width:100%">
+                    <input type="number" name="qta" min="1" max="{{.Disponibile}}" value="1"
+                           class="ec-order__row-qty-input" style="width:60px;padding:5px 6px;font-size:12.5px">
+                    <button type="submit" class="ec-btn ec-btn--secondary ec-btn--sm" style="margin-left:auto">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                      Aggiungi
+                    </button>
+                  </form>
+                  {{else}}
+                  <span class="ec-pill ec-pill--red">Esaurito</span>
+                  {{end}}
+                </div>
               </div>
               {{end}}
             </div>
             {{else}}
-            <div class="empty-sm">
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
-              <p>Nessun prodotto disponibile.</p>
-            </div>
+            <div class="ec-empty"><div class="ec-empty__title">Nessun prodotto disponibile</div></div>
             {{end}}
-          </section>
+          </div>
 
-          <aside>
-            <div class="cart-panel">
-              <div class="cart-head">Carrello</div>
-              {{if .Bozza}}
-                <div id="fn-carrello-content">
+          <aside class="ec-cart">
+            <header class="ec-cart__head">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.5l2.5 11h11l2-8H6.5"/><path d="M9 21a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M18 21a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/></svg>
+              <span class="ec-cart__title">La mia richiesta</span>
+              {{if .Bozza}}{{if .Bozza.Righe}}<span class="ec-cart__count">{{len .Bozza.Righe}} prodotti</span>{{end}}{{end}}
+            </header>
+            {{if and .Bozza .Bozza.Righe}}
+              <div id="carrello-content">
+                <div class="ec-cart__body">
                   {{range .Bozza.Righe}}
-                  <div class="cart-row">
-                    <span class="cart-pname">{{.ProdottoNome}}</span>
-                    <input type="number" min="1" value="{{.QtaRichiesta}}"
-                           class="cart-qty" name="qta"
-                           hx-post="/bozza/righe/{{.ProdottoID}}?cart=fn-carrello-content"
-                           hx-target="#fn-carrello-content"
-                           hx-swap="outerHTML"
-                           hx-trigger="change">
-                    <button type="button" class="cart-rm"
-                            hx-delete="/bozza/righe/{{.ProdottoID}}?cart=fn-carrello-content"
-                            hx-target="#fn-carrello-content"
-                            hx-swap="outerHTML"
-                            title="Rimuovi">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  <div class="ec-cart__row">
+                    <div class="ec-prod-img ec-prod-img--sm ec-prod-img--cat-default">
+                      <img src="/prodotti/{{.ProdottoID}}/immagine" alt="" onerror="this.style.display='none'">
+                    </div>
+                    <div>
+                      <div class="ec-cart__row-name">{{.ProdottoNome}}</div>
+                      <input type="number" min="1" value="{{.QtaRichiesta}}" name="qta"
+                             class="ec-cart__row-qty"
+                             hx-post="/bozza/righe/{{.ProdottoID}}?cart=carrello-content"
+                             hx-target="#carrello-content" hx-swap="outerHTML" hx-trigger="change">
+                    </div>
+                    <button type="button" class="ec-cart__row-remove"
+                            hx-delete="/bozza/righe/{{.ProdottoID}}?cart=carrello-content"
+                            hx-target="#carrello-content" hx-swap="outerHTML"
+                            aria-label="Rimuovi">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
                     </button>
                   </div>
                   {{end}}
                 </div>
-                {{if .Bozza.ID}}
-                <button type="button" class="btn-order"
-                        hx-post="/ordini/{{.Bozza.ID}}/invia"
-                        hx-target="body"
-                        hx-push-url="true">
-                  Invia ordine
-                </button>
-                {{end}}
-              {{else}}
-              <div id="fn-carrello-content">
-                <div class="cart-empty">Carrello vuoto</div>
+                <div class="ec-cart__foot">
+                  <div class="ec-cart__totals">
+                    <span>Totale articoli</span>
+                    <span class="ec-mono mono">{{len .Bozza.Righe}} prodotti</span>
+                  </div>
+                  <button type="button" class="ec-btn ec-btn--primary ec-btn--lg ec-btn--block"
+                          hx-post="/ordini/{{.Bozza.ID}}/invia" hx-target="body" hx-push-url="true">
+                    <span style="flex:1;text-align:left">Invia richiesta</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+                  </button>
+                  <div class="ec-cart__hint">Auto-approvato (richiesta personale del funzionario): l'ordine andrà direttamente al magazzino.</div>
+                </div>
               </div>
-              {{end}}
-            </div>
+            {{else}}
+              <div id="carrello-content">
+                <div class="ec-cart__empty">
+                  <div class="ec-cart__empty-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.5l2.5 11h11l2-8H6.5"/><path d="M9 21a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M18 21a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/></svg>
+                  </div>
+                  <div class="ec-cart__empty-title">Carrello vuoto</div>
+                  <div>Aggiungi prodotti dal catalogo</div>
+                </div>
+              </div>
+            {{end}}
           </aside>
-
         </div>
-      </div>
-    </div>
+      </section>
 
-  </main>
+      <!-- ─── Vista: I miei ordini ─── -->
+      <section data-view-section="miei" style="display:none">
+        <header class="ec-secthead">
+          <div>
+            <div class="ec-secthead__kicker">Storico</div>
+            <h1 class="ec-secthead__title">I miei ordini</h1>
+            <p class="ec-secthead__sub">Le richieste personali che hai effettuato.</p>
+          </div>
+        </header>
+
+        {{if .MieiOrdini}}
+        <div class="ec-stack">
+          {{range .MieiOrdini}}
+          <div class="ec-order">
+            <header class="ec-order__head">
+              <span class="ec-order__id">#{{.Ordine.ID}}</span>
+              <span class="ec-order__meta">{{fmtDate .Ordine.DataCreazione}}</span>
+              <span class="ec-pill ec-pill--{{statoTone .Ordine.Stato}}">{{statoLabel .Ordine.Stato}}</span>
+            </header>
+            <div class="ec-order__body">
+              <div class="ec-order__rows">
+                {{range .Righe}}
+                <div class="ec-order__row">
+                  <div class="ec-prod-img ec-prod-img--sm ec-prod-img--cat-default">
+                    <img src="/prodotti/{{.ProdottoID}}/immagine" alt="" onerror="this.style.display='none'">
+                  </div>
+                  <div>
+                    <div class="ec-order__row-name">{{.ProdottoNome}}</div>
+                    <div class="ec-order__row-meta">Stato: {{.StatoRiga}}</div>
+                  </div>
+                  <span class="ec-order__row-qty">{{if .QtaApprovata}}{{.QtaApprovata}}{{else}}{{.QtaRichiesta}}{{end}} pz</span>
+                  <span style="width:90px;text-align:right">
+                    {{if eq .StatoRiga "evasa"}}<span class="ec-pill ec-pill--teal">Evasa</span>
+                    {{else if eq .StatoRiga "evasa_parziale"}}<span class="ec-pill ec-pill--amber">Parziale</span>{{end}}
+                  </span>
+                </div>
+                {{end}}
+              </div>
+            </div>
+            {{if .Ordine.NoteFunzionario}}
+            <div class="ec-note ec-note--info">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8v.5"/></svg>
+              <div>{{.Ordine.NoteFunzionario}}</div>
+            </div>
+            {{end}}
+          </div>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="ec-empty">
+          <div class="ec-empty__icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4V7Z"/></svg></div>
+          <div class="ec-empty__title">Nessun ordine personale</div>
+          <div class="ec-empty__hint">Le tue richieste personali appariranno qui.</div>
+        </div>
+        {{end}}
+      </section>
+
+    </main>
+  </div>
 </div>
 
 <script src="/static/js/htmx.min.js"></script>
 <script>
-  function showView(name, btn) {
-    ['approvazioni', 'miei', 'nuovo'].forEach(function(v) {
-      document.getElementById('view-' + v).style.display = v === name ? '' : 'none';
+  (function () {
+    var titles = {
+      approva: "Richieste da approvare",
+      nuovo:   "Nuovo ordine personale",
+      miei:    "I miei ordini"
+    };
+    function setView(view) {
+      document.querySelectorAll('[data-view-section]').forEach(function (s) {
+        s.style.display = s.getAttribute('data-view-section') === view ? '' : 'none';
+      });
+      document.querySelectorAll('[data-view]').forEach(function (b) {
+        b.classList.toggle('is-active', b.getAttribute('data-view') === view);
+      });
+      var t = document.querySelector('[data-topbar-title]');
+      if (t && titles[view]) t.textContent = titles[view];
+    }
+    document.querySelectorAll('[data-view]').forEach(function (b) {
+      b.addEventListener('click', function () { setView(b.getAttribute('data-view')); });
     });
-    document.querySelectorAll('.sidebar-item').forEach(function(el) {
-      el.classList.remove('active');
+
+    // Toggle reject form per order card
+    document.querySelectorAll('[data-order-card]').forEach(function (card) {
+      var approve = card.querySelector('[data-approve-form]');
+      var reject  = card.querySelector('[data-reject-form]');
+      var panel   = card.querySelector('[data-reject-panel]');
+      var openBtn = card.querySelector('[data-toggle-reject]');
+      var cancel  = card.querySelector('[data-cancel-reject]');
+      if (openBtn) openBtn.addEventListener('click', function () {
+        if (reject) reject.style.display = '';
+        if (panel) panel.style.display = '';
+        if (approve) approve.querySelectorAll('button[type=submit]').forEach(function (b) { b.disabled = true; });
+      });
+      if (cancel) cancel.addEventListener('click', function () {
+        if (reject) reject.style.display = 'none';
+        if (panel) panel.style.display = 'none';
+        if (approve) approve.querySelectorAll('button[type=submit]').forEach(function (b) { b.disabled = false; });
+      });
     });
-    if (btn) btn.classList.add('active');
-  }
+  })();
 </script>
 </body>
 </html>
