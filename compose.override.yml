@@ -1,6 +1,6 @@
 services:
-  magazzino:
+  e-conomato:
     build:
       context: .
       dockerfile: Dockerfile
-    image: magazzino:local
+    image: e-conomato:local
