@@ -1,6 +1,6 @@
 # Documento di Analisi, Requisiti e Piano di Progetto Completo
 **Progetto:** E-conomato - Sistema Gestionale di Magazzino e Cancelleria per Ente Pubblico
-**Stack Tecnologico:** Go, HTMX, SQLite, Docker, Autenticazione LDAP (basato sul repository *gopulley*)
+**Stack Tecnologico:** Go, HTMX, SQLite, Docker, Autenticazione LDAP
 
 ---
 
@@ -29,7 +29,7 @@ La prima fase del progetto è consistita in un'intervista mirata per far emerger
 * **Deduzione Tecnica:** Salveremo lo storico dei movimenti di magazzino congelando il costo di ogni singola estrazione. Da questa tabella, costruiremo delle API interne in linguaggio Go che aggregheranno i dati per mese e per settore, fornendo i dati formattati in JSON alla libreria Chart.js per disegnare i grafici nella dashboard dell'Amministratore.
 
 **Domanda 5: Infrastruttura e Deploy**
-* **Analista:** Per il rilascio utilizzeremo Docker e Docker Compose, basandoci sul repository `gopulley` indicato. È disponibile un ambiente per fare i test?
+* **Analista:** Per il rilascio utilizzeremo Docker e Docker Compose. È disponibile un ambiente per fare i test?
 * **Committente:** Sì, ho tutto il necessario per fare i test.
 
 ---

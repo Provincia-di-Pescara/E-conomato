@@ -33,7 +33,7 @@ type Config struct {
 	DBPath            string
 	UploadDir         string
 	// Branding aziendale opzionale
-	// BrandName: nome dell'ente/azienda da affiancare al logo GoPulley
+	// BrandName: nome dell'ente/azienda da affiancare al logo E-conomato
 	// BrandLogoPath: path relativo a /static/ del logo PNG (es. "img/brand-logo.png")
 	BrandName     string
 	BrandLogoPath string

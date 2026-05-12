@@ -21,7 +21,7 @@ RUN CGO_ENABLED=1 GOOS=linux \
   go build \
   -ldflags="-s -w -extldflags '-static' -X main.AppVersion=${VERSION}${VERSION_SUFFIX}" \
   -trimpath \
-  -o gopulley \
+  -o e-conomato \
   ./cmd/server
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
@@ -29,9 +29,9 @@ RUN CGO_ENABLED=1 GOOS=linux \
 FROM alpine:3.19
 
 RUN apk add --no-cache ca-certificates tzdata \
-  && adduser -D -u 1001 gopulley \
+  && adduser -D -u 1001 econom \
   && mkdir -p /data/uploads \
-  && chown -R gopulley:gopulley /data
+  && chown -R econom:econom /data
 
 WORKDIR /app
 
@@ -40,18 +40,18 @@ ENV DB_PATH=/data/magazzino.db
 ENV UPLOAD_DIR=/data/uploads
 
 # Copy compiled binary
-COPY --from=builder /build/gopulley .
+COPY --from=builder /build/e-conomato .
 
 # Copy web assets (templates + static files)
-COPY --chown=gopulley:gopulley web/ ./web/
+COPY --chown=econom:econom web/ ./web/
 
 # Data volumes: SQLite DB and uploaded files
 # Mount these as Docker/Podman volumes in production
 VOLUME ["/data"]
 
 # Run as non-root
-USER gopulley
+USER econom
 
 EXPOSE 8080
 
-ENTRYPOINT ["/app/gopulley"]
+ENTRYPOINT ["/app/e-conomato"]

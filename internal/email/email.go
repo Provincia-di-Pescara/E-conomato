@@ -83,7 +83,7 @@ func SendShareEmail(to string, downloadURL string, filename string, expirationDa
 func buildBrandedShareEmail(downloadURL, filename string, expirationDays int, isPasswordProtected bool, senderLabel string, cfg *config.Config) string {
 	brandName := strings.TrimSpace(cfg.BrandName)
 	if brandName == "" {
-		brandName = "GoPulley"
+		brandName = "E-conomato"
 	}
 
 	baseURL := baseURLFromDownload(downloadURL)
@@ -103,12 +103,12 @@ func buildBrandedShareEmail(downloadURL, filename string, expirationDays int, is
 	if brandLogoURL != "" {
 		logoBlock = fmt.Sprintf(`<img src="%s" alt="%s" width="40" height="40" style="display:block;width:40px;height:40px;border-radius:10px;border:1px solid rgba(255,255,255,0.18);object-fit:cover;background:#111827;">`, html.EscapeString(brandLogoURL), escBrand)
 	} else if appLogoURL != "" {
-		logoBlock = fmt.Sprintf(`<img src="%s" alt="GoPulley" width="40" height="40" style="display:block;width:40px;height:40px;border-radius:10px;border:1px solid rgba(255,255,255,0.18);object-fit:contain;background:#111827;padding:6px;">`, html.EscapeString(appLogoURL))
+		logoBlock = fmt.Sprintf(`<img src="%s" alt="E-conomato" width="40" height="40" style="display:block;width:40px;height:40px;border-radius:10px;border:1px solid rgba(255,255,255,0.18);object-fit:contain;background:#111827;padding:6px;">`, html.EscapeString(appLogoURL))
 	}
 
 	metaBrand := escBrand
-	if escBrand != "GoPulley" {
-		metaBrand = escBrand + " - GoPulley"
+	if escBrand != "E-conomato" {
+		metaBrand = escBrand + " - E-conomato"
 	}
 
 	passwordNotice := ""
@@ -271,7 +271,7 @@ func buildEmailMessage(from string, to string, subject string, htmlBody string) 
 	}
 
 	now := time.Now().UTC().Format(time.RFC1123Z)
-	msgID := fmt.Sprintf("<%d.%s@gopulley.%s>", time.Now().UTC().UnixNano(), strings.ReplaceAll(hostname, " ", "-"), hostname)
+	msgID := fmt.Sprintf("<%d.%s@e-conomato.%s>", time.Now().UTC().UnixNano(), strings.ReplaceAll(hostname, " ", "-"), hostname)
 
 	// RFC-compliant CRLF line endings prevent strict relays from rejecting DATA finalization.
 	headers := []string{

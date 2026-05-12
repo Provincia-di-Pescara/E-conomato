@@ -5,7 +5,7 @@
 docker-compose.override.yml
 
 # Binario compilato
-gopulley
+e-conomato
 *.exe
 
 # Database e upload locali
@@ -24,3 +24,4 @@ tmp-test.db
 .DS_Store
 Thumbs.db
 *.csv
+/.claude/
