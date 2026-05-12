@@ -65,10 +65,7 @@ Ogni utente che accede al sistema eredita i propri permessi dalle configurazioni
   * Inserisce le fatture o i documenti di trasporto (DDT) dei fornitori, creando nuovi "Lotti di acquisto" e incrementando le giacenze.
   * Visualizza gli ordini approvati e li evade fisicamente, potendo effettuare evasioni parziali.
   * Gestisce gli stati finali di consegna e visualizza i cruscotti di allarme per i prodotti sotto la soglia minima di scorta.
-* **Amministratore (Admin):**
-  * Ha accesso a una dashboard esclusiva per la reportistica finanziaria.
-  * Visualizza grafici interattivi sui consumi (suddivisi per centro di costo/settore, andamento temporale mensile e annuale).
-  * Può esportare i dati grezzi in formato CSV/Excel per elaborazioni contabili esterne.
+  * Accede alla reportistica finanziaria esportabile in CSV/Excel e ai grafici analitici sui consumi (Chart.js).
 
 ---
 
@@ -110,7 +107,7 @@ CREATE TABLE IF NOT EXISTS settori (
 CREATE TABLE IF NOT EXISTS utenti (
     username TEXT PRIMARY KEY, -- Identificativo di login da LDAP
     email TEXT, -- Estratta dalle proprietà di dominio per l'invio delle notifiche
-    ruolo TEXT NOT NULL DEFAULT 'user', -- Può assumere i valori: 'user', 'funzionario', 'magazzino', 'admin'
+    ruolo TEXT NOT NULL DEFAULT 'user', -- Può assumere i valori: 'user', 'funzionario', 'magazzino'
     settore_id TEXT, -- Il settore a cui l'utente appartiene
     FOREIGN KEY(settore_id) REFERENCES settori(id)
 );

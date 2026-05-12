@@ -34,8 +34,7 @@ Il sistema è un monolita moderno, leggero e ultra-veloce:
 L'autenticazione è centralizzata tramite Active Directory (LDAP). I ruoli sono associati in base ai gruppi e ai settori di appartenenza:
 - **Utente Base**: Naviga il catalogo, inserisce richieste nel carrello e visualizza lo storico dei propri ordini.
 - **Funzionario**: Approva, riduce le quantità o rifiuta (motivandolo) le richieste del proprio settore di competenza. Le richieste personali dei funzionari sono invece auto-approvate.
-- **Magazziniere**: Gestisce l'anagrafica, carica fatture/DDT (creando "lotti" di acquisto), evade le richieste, monitora le scorte minime e conclude il flusso di consegna.
-- **Amministratore**: Accede a dashboard direzionali, reportistica JSON/CSV esportabile e grafici analitici (Chart.js) sul budget e i consumi per singolo reparto.
+- **Magazziniere**: Gestisce l'anagrafica, carica fatture/DDT (creando "lotti" di acquisto), evade le richieste, monitora le scorte minime, conclude il flusso di consegna e accede alla reportistica finanziaria (export CSV e grafici Chart.js).
 
 ---
 
@@ -57,7 +56,7 @@ L'autenticazione è centralizzata tramite Active Directory (LDAP). I ruoli sono 
 - [ ] **Workflow Funzionari**: Dashboard di approvazione per settore.
 - [ ] **Motore di Evasione FIFO**: Logica per il prelievo lotti ed eventuale evasione parziale.
 - [ ] **Notifiche Transazionali**: Email asincrone per i cambi di stato dell'ordine.
-- [ ] **Reportistica**: Dashboard amministratore, grafici e export CSV.
+- [ ] **Reportistica**: Dashboard direzionale, grafici e export CSV a disposizione del Magazziniere.
 - [ ] **Deploy**: Configurazione Docker multi-stage e script di backup.
 
 ---

@@ -11,7 +11,7 @@
 - [ ] **Client LDAP:** Configurare la connessione al server in `internal/auth/ldap.go`.
 - [ ] **Mapping Utente:** Sviluppare la logica che salva l'utente in SQLite dopo il primo login riuscito.
 - [ ] **Gestione Sessioni:** Implementare il sistema di cookie sicuri per mantenere l'accesso.
-- [ ] **Middleware RBAC:** Scrivere i filtri per limitare l'accesso alle rotte in base al ruolo (`RequireAdmin`, `RequireMagazzino`, etc.).
+- [ ] **Middleware RBAC:** Scrivere i filtri per limitare l'accesso alle rotte in base al ruolo (`RequireMagazzino`, `RequireFunzionario`).
 
 ## 3. Gestione Catalogo e Magazzino (Area Magazziniere)
 - [ ] **CRUD Categorie:** Interfaccia HTMX per creare/modificare le categorie.
@@ -46,9 +46,9 @@
 - [ ] **Worker Asincrono:** Implementare l'invio delle mail tramite goroutine per non rallentare l'interfaccia utente.
 - [ ] **Integrazione Trigger:** Inserire le chiamate di invio mail nei passaggi di stato dell'ordine.
 
-## 8. Reportistica e Amministrazione
+## 8. Reportistica (Area Magazzino)
 - [ ] **API Statistiche:** Creare endpoint che restituiscono dati aggregati in JSON (spesa per settore, consumi mensili).
-- [ ] **Integrazione Chart.js:** Implementare grafici a torta e a barre nella dashboard Admin.
+- [ ] **Integrazione Chart.js:** Implementare grafici a torta e a barre nella dashboard direzionale (Magazzino).
 - [ ] **Esportazione CSV:** Generazione dinamica di file CSV con lo storico di tutti i movimenti valorizzati.
 
 ## 9. Deploy e Manutenzione
