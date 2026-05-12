@@ -71,7 +71,7 @@ return t.Format("02 Jan 2006 15:04")
 },
 }
 
-names := []string{"login", "dashboard", "admin", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino"}
+names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino"}
 a.templates = make(map[string]*template.Template, len(names))
 for _, name := range names {
 path := filepath.Join(baseDir, name+".html")
@@ -278,7 +278,6 @@ scorte = nil
 a.render(w, r, "dashboard", map[string]any{
 "Username":  a.getUsername(r),
 "Role":      a.getRole(r),
-"IsAdmin":   a.getRole(r) == "admin",
 "Scorte":    scorte,
 "Version":   AppVersion,
 "BrandName": a.cfg.BrandName,
@@ -300,7 +299,6 @@ func (a *App) handleDashboardUtente(w http.ResponseWriter, r *http.Request) {
 	a.render(w, r, "dashboard-utente", map[string]any{
 		"Username":  username,
 		"Role":      a.getRole(r),
-		"IsAdmin":   false,
 		"Bozza":     bozza,
 		"Categorie": categorie,
 		"Prodotti":  prodotti,
@@ -436,7 +434,6 @@ func (a *App) handleDashboardFunzionario(w http.ResponseWriter, r *http.Request)
 	a.render(w, r, "dashboard-funzionario", map[string]any{
 		"Username":    username,
 		"Role":        a.getRole(r),
-		"IsAdmin":     false,
 		"DaApprovare": daApprovare,
 		"Bozza":       bozza,
 		"Categorie":   categorie,
@@ -537,7 +534,6 @@ func (a *App) handleDashboardMagazzino(w http.ResponseWriter, r *http.Request) {
 	a.render(w, r, "dashboard-magazzino", map[string]any{
 		"Username":  a.getUsername(r),
 		"Role":      a.getRole(r),
-		"IsAdmin":   false,
 		"Scorte":    scorte,
 		"Ordini":    ordini,
 		"Version":   AppVersion,
@@ -624,17 +620,10 @@ p.ScortaMinima,
 fmt.Fprint(w, `</tbody></table>`)
 }
 
-// GET /admin
-func (a *App) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
-utenti, err := a.db.GetAllUtenti()
-if err != nil {
-logger.Error("admin utenti: %v", err)
-utenti = nil
-}
+
 a.render(w, r, "admin", map[string]any{
 "Username":  a.getUsername(r),
 "Role":      a.getRole(r),
-"IsAdmin":   true,
 "Utenti":    utenti,
 "Version":   AppVersion,
 "BrandName": a.cfg.BrandName,
@@ -755,7 +744,6 @@ a.render(w, r, "magazzino", map[string]any{
 "Categorie": categorie,
 "Username":  a.getUsername(r),
 "Role":      a.getRole(r),
-"IsAdmin":   a.getRole(r) == "admin",
 "Version":   AppVersion,
 "BrandName": a.cfg.BrandName,
 "BrandLogo": a.cfg.BrandLogoPath,
