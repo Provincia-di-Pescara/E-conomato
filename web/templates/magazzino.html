@@ -8,85 +8,27 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/fa/css/all.min.css" />
   <link rel="stylesheet" href="/static/css/style.css" />
   <script src="/static/js/htmx.min.js" defer></script>
 </head>
 <body>
 
+<script>
+  window.__econIcone = '{{if .IconePicker}}[{{range $i, $ic := .IconePicker}}{{if $i}},{{end}}"{{$ic}}"{{end}}]{{else}}[]{{end}}';
+</script>
+
 <div class="ec-app">
 
-  <!-- ═════════ Sidebar ═════════ -->
-  <nav class="ec-side">
-    <div class="ec-side__brand">
-      <span class="ec-brandmark" aria-label="E-conomato">
-        <img src="/static/img/logo-icon.svg" alt="" class="ec-brandmark__icon" />
-        <span class="ec-brandmark__word">-conomato</span>
-      </span>
-    </div>
+  {{template "sidebar-magazzino" .}}
 
-    <div class="ec-side__ente">
-      <div class="ec-side__ente-logo">
-        {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}">
-        {{else}}<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/></svg>{{end}}
-      </div>
-      <div style="min-width:0">
-        <div class="ec-side__ente-name">{{if .BrandName}}{{.BrandName}}{{else}}Ente Pubblico{{end}}</div>
-        <div class="ec-side__ente-sub">Provincia di Pescara</div>
-      </div>
-    </div>
-
-    <div class="ec-side__group-label">Magazziniere</div>
-    <a href="/dashboard/magazzino" class="ec-side__link">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h11v8H3V7Z"/><path d="M14 10h4l3 3v2h-7V10Z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg>
-      <span>Ordini</span>
-    </a>
-    <a href="/prodotti" class="ec-side__link is-active">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>
-      <span>Prodotti</span>
-    </a>
-    <a href="/categorie" class="ec-side__link" hx-get="/categorie" hx-target="#main-panel" hx-swap="innerHTML" hx-push-url="/categorie">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h7l2 2h9v12H3V6Z"/></svg>
-      <span>Categorie</span>
-    </a>
-    <button class="ec-side__link"
-      hx-get="/lotti/new" hx-target="#modal-body" hx-swap="innerHTML"
-      onclick="document.getElementById('modal').classList.add('is-open')">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V9"/><path d="M7 14l5-5 5 5"/><path d="M4 4h16"/></svg>
-      <span>Carico merce</span>
-    </button>
-
-    <div class="ec-side__group-label">Generale</div>
-    <button class="ec-side__link">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2H4.5L6 16Z"/><path d="M10 21h4"/></svg>
-      <span>Notifiche</span>
-    </button>
-    <button class="ec-side__link">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg>
-      <span>Impostazioni</span>
-    </button>
-
-    <div class="ec-side__foot">
-      <span class="ec-avatar" style="width:36px;height:36px;font-size:13px">{{initials .Username}}</span>
-      <div style="min-width:0;flex:1">
-        <div class="ec-side__foot-name">{{.Username}}</div>
-        <div class="ec-side__foot-sub">{{.Role}}</div>
-      </div>
-      <form method="POST" action="/logout" style="margin:0">
-        <button type="submit" class="ec-side__link" style="width:32px;padding:6px;color:#8590A8" title="Esci">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h11"/></svg>
-        </button>
-      </form>
-    </div>
-  </nav>
-
-  <!-- ═════════ Main ═════════ -->
   <div class="ec-main">
 
     <header class="ec-topbar">
       <div class="ec-topbar__title">
-        {{if .BrandName}}{{.BrandName}}{{else}}Provincia di Pescara{{end}}
+        {{if .BrandName}}{{.BrandName}}{{else}}E-conomato{{end}}
         <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
-        <b>Anagrafica prodotti</b>
+        <b>{{if .SectionName}}{{.SectionName}}{{else}}Anagrafica prodotti{{end}}</b>
       </div>
     </header>
 
@@ -99,18 +41,14 @@
           <p class="ec-secthead__sub">Gestione anagrafica del magazzino. Le foto sono salvate come BLOB nel database SQLite.</p>
         </div>
         <div class="ec-secthead__right">
-          <button class="ec-btn ec-btn--ghost"
-            hx-get="/lotti/new" hx-target="#modal-body" hx-swap="innerHTML"
-            onclick="document.getElementById('modal').classList.add('is-open')">
+          <a href="/lotti/new" class="ec-btn ec-btn--ghost">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V9"/><path d="M7 14l5-5 5 5"/><path d="M4 4h16"/></svg>
             Carico merce
-          </button>
-          <button class="ec-btn ec-btn--primary"
-            hx-get="/prodotti/new" hx-target="#modal-body" hx-swap="innerHTML"
-            onclick="document.getElementById('modal').classList.add('is-open')">
+          </a>
+          <a href="/prodotti/new" class="ec-btn ec-btn--primary">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
             Nuovo prodotto
-          </button>
+          </a>
         </div>
       </header>
 
@@ -149,6 +87,7 @@
                 <td>
                   <div class="ec-prod-img ec-prod-img--sm ec-prod-img--cat-default">
                     {{if .ImmagineBLOB}}<img src="/prodotti/{{.ID}}/immagine" alt="{{.Nome}}" loading="lazy">
+                    {{else if .Icona}}<i class="{{.Icona}}" style="font-size:18px;color:var(--ec-navy-700)"></i>
                     {{else}}<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7"/></svg>{{end}}
                   </div>
                 </td>
@@ -161,12 +100,9 @@
                 <td class="mono" style="text-align:right{{if lt .ScortaRimanente .ScortaMinima}};color:var(--ec-red-700);font-weight:700{{end}}">{{.ScortaRimanente}}</td>
                 <td class="mono" style="text-align:right;color:var(--ec-ink-500)">{{.ScortaMinima}}</td>
                 <td style="text-align:right;white-space:nowrap">
-                  <button class="ec-btn ec-btn--ghost ec-btn--sm" title="Modifica"
-                    hx-get="/prodotti/{{.ID}}/edit"
-                    hx-target="#modal-body" hx-swap="innerHTML"
-                    onclick="document.getElementById('modal').classList.add('is-open')">
+                  <a href="/prodotti/{{.ID}}/edit" class="ec-btn ec-btn--ghost ec-btn--sm" title="Modifica">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l6 6-10 10H4v-6L14 4Z"/></svg>
-                  </button>
+                  </a>
                   <button class="ec-btn ec-btn--danger ec-btn--sm" title="Elimina"
                     hx-delete="/prodotti/{{.ID}}"
                     hx-confirm="Eliminare il prodotto {{.Nome}}?"
@@ -189,32 +125,13 @@
           {{end}}
 
         {{else if eq .Partial "categorie"}}
-        <div id="categorie-list">
           {{template "categorie-partial" .}}
-        </div>
-
-        {{else if eq .Partial "prodotto-form"}}
-        {{template "prodotto-form-partial" .}}
-
-        {{else if eq .Partial "lotto-form"}}
-        {{template "lotto-form-partial" .}}
         {{end}}
       </div>
 
     </main>
   </div>
 </div>
-
-<!-- ═════════ Modal ═════════ -->
-<div id="modal" class="ec-modal-bg" style="display:none"
-     onclick="if(event.target===this)this.classList.remove('is-open')">
-  <div class="ec-modal" id="modal-body"></div>
-</div>
-
-<style>
-  #modal { display: none; }
-  #modal.is-open { display: flex; }
-</style>
 
 </body>
 </html>
@@ -229,127 +146,63 @@
     <span class="ec-pill ec-pill--navy">{{len .Categorie}} totali</span>
   </div>
   <div id="cat-list" style="padding:8px 14px">
-    {{range .Categorie}}
-    <div id="cat-{{.ID}}" style="display:flex;align-items:center;gap:10px;padding:10px 6px;border-bottom:1px solid var(--ec-line-2)">
-      <span style="flex:1;font-size:14px">{{.Nome}}</span>
-      <button class="ec-btn ec-btn--ghost ec-btn--sm"
-              data-id="{{.ID}}" data-nome="{{.Nome}}"
-              onclick="startEditCat(this.dataset.id, this.dataset.nome)" title="Modifica">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l6 6-10 10H4v-6L14 4Z"/></svg>
-      </button>
-      <button class="ec-btn ec-btn--danger ec-btn--sm" title="Elimina"
-              hx-delete="/categorie/{{.ID}}"
-              hx-confirm="Eliminare la categoria {{.Nome}}?"
-              hx-target="#cat-list" hx-swap="innerHTML">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
-      </button>
-    </div>
-    {{else}}
-    <p style="color:var(--ec-ink-500);font-size:14px;padding:10px 6px">Nessuna categoria.</p>
-    {{end}}
+    {{template "categorie-list-inner" .}}
   </div>
   <form hx-post="/categorie" hx-target="#cat-list" hx-swap="innerHTML"
-        style="display:flex;gap:10px;padding:14px;border-top:1px solid var(--ec-line)">
-    <input type="text" name="nome" placeholder="Nuova categoria" required class="ec-input" style="flex:1">
+        style="display:flex;gap:10px;padding:14px;border-top:1px solid var(--ec-line);align-items:center;flex-wrap:wrap">
+    <input type="text" name="nome" placeholder="Nuova categoria" required class="ec-input" style="flex:1;min-width:200px">
+    <select name="icona" class="ec-select" style="max-width:220px">
+      {{range .IconePicker}}<option value="{{.}}">{{.}}</option>{{end}}
+    </select>
     <button type="submit" class="ec-btn ec-btn--primary">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
       Aggiungi
     </button>
   </form>
 </div>
+{{end}}
+
+{{define "categorie-list-inner"}}
+{{range .Categorie}}
+<div id="cat-{{.ID}}" style="display:flex;align-items:center;gap:10px;padding:10px 6px;border-bottom:1px solid var(--ec-line-2)">
+  <span style="width:28px;text-align:center"><i class="{{.Icona}}" style="font-size:16px;color:var(--ec-navy-700)"></i></span>
+  <span style="flex:1;font-size:14px">{{.Nome}}</span>
+  <span class="mono" style="font-size:11px;color:var(--ec-ink-500)">{{.Icona}}</span>
+  <button class="ec-btn ec-btn--ghost ec-btn--sm"
+          data-id="{{.ID}}" data-nome="{{.Nome}}" data-icona="{{.Icona}}"
+          onclick="startEditCat(this.dataset.id, this.dataset.nome, this.dataset.icona)" title="Modifica">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l6 6-10 10H4v-6L14 4Z"/></svg>
+  </button>
+  <button class="ec-btn ec-btn--danger ec-btn--sm" title="Elimina"
+          hx-delete="/categorie/{{.ID}}"
+          hx-confirm="Eliminare la categoria {{.Nome}}?"
+          hx-target="#cat-list" hx-swap="innerHTML">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
+  </button>
+</div>
+{{else}}
+<p style="color:var(--ec-ink-500);font-size:14px;padding:10px 6px">Nessuna categoria.</p>
+{{end}}
 <script>
-function startEditCat(id, nome) {
+window.startEditCat = function (id, nome, icona) {
   var row = document.getElementById('cat-' + id);
   if (!row) return;
-  row.innerHTML = '<form class="ec-row" hx-put="/categorie/' + id + '" hx-target="#cat-list" hx-swap="innerHTML" style="flex:1;gap:8px">' +
-    '<input type="text" name="nome" value="' + nome.replace(/"/g,'&quot;') + '" required autofocus class="ec-input" style="flex:1">' +
-    '<button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">Salva</button>' +
+  var iconeJson = window.__econIcone || '[]';
+  var opzioni = '';
+  try {
+    var icone = JSON.parse(iconeJson);
+    icone.forEach(function (ic) {
+      opzioni += '<option value="' + ic + '"' + (ic === icona ? ' selected' : '') + '>' + ic + '</option>';
+    });
+  } catch (e) {}
+  row.innerHTML =
+    '<form hx-put="/categorie/' + id + '" hx-target="#cat-list" hx-swap="innerHTML" style="display:flex;flex:1;gap:8px;align-items:center;flex-wrap:wrap">' +
+      '<input type="text" name="nome" value="' + nome.replace(/"/g,'&quot;') + '" required autofocus class="ec-input" style="flex:1;min-width:160px">' +
+      '<select name="icona" class="ec-select" style="max-width:220px">' + opzioni + '</select>' +
+      '<button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">Salva</button>' +
     '</form>' +
-    '<button class="ec-btn ec-btn--ghost ec-btn--sm" onclick="htmx.ajax(\'GET\',\'/categorie\',{target:\'#cat-list\',swap:\'innerHTML\'})">Annulla</button>';
+    '<button class="ec-btn ec-btn--ghost ec-btn--sm" onclick="htmx.ajax(\'GET\',\'/categorie\',{target:\'#main-panel\',swap:\'innerHTML\'})">Annulla</button>';
   if (window.htmx) htmx.process(row);
-}
+};
 </script>
-{{end}}
-
-{{define "prodotto-form-partial"}}
-<div class="ec-modal__head">
-  <div class="ec-modal__title">{{if .Prodotto.ID}}Modifica prodotto{{else}}Nuovo prodotto{{end}}</div>
-  <div class="ec-modal__sub">Le immagini vengono salvate come BLOB nel database SQLite — max 10 MB.</div>
-</div>
-<form method="POST" action="{{if .Prodotto.ID}}/prodotti/{{.Prodotto.ID}}{{else}}/prodotti{{end}}" enctype="multipart/form-data">
-  <div class="ec-formgrid">
-    <div>
-      <label class="ec-label">Codice articolo</label>
-      <input type="text" name="codice_articolo" value="{{.Prodotto.CodiceArticolo}}" placeholder="es. C0560" class="ec-input mono">
-    </div>
-    <div>
-      <label class="ec-label">Categoria</label>
-      <select name="categoria_id" class="ec-select">
-        <option value="0">— Nessuna —</option>
-        {{range .Categorie}}
-        <option value="{{.ID}}"{{if eq .ID $.Prodotto.CategoriaID}} selected{{end}}>{{.Nome}}</option>
-        {{end}}
-      </select>
-    </div>
-    <div style="grid-column:1 / -1">
-      <label class="ec-label">Nome *</label>
-      <input type="text" name="nome" value="{{.Prodotto.Nome}}" required autofocus class="ec-input">
-    </div>
-    <div style="grid-column:1 / -1">
-      <label class="ec-label">Descrizione</label>
-      <textarea name="descrizione" rows="3" placeholder="Descrizione opzionale" class="ec-textarea">{{.Prodotto.Descrizione}}</textarea>
-    </div>
-    <div>
-      <label class="ec-label">Scorta minima</label>
-      <input type="number" name="scorta_minima" value="{{.Prodotto.ScortaMinima}}" min="0" class="ec-input mono">
-    </div>
-    <div>
-      <label class="ec-label">Immagine</label>
-      <input type="file" name="immagine" accept="image/*" class="ec-input" style="padding:7px 10px">
-    </div>
-  </div>
-  <div class="ec-modal__foot">
-    <button type="button" class="ec-btn ec-btn--ghost" onclick="document.getElementById('modal').classList.remove('is-open')">Annulla</button>
-    <button type="submit" class="ec-btn ec-btn--primary">{{if .Prodotto.ID}}Salva modifiche{{else}}Crea prodotto{{end}}</button>
-  </div>
-</form>
-{{end}}
-
-{{define "lotto-form-partial"}}
-<div class="ec-modal__head">
-  <div class="ec-modal__title">Carico merce — Nuovo lotto</div>
-  <div class="ec-modal__sub">Il lotto entra nel calcolo FIFO con data acquisto crescente.</div>
-</div>
-<form method="POST" action="/lotti">
-  <div class="ec-formgrid">
-    <div style="grid-column:1 / -1">
-      <label class="ec-label">Prodotto *</label>
-      <select name="prodotto_id" required class="ec-select">
-        <option value="">— Seleziona prodotto —</option>
-        {{range .Prodotti}}
-        <option value="{{.ID}}">{{if .CodiceArticolo}}[{{.CodiceArticolo}}] {{end}}{{.Nome}}</option>
-        {{end}}
-      </select>
-    </div>
-    <div>
-      <label class="ec-label">Data acquisto</label>
-      <input type="date" name="data_acquisto" class="ec-input">
-    </div>
-    <div>
-      <label class="ec-label">Quantità *</label>
-      <input type="number" name="quantita" min="1" required class="ec-input mono">
-    </div>
-    <div style="grid-column:1 / -1">
-      <label class="ec-label">Costo unitario (€)</label>
-      <input type="text" name="costo_unitario" placeholder="0.00" class="ec-input mono">
-    </div>
-  </div>
-  <div class="ec-modal__foot">
-    <button type="button" class="ec-btn ec-btn--ghost" onclick="document.getElementById('modal').classList.remove('is-open')">Annulla</button>
-    <button type="submit" class="ec-btn ec-btn--primary">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg>
-      Registra lotto
-    </button>
-  </div>
-</form>
 {{end}}

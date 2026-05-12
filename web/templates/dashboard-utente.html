@@ -8,13 +8,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/fa/css/all.min.css" />
   <link rel="stylesheet" href="/static/css/style.css" />
 </head>
 <body>
 
 <div class="ec-app">
 
-  <!-- ═════════ Sidebar ═════════ -->
   <nav class="ec-side">
     <div class="ec-side__brand">
       <span class="ec-brandmark" aria-label="E-conomato">
@@ -33,7 +33,7 @@
       </div>
       <div style="min-width:0">
         <div class="ec-side__ente-name">{{if .BrandName}}{{.BrandName}}{{else}}Ente Pubblico{{end}}</div>
-        <div class="ec-side__ente-sub">Provincia di Pescara</div>
+        {{if .BrandSub}}<div class="ec-side__ente-sub">{{.BrandSub}}</div>{{end}}
       </div>
     </div>
 
@@ -53,10 +53,6 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2H4.5L6 16Z"/><path d="M10 21h4"/></svg>
       <span>Notifiche</span>
     </button>
-    <button class="ec-side__link">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 14.5a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V20a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1A2 2 0 1 1 4.1 16l.1-.1a1.7 1.7 0 0 0-1.2-2.9H2a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1A2 2 0 1 1 6 4.1l.1.1a1.7 1.7 0 0 0 2.9-1.2V2a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9H22a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.2 2.9Z"/></svg>
-      <span>Impostazioni</span>
-    </button>
 
     <div class="ec-side__foot">
       <span class="ec-avatar" style="width:36px;height:36px;font-size:13px">{{initials .Username}}</span>
@@ -72,14 +68,16 @@
     </div>
   </nav>
 
-  <!-- ═════════ Main ═════════ -->
   <div class="ec-main">
 
     <header class="ec-topbar">
       <div class="ec-topbar__title">
-        {{if .BrandName}}{{.BrandName}}{{else}}Provincia di Pescara{{end}}
+        {{if .BrandName}}{{.BrandName}}{{else}}E-conomato{{end}}
         <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
         <b data-topbar-title>Catalogo</b>
+        {{if .SettoreNome}}<span class="ec-topbar__settore" title="Ufficio attivo">
+          <i class="fa-solid fa-building" style="margin-right:5px"></i>{{.SettoreNome}}
+        </span>{{end}}
       </div>
       <div class="ec-topbar__right">
         <button class="ec-iconbtn" title="Notifiche">
@@ -93,13 +91,12 @@
 
     <main class="ec-content">
 
-      <!-- ─── Vista: Catalogo ─── -->
       <section data-view-section="catalogo">
         <header class="ec-secthead">
           <div>
             <div class="ec-secthead__kicker">Catalogo materiali</div>
             <h1 class="ec-secthead__title">Cosa ti serve oggi?</h1>
-            <p class="ec-secthead__sub">Cerca un articolo, aggiungilo al carrello e invia la richiesta al tuo settore. Le scorte sono aggiornate in tempo reale.</p>
+            <p class="ec-secthead__sub">Cerca un articolo, aggiungilo al carrello e invia la richiesta al tuo settore. Se un prodotto è esaurito puoi prenotarlo per il prossimo rifornimento.</p>
           </div>
           <div class="ec-secthead__right">
             <form method="GET" action="/dashboard" class="ec-search" style="min-width:280px">
@@ -113,12 +110,12 @@
           <div>
             {{if .Categorie}}
             <div class="ec-catfilter">
-              <a href="/dashboard" class="ec-catchip is-active">
-                Tutti <span class="ec-catchip__count">{{len .Prodotti}}</span>
+              <a href="/dashboard" class="ec-catchip {{if not .CategoriaID}}is-active{{end}}">
+                <i class="fa-solid fa-list" style="margin-right:6px"></i> Tutti <span class="ec-catchip__count">{{len .Prodotti}}</span>
               </a>
               {{range .Categorie}}
-              <a href="/dashboard?cat={{.ID}}" class="ec-catchip">
-                <span>{{.Nome}}</span>
+              <a href="/dashboard?cat={{.ID}}" class="ec-catchip {{if eq .ID $.CategoriaID}}is-active{{end}}">
+                <i class="{{.Icona}}" style="margin-right:6px"></i><span>{{.Nome}}</span>
               </a>
               {{end}}
             </div>
@@ -129,10 +126,11 @@
               {{range .Prodotti}}
               <div class="ec-prodcard">
                 <div class="ec-prod-img ec-prod-img--cat-default">
-                  <img src="/prodotti/{{.ID}}/immagine" alt="" onerror="this.style.display='none'">
+                  {{if .Icona}}<i class="{{.Icona}}" style="font-size:36px;color:var(--ec-navy-700)"></i>
+                  {{else}}<img src="/prodotti/{{.ID}}/immagine" alt="" onerror="this.style.display='none'">{{end}}
                   <span class="ec-prod-img__code">#{{.ID}}</span>
                 </div>
-                <div class="ec-prodcard__cat">{{.CategoriaNome}}</div>
+                <div class="ec-prodcard__cat">{{if .CategoriaIcona}}<i class="{{.CategoriaIcona}}" style="margin-right:4px"></i>{{end}}{{.CategoriaNome}}</div>
                 <div class="ec-prodcard__name">{{.Nome}}</div>
                 <div class="ec-prodcard__avail">
                   {{if gt .Disponibile 0}}
@@ -157,7 +155,13 @@
                     </button>
                   </form>
                   {{else}}
-                  <span class="ec-pill ec-pill--red">Esaurito</span>
+                  <button class="ec-btn ec-btn--ghost ec-btn--sm" style="width:100%"
+                          hx-get="/prodotti/{{.ID}}/prenota"
+                          hx-target="#modal-body" hx-swap="innerHTML"
+                          onclick="document.getElementById('modal').classList.add('is-open')">
+                    <i class="fa-regular fa-bookmark" style="margin-right:6px"></i>
+                    Prenota rifornimento
+                  </button>
                   {{end}}
                 </div>
               </div>
@@ -174,7 +178,6 @@
             {{end}}
           </div>
 
-          <!-- Carrello -->
           <aside class="ec-cart">
             <header class="ec-cart__head">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.5l2.5 11h11l2-8H6.5"/><path d="M9 21a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M18 21a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/></svg>
@@ -190,12 +193,26 @@
                       <img src="/prodotti/{{.ProdottoID}}/immagine" alt="" onerror="this.style.display='none'">
                     </div>
                     <div>
-                      <div class="ec-cart__row-name">{{.ProdottoNome}}</div>
-                      <input type="number" min="1" value="{{.QtaRichiesta}}" name="qta"
-                             class="ec-cart__row-qty"
-                             hx-post="/bozza/righe/{{.ProdottoID}}?cart=carrello-content"
-                             hx-target="#carrello-content" hx-swap="outerHTML"
-                             hx-trigger="change">
+                      <div class="ec-cart__row-name">
+                        {{.ProdottoNome}}
+                        {{if .Prenotazione}}<span class="ec-pill ec-pill--amber" style="margin-left:4px;font-size:10px">Prenot.</span>{{end}}
+                      </div>
+                      <div class="ec-qty-stepper">
+                        <button type="button" class="ec-qty-stepper__btn"
+                                hx-post="/bozza/righe/{{.ProdottoID}}?cart=carrello-content"
+                                hx-vals='{"delta":"-1"}'
+                                hx-target="#carrello-content" hx-swap="outerHTML"
+                                aria-label="Diminuisci">−</button>
+                        <input type="number" min="1" value="{{.QtaRichiesta}}" name="qta"
+                               class="ec-qty-stepper__input"
+                               hx-post="/bozza/righe/{{.ProdottoID}}?cart=carrello-content"
+                               hx-target="#carrello-content" hx-swap="outerHTML" hx-trigger="change">
+                        <button type="button" class="ec-qty-stepper__btn"
+                                hx-post="/bozza/righe/{{.ProdottoID}}?cart=carrello-content"
+                                hx-vals='{"delta":"1"}'
+                                hx-target="#carrello-content" hx-swap="outerHTML"
+                                aria-label="Aumenta">+</button>
+                      </div>
                     </div>
                     <button type="button" class="ec-cart__row-remove"
                             hx-delete="/bozza/righe/{{.ProdottoID}}?cart=carrello-content"
@@ -234,7 +251,6 @@
         </div>
       </section>
 
-      <!-- ─── Vista: I miei ordini ─── -->
       <section data-view-section="ordini" style="display:none">
         <header class="ec-secthead">
           <div>
@@ -295,7 +311,10 @@
                     <img src="/prodotti/{{.ProdottoID}}/immagine" alt="" onerror="this.style.display='none'">
                   </div>
                   <div>
-                    <div class="ec-order__row-name">{{.ProdottoNome}}</div>
+                    <div class="ec-order__row-name">
+                      {{.ProdottoNome}}
+                      {{if .Prenotazione}}<span class="ec-pill ec-pill--amber" style="margin-left:6px;font-size:10px">Prenotazione</span>{{end}}
+                    </div>
                     <div class="ec-order__row-meta">Stato: {{.StatoRiga}}</div>
                   </div>
                   {{$appr := derefInt .QtaApprovata}}
@@ -336,6 +355,12 @@
     </main>
   </div>
 </div>
+
+<!-- Modale prenotazione -->
+<div id="modal" class="ec-modal-bg" onclick="if(event.target===this)this.classList.remove('is-open')">
+  <div class="ec-modal" id="modal-body"></div>
+</div>
+<style>#modal{display:none}#modal.is-open{display:flex}</style>
 
 <script src="/static/js/htmx.min.js"></script>
 <script>

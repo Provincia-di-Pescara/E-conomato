@@ -118,12 +118,67 @@ func migrate(conn *sql.DB) error {
 			FOREIGN KEY(riga_ordine_id) REFERENCES righe_ordine(id),
 			FOREIGN KEY(lotto_id)       REFERENCES lotti_acquisto(id)
 		);
+
+		-- Impostazioni globali key-value (branding, soglie, flag operativi).
+		CREATE TABLE IF NOT EXISTS impostazioni (
+			chiave         TEXT PRIMARY KEY,
+			valore         TEXT NOT NULL,
+			aggiornata_il  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+
+		-- Logo aziendale persistente (singleton).
+		CREATE TABLE IF NOT EXISTS branding_logo (
+			id        INTEGER PRIMARY KEY CHECK(id=1),
+			blob_data BLOB NOT NULL,
+			mime      TEXT NOT NULL
+		);
 	`)
 	if err != nil {
 		return err
 	}
-	_, err = conn.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_righe_ordine_uniq ON righe_ordine(ordine_id, prodotto_id)`)
-	return err
+	if _, err = conn.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_righe_ordine_uniq ON righe_ordine(ordine_id, prodotto_id)`); err != nil {
+		return err
+	}
+	// Migrazioni additive: colonne nuove su tabelle esistenti.
+	// sqlite supporta ADD COLUMN ma non IF NOT EXISTS, quindi probe via PRAGMA.
+	if err := ensureColumn(conn, "categorie", "icona", `ALTER TABLE categorie ADD COLUMN icona TEXT NOT NULL DEFAULT 'fa-solid fa-box'`); err != nil {
+		return err
+	}
+	if err := ensureColumn(conn, "prodotti", "icona", `ALTER TABLE prodotti ADD COLUMN icona TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	if err := ensureColumn(conn, "righe_ordine", "prenotazione", `ALTER TABLE righe_ordine ADD COLUMN prenotazione INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	if err := ensureColumn(conn, "righe_ordine", "nota_utente", `ALTER TABLE righe_ordine ADD COLUMN nota_utente TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ensureColumn aggiunge una colonna a una tabella solo se non già presente.
+func ensureColumn(conn *sql.DB, table, column, alter string) error {
+	rows, err := conn.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return err
+		}
+		if name == column {
+			return nil
+		}
+	}
+	if _, err := conn.Exec(alter); err != nil {
+		return fmt.Errorf("alter %s add %s: %w", table, column, err)
+	}
+	return nil
 }
 
 // ── Utenti ───────────────────────────────────────────────────────────────────
@@ -170,7 +225,7 @@ func (db *DB) GetSettoreIDByUsername(username string) (string, error) {
 // ── Categorie ────────────────────────────────────────────────────────────────
 
 func (db *DB) GetAllCategorie() ([]models.Categoria, error) {
-	rows, err := db.conn.Query(`SELECT id, nome FROM categorie ORDER BY nome`)
+	rows, err := db.conn.Query(`SELECT id, nome, COALESCE(icona,'fa-solid fa-box') FROM categorie ORDER BY nome`)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +233,7 @@ func (db *DB) GetAllCategorie() ([]models.Categoria, error) {
 	var out []models.Categoria
 	for rows.Next() {
 		var c models.Categoria
-		if err := rows.Scan(&c.ID, &c.Nome); err != nil {
+		if err := rows.Scan(&c.ID, &c.Nome, &c.Icona); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -186,17 +241,23 @@ func (db *DB) GetAllCategorie() ([]models.Categoria, error) {
 	return out, rows.Err()
 }
 
-func (db *DB) CreateCategoria(nome string) (models.Categoria, error) {
-	res, err := db.conn.Exec(`INSERT INTO categorie (nome) VALUES (?)`, nome)
+func (db *DB) CreateCategoria(nome, icona string) (models.Categoria, error) {
+	if icona == "" {
+		icona = "fa-solid fa-box"
+	}
+	res, err := db.conn.Exec(`INSERT INTO categorie (nome, icona) VALUES (?, ?)`, nome, icona)
 	if err != nil {
 		return models.Categoria{}, err
 	}
 	id, _ := res.LastInsertId()
-	return models.Categoria{ID: id, Nome: nome}, nil
+	return models.Categoria{ID: id, Nome: nome, Icona: icona}, nil
 }
 
-func (db *DB) UpdateCategoria(id int64, nome string) error {
-	_, err := db.conn.Exec(`UPDATE categorie SET nome=? WHERE id=?`, nome, id)
+func (db *DB) UpdateCategoria(id int64, nome, icona string) error {
+	if icona == "" {
+		icona = "fa-solid fa-box"
+	}
+	_, err := db.conn.Exec(`UPDATE categorie SET nome=?, icona=? WHERE id=?`, nome, icona, id)
 	return err
 }
 
@@ -210,7 +271,9 @@ func (db *DB) DeleteCategoria(id int64) error {
 func (db *DB) GetCatalogo(search string, categoriaID int64) ([]models.ProdottoCatalogo, error) {
 	rows, err := db.conn.Query(`
 		SELECT p.id, COALESCE(p.codice_articolo,''), p.nome, COALESCE(p.descrizione,''),
-		       COALESCE(p.categoria_id,0), COALESCE(c.nome,''), p.scorta_minima,
+		       COALESCE(p.categoria_id,0), COALESCE(c.nome,''),
+		       COALESCE(c.icona,'fa-solid fa-box'), COALESCE(p.icona,''),
+		       p.scorta_minima,
 		       COALESCE(SUM(l.quantita_rimanente),0)
 		FROM prodotti p
 		LEFT JOIN categorie c ON c.id = p.categoria_id
@@ -229,7 +292,8 @@ func (db *DB) GetCatalogo(search string, categoriaID int64) ([]models.ProdottoCa
 	for rows.Next() {
 		var p models.ProdottoCatalogo
 		if err := rows.Scan(&p.ID, &p.CodiceArticolo, &p.Nome, &p.Descrizione,
-			&p.CategoriaID, &p.CategoriaNome, &p.ScortaMinima, &p.Disponibile); err != nil {
+			&p.CategoriaID, &p.CategoriaNome, &p.CategoriaIcona, &p.Icona,
+			&p.ScortaMinima, &p.Disponibile); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -242,14 +306,14 @@ func (db *DB) GetCatalogo(search string, categoriaID int64) ([]models.ProdottoCa
 // ProdottoRow extends Prodotto with the category name for list views (no BLOB).
 type ProdottoRow struct {
 	models.Prodotto
-	CategoriaName    string
-	ScortaRimanente  int
+	CategoriaName   string
+	ScortaRimanente int
 }
 
 func (db *DB) GetAllProdotti() ([]ProdottoRow, error) {
 	rows, err := db.conn.Query(`
 		SELECT p.id, COALESCE(p.codice_articolo,''), p.nome, COALESCE(p.descrizione,''),
-		       COALESCE(p.categoria_id,0), p.scorta_minima,
+		       COALESCE(p.categoria_id,0), p.scorta_minima, COALESCE(p.icona,''),
 		       COALESCE(c.nome,'—'),
 		       COALESCE((SELECT SUM(l.quantita_rimanente) FROM lotti_acquisto l WHERE l.prodotto_id=p.id),0)
 		FROM prodotti p
@@ -263,7 +327,7 @@ func (db *DB) GetAllProdotti() ([]ProdottoRow, error) {
 	for rows.Next() {
 		var r ProdottoRow
 		if err := rows.Scan(&r.ID, &r.CodiceArticolo, &r.Nome, &r.Descrizione,
-			&r.CategoriaID, &r.ScortaMinima, &r.CategoriaName, &r.ScortaRimanente); err != nil {
+			&r.CategoriaID, &r.ScortaMinima, &r.Icona, &r.CategoriaName, &r.ScortaRimanente); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -275,9 +339,9 @@ func (db *DB) GetProdottoByID(id int64) (models.Prodotto, error) {
 	var p models.Prodotto
 	err := db.conn.QueryRow(`
 		SELECT id, COALESCE(codice_articolo,''), nome, COALESCE(descrizione,''),
-		       COALESCE(categoria_id,0), scorta_minima
+		       COALESCE(categoria_id,0), scorta_minima, COALESCE(icona,'')
 		FROM prodotti WHERE id=?`, id).
-		Scan(&p.ID, &p.CodiceArticolo, &p.Nome, &p.Descrizione, &p.CategoriaID, &p.ScortaMinima)
+		Scan(&p.ID, &p.CodiceArticolo, &p.Nome, &p.Descrizione, &p.CategoriaID, &p.ScortaMinima, &p.Icona)
 	if err == sql.ErrNoRows {
 		return p, fmt.Errorf("prodotto %d non trovato", id)
 	}
@@ -290,9 +354,9 @@ func (db *DB) CreateProdotto(p models.Prodotto) (int64, error) {
 		catID = p.CategoriaID
 	}
 	res, err := db.conn.Exec(`
-		INSERT INTO prodotti (codice_articolo, nome, descrizione, categoria_id, scorta_minima, immagine_blob)
-		VALUES (?,?,?,?,?,?)`,
-		nullableStr(p.CodiceArticolo), p.Nome, nullableStr(p.Descrizione), catID, p.ScortaMinima, nullableBlob(p.ImmagineBLOB),
+		INSERT INTO prodotti (codice_articolo, nome, descrizione, categoria_id, scorta_minima, immagine_blob, icona)
+		VALUES (?,?,?,?,?,?,?)`,
+		nullableStr(p.CodiceArticolo), p.Nome, nullableStr(p.Descrizione), catID, p.ScortaMinima, nullableBlob(p.ImmagineBLOB), p.Icona,
 	)
 	if err != nil {
 		return 0, err
@@ -307,16 +371,16 @@ func (db *DB) UpdateProdotto(p models.Prodotto) error {
 	}
 	if len(p.ImmagineBLOB) > 0 {
 		_, err := db.conn.Exec(`
-			UPDATE prodotti SET codice_articolo=?, nome=?, descrizione=?, categoria_id=?, scorta_minima=?, immagine_blob=?
+			UPDATE prodotti SET codice_articolo=?, nome=?, descrizione=?, categoria_id=?, scorta_minima=?, immagine_blob=?, icona=?
 			WHERE id=?`,
-			nullableStr(p.CodiceArticolo), p.Nome, nullableStr(p.Descrizione), catID, p.ScortaMinima, p.ImmagineBLOB, p.ID,
+			nullableStr(p.CodiceArticolo), p.Nome, nullableStr(p.Descrizione), catID, p.ScortaMinima, p.ImmagineBLOB, p.Icona, p.ID,
 		)
 		return err
 	}
 	_, err := db.conn.Exec(`
-		UPDATE prodotti SET codice_articolo=?, nome=?, descrizione=?, categoria_id=?, scorta_minima=?
+		UPDATE prodotti SET codice_articolo=?, nome=?, descrizione=?, categoria_id=?, scorta_minima=?, icona=?
 		WHERE id=?`,
-		nullableStr(p.CodiceArticolo), p.Nome, nullableStr(p.Descrizione), catID, p.ScortaMinima, p.ID,
+		nullableStr(p.CodiceArticolo), p.Nome, nullableStr(p.Descrizione), catID, p.ScortaMinima, p.Icona, p.ID,
 	)
 	return err
 }
@@ -377,7 +441,7 @@ func (db *DB) GetLottiByProdotto(prodottoID int64) ([]models.LottoAcquisto, erro
 func (db *DB) GetProdottiSottoSoglia() ([]ProdottoRow, error) {
 	rows, err := db.conn.Query(`
 		SELECT p.id, COALESCE(p.codice_articolo,''), p.nome, COALESCE(p.descrizione,''),
-		       COALESCE(p.categoria_id,0), p.scorta_minima,
+		       COALESCE(p.categoria_id,0), p.scorta_minima, COALESCE(p.icona,''),
 		       COALESCE(c.nome,'—'),
 		       COALESCE((SELECT SUM(l.quantita_rimanente) FROM lotti_acquisto l WHERE l.prodotto_id=p.id),0) AS scorta
 		FROM prodotti p
@@ -392,7 +456,7 @@ func (db *DB) GetProdottiSottoSoglia() ([]ProdottoRow, error) {
 	for rows.Next() {
 		var r ProdottoRow
 		if err := rows.Scan(&r.ID, &r.CodiceArticolo, &r.Nome, &r.Descrizione,
-			&r.CategoriaID, &r.ScortaMinima, &r.CategoriaName, &r.ScortaRimanente); err != nil {
+			&r.CategoriaID, &r.ScortaMinima, &r.Icona, &r.CategoriaName, &r.ScortaRimanente); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -403,7 +467,9 @@ func (db *DB) GetProdottiSottoSoglia() ([]ProdottoRow, error) {
 func (db *DB) getRigheConProdotto(ordineID int64) ([]models.RigaConProdotto, error) {
 	rows, err := db.conn.Query(`
 		SELECT r.id, r.ordine_id, r.prodotto_id, r.qta_richiesta, r.qta_approvata,
-		       r.qta_evasa, r.stato_riga, p.nome, COALESCE(p.codice_articolo,'')
+		       r.qta_evasa, r.stato_riga,
+		       COALESCE(r.prenotazione,0), COALESCE(r.nota_utente,''),
+		       p.nome, COALESCE(p.codice_articolo,'')
 		FROM righe_ordine r
 		JOIN prodotti p ON p.id = r.prodotto_id
 		WHERE r.ordine_id = ?
@@ -416,10 +482,13 @@ func (db *DB) getRigheConProdotto(ordineID int64) ([]models.RigaConProdotto, err
 	var out []models.RigaConProdotto
 	for rows.Next() {
 		var r models.RigaConProdotto
+		var prenot int
 		if err := rows.Scan(&r.ID, &r.OrdineID, &r.ProdottoID, &r.QtaRichiesta, &r.QtaApprovata,
-			&r.QtaEvasa, &r.StatoRiga, &r.ProdottoNome, &r.ProdottoCodice); err != nil {
+			&r.QtaEvasa, &r.StatoRiga, &prenot, &r.NotaUtente,
+			&r.ProdottoNome, &r.ProdottoCodice); err != nil {
 			return nil, err
 		}
+		r.Prenotazione = prenot != 0
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -476,7 +545,7 @@ func (db *DB) GetBozzaConRighe(username string) (*models.OrdineConRighe, error) 
 }
 
 // UpsertRigaBozza inserisce o aggiorna la quantità di un prodotto nella bozza.
-// Se qta <= 0 rimuove la riga.
+// Se qta <= 0 rimuove la riga. Non tocca i flag prenotazione/nota_utente di una riga esistente.
 func (db *DB) UpsertRigaBozza(ordineID, prodottoID int64, qta int) error {
 	if qta <= 0 {
 		_, err := db.conn.Exec(
@@ -491,6 +560,44 @@ func (db *DB) UpsertRigaBozza(ordineID, prodottoID int64, qta int) error {
 		ON CONFLICT(ordine_id, prodotto_id) DO UPDATE SET qta_richiesta = excluded.qta_richiesta
 	`, ordineID, prodottoID, qta)
 	return err
+}
+
+// UpsertPrenotazione crea/aggiorna una riga bozza con flag prenotazione e nota utente.
+// Usata dal flusso "Prenota rifornimento" per prodotti esauriti.
+func (db *DB) UpsertPrenotazione(ordineID, prodottoID int64, qta int, nota string) error {
+	_, err := db.conn.Exec(`
+		INSERT INTO righe_ordine (ordine_id, prodotto_id, qta_richiesta, prenotazione, nota_utente)
+		VALUES (?, ?, ?, 1, ?)
+		ON CONFLICT(ordine_id, prodotto_id) DO UPDATE
+		SET qta_richiesta = excluded.qta_richiesta,
+		    prenotazione  = 1,
+		    nota_utente   = excluded.nota_utente
+	`, ordineID, prodottoID, qta, nota)
+	return err
+}
+
+// GetRigaBozzaCorrente restituisce la quantità di una riga della bozza, o 0 se non esiste.
+// Usata dallo stepper +/− per calcolare il nuovo valore lato server.
+func (db *DB) GetRigaBozzaCorrente(ordineID, prodottoID int64) (int, error) {
+	var qta int
+	err := db.conn.QueryRow(
+		`SELECT qta_richiesta FROM righe_ordine WHERE ordine_id = ? AND prodotto_id = ?`,
+		ordineID, prodottoID,
+	).Scan(&qta)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return qta, err
+}
+
+// GetDisponibilitaProdotto restituisce la giacenza corrente (somma quantita_rimanente lotti).
+func (db *DB) GetDisponibilitaProdotto(prodottoID int64) (int, error) {
+	var n int
+	err := db.conn.QueryRow(
+		`SELECT COALESCE(SUM(quantita_rimanente),0) FROM lotti_acquisto WHERE prodotto_id = ?`,
+		prodottoID,
+	).Scan(&n)
+	return n, err
 }
 
 // DeleteRigaBozza rimuove un prodotto dalla bozza.
@@ -758,6 +865,109 @@ func (db *DB) ConsegnaOrdine(ordineID int64) error {
 		`UPDATE ordini SET stato = 'ritirato' WHERE id = ? AND stato = 'pronto'`, ordineID,
 	)
 	return err
+}
+
+// ── Impostazioni ─────────────────────────────────────────────────────────────
+
+// GetImpostazione legge un valore dalla tabella impostazioni.
+// Ritorna (valore, true) se presente, ("", false) altrimenti.
+func (db *DB) GetImpostazione(chiave string) (string, bool) {
+	var v string
+	err := db.conn.QueryRow(`SELECT valore FROM impostazioni WHERE chiave = ?`, chiave).Scan(&v)
+	if err != nil {
+		return "", false
+	}
+	return v, true
+}
+
+// SetImpostazione upserta una chiave; valore vuoto è ammesso (per reset esplicito).
+func (db *DB) SetImpostazione(chiave, valore string) error {
+	_, err := db.conn.Exec(`
+		INSERT INTO impostazioni (chiave, valore) VALUES (?, ?)
+		ON CONFLICT(chiave) DO UPDATE SET valore=excluded.valore, aggiornata_il=CURRENT_TIMESTAMP
+	`, chiave, valore)
+	return err
+}
+
+// GetAllImpostazioni ritorna tutte le impostazioni come mappa.
+func (db *DB) GetAllImpostazioni() (map[string]string, error) {
+	rows, err := db.conn.Query(`SELECT chiave, valore FROM impostazioni`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return nil, err
+		}
+		out[k] = v
+	}
+	return out, rows.Err()
+}
+
+// HasBrandingLogo segnala se un logo brand è già stato caricato in DB.
+func (db *DB) HasBrandingLogo() (bool, error) {
+	var n int
+	err := db.conn.QueryRow(`SELECT COUNT(*) FROM branding_logo WHERE id=1`).Scan(&n)
+	return n > 0, err
+}
+
+// GetBrandingLogo ritorna (blob, mime). Se non esiste, blob è nil.
+func (db *DB) GetBrandingLogo() ([]byte, string, error) {
+	var blob []byte
+	var mime string
+	err := db.conn.QueryRow(`SELECT blob_data, mime FROM branding_logo WHERE id=1`).Scan(&blob, &mime)
+	if err == sql.ErrNoRows {
+		return nil, "", nil
+	}
+	return blob, mime, err
+}
+
+// SetBrandingLogo sostituisce il logo brand.
+func (db *DB) SetBrandingLogo(blob []byte, mime string) error {
+	_, err := db.conn.Exec(`
+		INSERT INTO branding_logo (id, blob_data, mime) VALUES (1, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET blob_data=excluded.blob_data, mime=excluded.mime
+	`, blob, mime)
+	return err
+}
+
+// DeleteBrandingLogo rimuove il logo brand (torna al default env / SVG).
+func (db *DB) DeleteBrandingLogo() error {
+	_, err := db.conn.Exec(`DELETE FROM branding_logo WHERE id=1`)
+	return err
+}
+
+// GetSettoreNomeByUsername restituisce il nome leggibile del settore di un utente, "" se non assegnato.
+func (db *DB) GetSettoreNomeByUsername(username string) (string, error) {
+	var nome sql.NullString
+	err := db.conn.QueryRow(`
+		SELECT s.nome FROM utenti u
+		LEFT JOIN settori s ON s.id = u.settore_id
+		WHERE u.username = ?`, username).Scan(&nome)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return nome.String, nil
+}
+
+// GetOrdiniSettoreAll restituisce tutti gli ordini (escluso bozza) di un settore,
+// dal più recente. Usata dal funzionario per vedere lo storico completo.
+func (db *DB) GetOrdiniSettoreAll(settoreID string) ([]models.OrdineConRighe, error) {
+	rows, err := db.conn.Query(`
+		SELECT id, utente_username, settore_id, data_creazione, stato, COALESCE(note_funzionario,'')
+		FROM ordini WHERE settore_id = ? AND stato != 'bozza'
+		ORDER BY data_creazione DESC
+	`, settoreID)
+	if err != nil {
+		return nil, err
+	}
+	return db.scanOrdini(rows)
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

@@ -1,0 +1,33 @@
+{{define "prenotazione-form"}}
+<div class="ec-modal__head">
+  <div class="ec-modal__title">
+    <i class="fa-regular fa-bookmark" style="margin-right:6px"></i>
+    Prenota rifornimento — {{.Prodotto.Nome}}
+  </div>
+  <div class="ec-modal__sub">
+    Il prodotto è attualmente esaurito. La tua richiesta entra nel carrello con flag "prenotazione" e sarà evasa appena entra un nuovo lotto.
+  </div>
+</div>
+<form method="POST" action="/prodotti/{{.Prodotto.ID}}/prenota"
+      hx-post="/prodotti/{{.Prodotto.ID}}/prenota"
+      hx-target="body" hx-push-url="true">
+  <div class="ec-formgrid">
+    <div>
+      <label class="ec-label">Quantità *</label>
+      <input type="number" name="qta" min="1" value="1" required class="ec-input mono">
+    </div>
+    <div style="grid-column:1 / -1">
+      <label class="ec-label">Nota (opzionale)</label>
+      <textarea name="nota" rows="3" class="ec-textarea" placeholder="Es. urgente per ufficio Segreteria, indicare entro quando serve…"></textarea>
+    </div>
+  </div>
+  <div class="ec-modal__foot">
+    <button type="button" class="ec-btn ec-btn--ghost"
+            onclick="document.getElementById('modal').classList.remove('is-open')">Annulla</button>
+    <button type="submit" class="ec-btn ec-btn--primary">
+      <i class="fa-regular fa-bookmark" style="margin-right:6px"></i>
+      Aggiungi prenotazione al carrello
+    </button>
+  </div>
+</form>
+{{end}}

@@ -20,8 +20,9 @@ type Utente struct {
 
 // Categoria raggruppa i prodotti del catalogo.
 type Categoria struct {
-	ID   int64
-	Nome string
+	ID    int64
+	Nome  string
+	Icona string // classe Font Awesome (es. "fa-solid fa-box")
 }
 
 // Prodotto rappresenta un articolo del catalogo.
@@ -33,6 +34,7 @@ type Prodotto struct {
 	CategoriaID    int64
 	ScortaMinima   int
 	ImmagineBLOB   []byte
+	Icona          string // classe Font Awesome (es. "fa-solid fa-pen"); vuoto = usa immagine BLOB
 }
 
 // LottoAcquisto rappresenta un carico di merce acquistata (usato per FIFO).
@@ -58,6 +60,8 @@ type Ordine struct {
 
 // RigaOrdine rappresenta una singola voce (prodotto) all'interno di un ordine.
 // StatoRiga: "in_attesa", "evasa_parziale", "evasa".
+// Prenotazione=true se la riga è stata richiesta su prodotto esaurito: il FIFO
+// la lascia in_attesa finché non entrano nuovi lotti.
 type RigaOrdine struct {
 	ID           int64
 	OrdineID     int64
@@ -66,6 +70,8 @@ type RigaOrdine struct {
 	QtaApprovata *int
 	QtaEvasa     int
 	StatoRiga    string
+	Prenotazione bool
+	NotaUtente   string
 }
 
 // MovimentoMagazzino registra lo scarico fisico di merce da un lotto per un ordine.
@@ -100,6 +106,8 @@ type ProdottoCatalogo struct {
 	Descrizione    string
 	CategoriaID    int64
 	CategoriaNome  string
+	CategoriaIcona string
+	Icona          string
 	ScortaMinima   int
 	Disponibile    int
 }

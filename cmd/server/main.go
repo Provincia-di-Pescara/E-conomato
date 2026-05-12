@@ -44,6 +44,15 @@ return "/brand-logo"
 }
 
 func (a *App) handleBrandLogo(w http.ResponseWriter, r *http.Request) {
+if blob, mime, err := a.db.GetBrandingLogo(); err == nil && len(blob) > 0 {
+if mime == "" {
+mime = http.DetectContentType(blob)
+}
+w.Header().Set("Content-Type", mime)
+w.Header().Set("Cache-Control", "public, max-age=300")
+w.Write(blob) //nolint:errcheck
+return
+}
 if a.cfg.BrandLogoPath == "" {
 http.Error(w, "not found", 404)
 return
@@ -78,11 +87,30 @@ return t.Format("02 Jan 2006 15:04")
 "mul":        func(a, b int) int { return a * b },
 }
 
-names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino"}
+// I template magazziniere riusano la sidebar tramite il partial _sidebar-magazzino.
+// Lo associamo a parse-time così che {{template "sidebar-magazzino" .}} risolva.
+magazzinoTemplates := map[string]bool{
+"magazzino":           true,
+"dashboard-magazzino": true,
+"prodotto-form":       true,
+"lotto-form":          true,
+"impostazioni":        true,
+}
+sidebarMagazzino := filepath.Join(baseDir, "_sidebar-magazzino.html")
+prenotPartial := filepath.Join(baseDir, "_prenotazione-form.html")
+
+names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino", "prodotto-form", "lotto-form", "impostazioni"}
 a.templates = make(map[string]*template.Template, len(names))
 for _, name := range names {
-path := filepath.Join(baseDir, name+".html")
-tmpl, err := template.New(name + ".html").Funcs(funcs).ParseFiles(path)
+files := []string{filepath.Join(baseDir, name+".html")}
+if magazzinoTemplates[name] {
+files = append(files, sidebarMagazzino)
+}
+// dashboard-utente e dashboard-funzionario possono includere il form di prenotazione
+if name == "dashboard-utente" || name == "dashboard-funzionario" {
+files = append(files, prenotPartial)
+}
+tmpl, err := template.New(name + ".html").Funcs(funcs).ParseFiles(files...)
 if err != nil {
 return fmt.Errorf("parse template %s: %w", name, err)
 }
@@ -219,6 +247,64 @@ role, _ := sess.Values["role"].(string)
 return role
 }
 
+// brandInfo aggrega i campi di branding correnti (DB > env > fallback).
+type brandInfo struct {
+	Name    string
+	Sub     string
+	LogoSrc string
+}
+
+// brand restituisce le info di branding correnti. Le impostazioni in DB vincono
+// sull'env; se nulla è valorizzato i template applicano i propri fallback.
+func (a *App) brand() brandInfo {
+	bi := brandInfo{
+		Name:    a.cfg.BrandName,
+		LogoSrc: a.cfg.BrandLogoPath,
+	}
+	if v, ok := a.db.GetImpostazione("brand_name"); ok && v != "" {
+		bi.Name = v
+	}
+	if v, ok := a.db.GetImpostazione("brand_sub"); ok {
+		bi.Sub = v
+	}
+	if has, _ := a.db.HasBrandingLogo(); has {
+		bi.LogoSrc = "/brand-logo"
+	}
+	return bi
+}
+
+// viewData arricchisce un payload handler con campi comuni a tutte le viste.
+// Aggiunge BrandName / BrandLogo / BrandSub / Version preservando le chiavi
+// già impostate dal chiamante.
+func (a *App) viewData(r *http.Request, data map[string]any) map[string]any {
+	if data == nil {
+		data = map[string]any{}
+	}
+	b := a.brand()
+	if _, ok := data["BrandName"]; !ok {
+		data["BrandName"] = b.Name
+	}
+	if _, ok := data["BrandLogo"]; !ok {
+		data["BrandLogo"] = b.LogoSrc
+	}
+	if _, ok := data["BrandSub"]; !ok {
+		data["BrandSub"] = b.Sub
+	}
+	if _, ok := data["Version"]; !ok {
+		data["Version"] = AppVersion
+	}
+	return data
+}
+
+// settoreNomeFor restituisce il nome del settore di un utente, "" se non assegnato.
+func (a *App) settoreNomeFor(username string) string {
+	if username == "" {
+		return ""
+	}
+	nome, _ := a.db.GetSettoreNomeByUsername(username)
+	return nome
+}
+
 func (a *App) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 return func(w http.ResponseWriter, r *http.Request) {
 if a.getUsername(r) == "" {
@@ -274,12 +360,9 @@ http.Redirect(w, r, "/login", http.StatusSeeOther)
 
 // GET /login
 func (a *App) handleLoginPage(w http.ResponseWriter, r *http.Request) {
-a.render(w, r, "login", map[string]any{
-"MockMode":  a.cfg.LDAPHost == "mock",
-"Version":   AppVersion,
-"BrandName": a.cfg.BrandName,
-"BrandLogo": a.cfg.BrandLogoPath,
-})
+a.render(w, r, "login", a.viewData(r, map[string]any{
+"MockMode": a.cfg.LDAPHost == "mock",
+}))
 }
 
 // POST /login
@@ -357,14 +440,11 @@ if err != nil {
 logger.Error("dashboard scorte: %v", err)
 scorte = nil
 }
-a.render(w, r, "dashboard", map[string]any{
-"Username":  a.getUsername(r),
-"Role":      a.getRole(r),
-"Scorte":    scorte,
-"Version":   AppVersion,
-"BrandName": a.cfg.BrandName,
-"BrandLogo": a.cfg.BrandLogoPath,
-})
+a.render(w, r, "dashboard", a.viewData(r, map[string]any{
+"Username": a.getUsername(r),
+"Role":     a.getRole(r),
+"Scorte":   scorte,
+}))
 }
 
 // GET /dashboard — utente/funzionario landing
@@ -376,19 +456,19 @@ func (a *App) handleDashboardUtente(w http.ResponseWriter, r *http.Request) {
 	username := a.getUsername(r)
 	bozza, _ := a.db.GetBozzaConRighe(username)
 	categorie, _ := a.db.GetAllCategorie()
-	prodotti, _ := a.db.GetCatalogo(r.URL.Query().Get("q"), 0)
+	catID, _ := strconv.ParseInt(r.URL.Query().Get("cat"), 10, 64)
+	prodotti, _ := a.db.GetCatalogo(r.URL.Query().Get("q"), catID)
 	ordini, _ := a.db.GetOrdiniUtente(username)
-	a.render(w, r, "dashboard-utente", map[string]any{
-		"Username":  username,
-		"Role":      a.getRole(r),
-		"Bozza":     bozza,
-		"Categorie": categorie,
-		"Prodotti":  prodotti,
-		"Ordini":    ordini,
-		"Version":   AppVersion,
-		"BrandName": a.cfg.BrandName,
-		"BrandLogo": a.cfg.BrandLogoPath,
-	})
+	a.render(w, r, "dashboard-utente", a.viewData(r, map[string]any{
+		"Username":    username,
+		"Role":        a.getRole(r),
+		"Bozza":       bozza,
+		"Categorie":   categorie,
+		"CategoriaID": catID,
+		"Prodotti":    prodotti,
+		"Ordini":      ordini,
+		"SettoreNome": a.settoreNomeFor(username),
+	}))
 }
 
 // renderCarrello writes an HTMX-swappable cart fragment that fits the
@@ -451,7 +531,9 @@ func (a *App) renderCarrello(w http.ResponseWriter, targetID string, bozza *mode
 </div></div>`, totalPz, len(bozza.Righe), bozza.ID)
 }
 
-// POST /ordini/righe/{prodotto_id} — upsert riga bozza (HTMX)
+// POST /bozza/righe/{prodotto_id} — upsert riga bozza (HTMX).
+// Accetta `qta` (assoluta) oppure `delta` (incremento ±N rispetto al valore corrente).
+// `delta` ha precedenza se entrambi sono presenti.
 func (a *App) handleUpsertRigaBozza(w http.ResponseWriter, r *http.Request) {
 	prodottoID, err := strconv.ParseInt(r.PathValue("prodotto_id"), 10, 64)
 	if err != nil {
@@ -462,17 +544,34 @@ func (a *App) handleUpsertRigaBozza(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", 400)
 		return
 	}
-	qta, err := strconv.Atoi(r.FormValue("qta"))
-	if err != nil {
-		http.Error(w, "quantità non valida", 400)
-		return
-	}
 	username := a.getUsername(r)
 	bozzaID, err := a.db.GetOrCreateBozza(username)
 	if err != nil {
 		logger.Error("get/create bozza: %v", err)
 		http.Error(w, "settore non assegnato — contattare l'amministratore", 400)
 		return
+	}
+	var qta int
+	if deltaStr := r.FormValue("delta"); deltaStr != "" {
+		delta, err := strconv.Atoi(deltaStr)
+		if err != nil {
+			http.Error(w, "delta non valido", 400)
+			return
+		}
+		corrente, _ := a.db.GetRigaBozzaCorrente(bozzaID, prodottoID)
+		qta = corrente + delta
+		if qta < 1 {
+			qta = 1
+		}
+		if disp, err := a.db.GetDisponibilitaProdotto(prodottoID); err == nil && disp > 0 && qta > disp {
+			qta = disp
+		}
+	} else {
+		qta, err = strconv.Atoi(r.FormValue("qta"))
+		if err != nil {
+			http.Error(w, "quantità non valida", 400)
+			return
+		}
 	}
 	if err := a.db.UpsertRigaBozza(bozzaID, prodottoID, qta); err != nil {
 		logger.Error("upsert riga bozza: %v", err)
@@ -539,22 +638,24 @@ func (a *App) handleDashboardFunzionario(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	daApprovare, _ := a.db.GetOrdiniSettore(settoreID)
+	storicoSettore, _ := a.db.GetOrdiniSettoreAll(settoreID)
 	bozza, _ := a.db.GetBozzaConRighe(username)
 	categorie, _ := a.db.GetAllCategorie()
-	prodotti, _ := a.db.GetCatalogo(r.URL.Query().Get("q"), 0)
+	catID, _ := strconv.ParseInt(r.URL.Query().Get("cat"), 10, 64)
+	prodotti, _ := a.db.GetCatalogo(r.URL.Query().Get("q"), catID)
 	mieiOrdini, _ := a.db.GetOrdiniUtente(username)
-	a.render(w, r, "dashboard-funzionario", map[string]any{
-		"Username":    username,
-		"Role":        a.getRole(r),
-		"DaApprovare": daApprovare,
-		"Bozza":       bozza,
-		"Categorie":   categorie,
-		"Prodotti":    prodotti,
-		"MieiOrdini":  mieiOrdini,
-		"Version":     AppVersion,
-		"BrandName":   a.cfg.BrandName,
-		"BrandLogo":   a.cfg.BrandLogoPath,
-	})
+	a.render(w, r, "dashboard-funzionario", a.viewData(r, map[string]any{
+		"Username":       username,
+		"Role":           a.getRole(r),
+		"DaApprovare":    daApprovare,
+		"StoricoSettore": storicoSettore,
+		"Bozza":          bozza,
+		"Categorie":      categorie,
+		"CategoriaID":    catID,
+		"Prodotti":       prodotti,
+		"MieiOrdini":     mieiOrdini,
+		"SettoreNome":    a.settoreNomeFor(username),
+	}))
 }
 
 // POST /ordini/{id}/approva
@@ -643,15 +744,14 @@ func (a *App) handleRifiutaOrdine(w http.ResponseWriter, r *http.Request) {
 func (a *App) handleDashboardMagazzino(w http.ResponseWriter, r *http.Request) {
 	scorte, _ := a.db.GetProdottiSottoSoglia()
 	ordini, _ := a.db.GetOrdiniAttivi()
-	a.render(w, r, "dashboard-magazzino", map[string]any{
-		"Username":  a.getUsername(r),
-		"Role":      a.getRole(r),
-		"Scorte":    scorte,
-		"Ordini":    ordini,
-		"Version":   AppVersion,
-		"BrandName": a.cfg.BrandName,
-		"BrandLogo": a.cfg.BrandLogoPath,
-	})
+	a.render(w, r, "dashboard-magazzino", a.viewData(r, map[string]any{
+		"Username":    a.getUsername(r),
+		"Role":        a.getRole(r),
+		"Scorte":      scorte,
+		"Ordini":      ordini,
+		"ActiveNav":   "ordini",
+		"SectionName": "Ordini da evadere",
+	}))
 }
 
 // POST /ordini/{id}/prepara
@@ -777,13 +877,13 @@ if nome == "" {
 http.Error(w, "nome obbligatorio", http.StatusBadRequest)
 return
 }
-if _, err := a.db.CreateCategoria(nome); err != nil {
+icona := normalizeIcon(r.FormValue("icona"), "fa-solid fa-box")
+if _, err := a.db.CreateCategoria(nome, icona); err != nil {
 logger.Error("create categoria: %v", err)
 http.Error(w, "Errore DB", http.StatusInternalServerError)
 return
 }
-// Return updated list as HTMX partial
-a.handleListCategorie(w, r)
+a.renderCategorieListInner(w, r)
 }
 
 // PUT /categorie/{id}
@@ -802,12 +902,26 @@ if nome == "" {
 http.Error(w, "nome obbligatorio", http.StatusBadRequest)
 return
 }
-if err := a.db.UpdateCategoria(id, nome); err != nil {
+icona := normalizeIcon(r.FormValue("icona"), "fa-solid fa-box")
+if err := a.db.UpdateCategoria(id, nome, icona); err != nil {
 logger.Error("update categoria %d: %v", id, err)
 http.Error(w, "Errore DB", http.StatusInternalServerError)
 return
 }
-a.handleListCategorie(w, r)
+a.renderCategorieListInner(w, r)
+}
+
+// renderCategorieListInner renderizza SOLO il contenuto interno di #cat-list
+// (no wrapper ec-card) per evitare nidificazione DOM dopo create/update/delete.
+func (a *App) renderCategorieListInner(w http.ResponseWriter, r *http.Request) {
+cats, err := a.db.GetAllCategorie()
+if err != nil {
+http.Error(w, "Errore DB", http.StatusInternalServerError)
+return
+}
+a.renderPartial(w, r, "magazzino", "categorie-list-inner", map[string]any{
+"Categorie": cats,
+})
 }
 
 // DELETE /categorie/{id}
@@ -822,7 +936,7 @@ logger.Error("delete categoria %d: %v", id, err)
 http.Error(w, "Errore DB", http.StatusInternalServerError)
 return
 }
-a.handleListCategorie(w, r)
+a.renderCategorieListInner(w, r)
 }
 
 // ── Prodotti ─────────────────────────────────────────────────────────────────
@@ -839,28 +953,33 @@ if err != nil {
 logger.Error("get categorie: %v", err)
 categorie = nil
 }
-a.render(w, r, "magazzino", map[string]any{
-"Partial":   "prodotti",
-"Prodotti":  prodotti,
-"Categorie": categorie,
-"Username":  a.getUsername(r),
-"Role":      a.getRole(r),
-"Version":   AppVersion,
-"BrandName": a.cfg.BrandName,
-"BrandLogo": a.cfg.BrandLogoPath,
-})
+a.render(w, r, "magazzino", a.viewData(r, map[string]any{
+"Partial":     "prodotti",
+"Prodotti":    prodotti,
+"Categorie":   categorie,
+"Username":    a.getUsername(r),
+"Role":        a.getRole(r),
+"ActiveNav":   "prodotti",
+"SectionName": "Anagrafica prodotti",
+"IconePicker": IconePicker,
+}))
 }
 
-// GET /prodotti/new — inline form fragment
+// GET /prodotti/new — full-page form
 func (a *App) handleNewProdottoForm(w http.ResponseWriter, r *http.Request) {
 categorie, _ := a.db.GetAllCategorie()
-a.renderPartial(w, r, "magazzino", "prodotto-form-partial", map[string]any{
-"Prodotto":  models.Prodotto{},
-"Categorie": categorie,
-})
+a.render(w, r, "prodotto-form", a.viewData(r, map[string]any{
+"Username":    a.getUsername(r),
+"Role":        a.getRole(r),
+"Prodotto":    models.Prodotto{},
+"Categorie":   categorie,
+"IconePicker": IconePicker,
+"ActiveNav":   "prodotti",
+"SectionName": "Nuovo prodotto",
+}))
 }
 
-// GET /prodotti/{id}/edit — inline edit form fragment
+// GET /prodotti/{id}/edit — full-page edit form
 func (a *App) handleEditProdottoForm(w http.ResponseWriter, r *http.Request) {
 id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 if err != nil {
@@ -873,10 +992,15 @@ http.Error(w, "Prodotto non trovato", http.StatusNotFound)
 return
 }
 categorie, _ := a.db.GetAllCategorie()
-a.renderPartial(w, r, "magazzino", "prodotto-form-partial", map[string]any{
-"Prodotto":  p,
-"Categorie": categorie,
-})
+a.render(w, r, "prodotto-form", a.viewData(r, map[string]any{
+"Username":    a.getUsername(r),
+"Role":        a.getRole(r),
+"Prodotto":    p,
+"Categorie":   categorie,
+"IconePicker": IconePicker,
+"ActiveNav":   "prodotti",
+"SectionName": "Modifica prodotto",
+}))
 }
 
 // POST /prodotti — create
@@ -950,12 +1074,16 @@ w.Write(blob) //nolint:errcheck
 
 // ── Lotti ────────────────────────────────────────────────────────────────────
 
-// GET /lotti/new — form fragment
+// GET /lotti/new — full-page form
 func (a *App) handleNewLottoForm(w http.ResponseWriter, r *http.Request) {
 prodotti, _ := a.db.GetAllProdotti()
-a.renderPartial(w, r, "magazzino", "lotto-form-partial", map[string]any{
-"Prodotti": prodotti,
-})
+a.render(w, r, "lotto-form", a.viewData(r, map[string]any{
+"Username":    a.getUsername(r),
+"Role":        a.getRole(r),
+"Prodotti":    prodotti,
+"ActiveNav":   "carico-merce",
+"SectionName": "Carico merce",
+}))
 }
 
 // POST /lotti — create
@@ -1036,7 +1164,244 @@ Descrizione:    strings.TrimSpace(r.FormValue("descrizione")),
 CategoriaID:    catID,
 ScortaMinima:   scorta,
 ImmagineBLOB:   imgBytes,
+Icona:          normalizeIcon(r.FormValue("icona"), ""),
 }, nil
+}
+
+// IconePicker è la whitelist di classi Font Awesome ammesse nei form
+// (per evitare classi arbitrarie nel DB). Solo Free, mix solid+regular.
+var IconePicker = []string{
+"fa-solid fa-box",
+"fa-solid fa-boxes-stacked",
+"fa-solid fa-pen",
+"fa-solid fa-pencil",
+"fa-solid fa-paperclip",
+"fa-solid fa-note-sticky",
+"fa-regular fa-note-sticky",
+"fa-solid fa-file",
+"fa-regular fa-file",
+"fa-solid fa-file-lines",
+"fa-regular fa-file-lines",
+"fa-solid fa-folder",
+"fa-regular fa-folder",
+"fa-solid fa-folder-open",
+"fa-solid fa-envelope",
+"fa-regular fa-envelope",
+"fa-solid fa-stamp",
+"fa-solid fa-clipboard",
+"fa-regular fa-clipboard",
+"fa-solid fa-clipboard-list",
+"fa-solid fa-book",
+"fa-solid fa-bookmark",
+"fa-regular fa-bookmark",
+"fa-solid fa-print",
+"fa-solid fa-keyboard",
+"fa-regular fa-keyboard",
+"fa-solid fa-computer-mouse",
+"fa-solid fa-desktop",
+"fa-solid fa-laptop",
+"fa-solid fa-mobile",
+"fa-solid fa-phone",
+"fa-solid fa-fax",
+"fa-solid fa-headphones",
+"fa-solid fa-plug",
+"fa-solid fa-battery-full",
+"fa-solid fa-lightbulb",
+"fa-regular fa-lightbulb",
+"fa-solid fa-cube",
+"fa-solid fa-cubes",
+"fa-solid fa-toolbox",
+"fa-solid fa-screwdriver",
+"fa-solid fa-screwdriver-wrench",
+"fa-solid fa-wrench",
+"fa-solid fa-hammer",
+"fa-solid fa-paint-roller",
+"fa-solid fa-brush",
+"fa-solid fa-broom",
+"fa-solid fa-soap",
+"fa-solid fa-toilet-paper",
+"fa-solid fa-spray-can",
+"fa-solid fa-mug-hot",
+"fa-solid fa-mug-saucer",
+"fa-solid fa-coffee",
+"fa-solid fa-cookie-bite",
+"fa-solid fa-utensils",
+"fa-solid fa-bottle-water",
+"fa-solid fa-first-aid",
+"fa-solid fa-shield",
+"fa-solid fa-tag",
+"fa-solid fa-tags",
+"fa-solid fa-truck",
+"fa-solid fa-warehouse",
+"fa-solid fa-building",
+"fa-solid fa-briefcase",
+"fa-solid fa-id-card",
+"fa-regular fa-id-card",
+}
+
+// iconeSet è la stessa whitelist in forma di set, per check O(1).
+var iconeSet = func() map[string]struct{} {
+m := make(map[string]struct{}, len(IconePicker))
+for _, ic := range IconePicker {
+m[ic] = struct{}{}
+}
+return m
+}()
+
+// normalizeIcon valida l'icona richiesta contro la whitelist; ritorna fallback
+// se non valida. fallback="" è ammesso (campo opzionale, es. prodotti).
+func normalizeIcon(raw, fallback string) string {
+v := strings.TrimSpace(raw)
+if v == "" {
+return fallback
+}
+if _, ok := iconeSet[v]; ok {
+return v
+}
+return fallback
+}
+
+// ── Prenotazione prodotto esaurito ───────────────────────────────────────────
+
+// GET /prodotti/{id}/prenota — partial modale con form di prenotazione.
+func (a *App) handlePrenotaProdottoForm(w http.ResponseWriter, r *http.Request) {
+id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+if err != nil {
+http.Error(w, "id non valido", 400)
+return
+}
+p, err := a.db.GetProdottoByID(id)
+if err != nil {
+http.Error(w, "prodotto non trovato", 404)
+return
+}
+a.renderPartial(w, r, "dashboard-utente", "prenotazione-form", map[string]any{
+"Prodotto": p,
+})
+}
+
+// POST /prodotti/{id}/prenota — crea/aggiorna riga bozza con flag prenotazione.
+func (a *App) handlePrenotaProdotto(w http.ResponseWriter, r *http.Request) {
+id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+if err != nil {
+http.Error(w, "id non valido", 400)
+return
+}
+if err := r.ParseForm(); err != nil {
+http.Error(w, "bad request", 400)
+return
+}
+qta, err := strconv.Atoi(r.FormValue("qta"))
+if err != nil || qta < 1 {
+http.Error(w, "quantità non valida", 400)
+return
+}
+nota := strings.TrimSpace(r.FormValue("nota"))
+username := a.getUsername(r)
+bozzaID, err := a.db.GetOrCreateBozza(username)
+if err != nil {
+logger.Error("get/create bozza: %v", err)
+http.Error(w, "settore non assegnato", 400)
+return
+}
+if err := a.db.UpsertPrenotazione(bozzaID, id, qta, nota); err != nil {
+logger.Error("upsert prenotazione: %v", err)
+http.Error(w, "errore interno", 500)
+return
+}
+logger.Info("prenotazione registrata: utente=%s prodotto=%d qta=%d", username, id, qta)
+// HTMX: chiudere la modale e ricaricare la pagina (carrello aggiornato).
+w.Header().Set("HX-Redirect", a.dashboardURL(a.getRole(r)))
+w.WriteHeader(http.StatusOK)
+}
+
+// ── Impostazioni (magazziniere) ──────────────────────────────────────────────
+
+// GET /impostazioni — pagina con tab Generale / Operatività / Notifiche / Sistema.
+func (a *App) handleImpostazioniPage(w http.ResponseWriter, r *http.Request) {
+imp, _ := a.db.GetAllImpostazioni()
+hasLogo, _ := a.db.HasBrandingLogo()
+a.render(w, r, "impostazioni", a.viewData(r, map[string]any{
+"Username":     a.getUsername(r),
+"Role":         a.getRole(r),
+"Impostazioni": imp,
+"HasLogo":      hasLogo,
+"ActiveNav":    "impostazioni",
+"SectionName":  "Impostazioni",
+"LDAPHost":     a.cfg.LDAPHost,
+"SMTPServer":   a.cfg.SMTPServer,
+}))
+}
+
+// chiaviImpostazioniText elenca le chiavi testuali editabili dal form Generale/Operatività.
+var chiaviImpostazioniText = []string{
+"brand_name",
+"brand_sub",
+"soglia_scorta_default",
+"evasione_parziale_abilitata",
+"auto_approva_funzionario_proprio_settore",
+"notif_email_cambio_stato",
+"notif_email_soglia_scorta",
+"notif_riepilogo_settimanale",
+}
+
+var chiaviImpostazioniSet = func() map[string]struct{} {
+m := make(map[string]struct{}, len(chiaviImpostazioniText))
+for _, k := range chiaviImpostazioniText {
+m[k] = struct{}{}
+}
+return m
+}()
+
+// POST /impostazioni — salva i campi testuali e (eventuale) upload logo.
+func (a *App) handleImpostazioniSave(w http.ResponseWriter, r *http.Request) {
+// Multipart per supportare il logo upload (max 2 MB).
+if err := r.ParseMultipartForm(2 << 20); err != nil {
+if err2 := r.ParseForm(); err2 != nil {
+http.Error(w, "bad request", 400)
+return
+}
+}
+for _, k := range chiaviImpostazioniText {
+v := strings.TrimSpace(r.FormValue(k))
+if _, ok := chiaviImpostazioniSet[k]; !ok {
+continue
+}
+if err := a.db.SetImpostazione(k, v); err != nil {
+logger.Error("set impostazione %s: %v", k, err)
+http.Error(w, "errore DB", 500)
+return
+}
+}
+// Logo opzionale: se presente sostituisce, se "rimuovi=1" cancella.
+if r.FormValue("rimuovi_logo") == "1" {
+if err := a.db.DeleteBrandingLogo(); err != nil {
+logger.Error("delete logo: %v", err)
+}
+} else if r.MultipartForm != nil {
+if fhs := r.MultipartForm.File["brand_logo"]; len(fhs) > 0 {
+fh := fhs[0]
+f, err := fh.Open()
+if err != nil {
+http.Error(w, "logo non leggibile", 400)
+return
+}
+defer f.Close()
+blob, err := io.ReadAll(f)
+if err == nil && len(blob) > 0 {
+mime := fh.Header.Get("Content-Type")
+if mime == "" {
+mime = http.DetectContentType(blob)
+}
+if err := a.db.SetBrandingLogo(blob, mime); err != nil {
+logger.Error("set logo: %v", err)
+http.Error(w, "errore DB", 500)
+return
+}
+}
+}
+}
+http.Redirect(w, r, "/impostazioni", http.StatusSeeOther)
 }
 
 // -- Logging middleware --------------------------------------------------------
@@ -1226,6 +1591,14 @@ mux.HandleFunc("GET /prodotti/{id}/immagine", app.requireAuth(app.handleProdotto
 // Lotti
 mux.HandleFunc("GET /lotti/new", app.requireRole("magazziniere")(app.handleNewLottoForm))
 mux.HandleFunc("POST /lotti", app.requireRole("magazziniere")(app.handleCreateLotto))
+
+// Impostazioni (magazziniere)
+mux.HandleFunc("GET /impostazioni", app.requireRole("magazziniere")(app.handleImpostazioniPage))
+mux.HandleFunc("POST /impostazioni", app.requireRole("magazziniere")(app.handleImpostazioniSave))
+
+// Prenotazione prodotto esaurito (utente / funzionario)
+mux.HandleFunc("GET /prodotti/{id}/prenota", app.requireRole("user", "funzionario")(app.handlePrenotaProdottoForm))
+mux.HandleFunc("POST /prodotti/{id}/prenota", app.requireRole("user", "funzionario")(app.handlePrenotaProdotto))
 
 if cfg.LDAPHost == "mock" {
 logger.Warn("RUNNING IN MOCK MODE - any credentials accepted")

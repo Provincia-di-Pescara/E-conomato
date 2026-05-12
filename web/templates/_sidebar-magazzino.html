@@ -1,0 +1,60 @@
+{{define "sidebar-magazzino"}}
+<nav class="ec-side">
+  <div class="ec-side__brand">
+    <span class="ec-brandmark" aria-label="E-conomato">
+      <img src="/static/img/logo-icon.svg" alt="" class="ec-brandmark__icon" />
+      <span class="ec-brandmark__word">-conomato</span>
+    </span>
+  </div>
+
+  <div class="ec-side__ente">
+    <div class="ec-side__ente-logo">
+      {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}">
+      {{else}}<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/></svg>{{end}}
+    </div>
+    <div style="min-width:0">
+      <div class="ec-side__ente-name">{{if .BrandName}}{{.BrandName}}{{else}}Ente Pubblico{{end}}</div>
+      {{if .BrandSub}}<div class="ec-side__ente-sub">{{.BrandSub}}</div>{{end}}
+    </div>
+  </div>
+
+  <div class="ec-side__group-label">Magazziniere</div>
+  <a href="/dashboard/magazzino" class="ec-side__link {{if eq .ActiveNav "ordini"}}is-active{{end}}">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h11v8H3V7Z"/><path d="M14 10h4l3 3v2h-7V10Z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg>
+    <span>Ordini</span>
+    {{if .Ordini}}<span class="ec-side__badge">{{len .Ordini}}</span>{{end}}
+  </a>
+  <a href="/prodotti" class="ec-side__link {{if eq .ActiveNav "prodotti"}}is-active{{end}}">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>
+    <span>Prodotti</span>
+  </a>
+  <a href="/lotti/new" class="ec-side__link {{if eq .ActiveNav "carico-merce"}}is-active{{end}}">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V9"/><path d="M7 14l5-5 5 5"/><path d="M4 4h16"/></svg>
+    <span>Carico merce</span>
+  </a>
+  <a href="/dashboard/scorte" class="ec-side__link {{if eq .ActiveNav "scorte"}}is-active{{end}}" hx-get="/dashboard/scorte" hx-target="#scorte-table" hx-swap="innerHTML">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V8"/><path d="M10 20V4"/><path d="M16 20v-8"/><path d="M22 20H2"/></svg>
+    <span>Scorte</span>
+    {{if .Scorte}}<span class="ec-side__badge">{{len .Scorte}}</span>{{end}}
+  </a>
+
+  <div class="ec-side__group-label">Generale</div>
+  <a href="/impostazioni" class="ec-side__link {{if eq .ActiveNav "impostazioni"}}is-active{{end}}">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 14.5a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V20a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1A2 2 0 1 1 4.1 16l.1-.1a1.7 1.7 0 0 0-1.2-2.9H2a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1A2 2 0 1 1 6 4.1l.1.1a1.7 1.7 0 0 0 2.9-1.2V2a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9H22a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.2 2.9Z"/></svg>
+    <span>Impostazioni</span>
+  </a>
+
+  <div class="ec-side__foot">
+    <span class="ec-avatar" style="width:36px;height:36px;font-size:13px">{{initials .Username}}</span>
+    <div style="min-width:0;flex:1">
+      <div class="ec-side__foot-name">{{.Username}}</div>
+      <div class="ec-side__foot-sub">{{.Role}}</div>
+    </div>
+    <form method="POST" action="/logout" style="margin:0">
+      <button type="submit" class="ec-side__link" style="width:32px;padding:6px;color:#8590A8" title="Esci">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h11"/></svg>
+      </button>
+    </form>
+  </div>
+</nav>
+{{end}}

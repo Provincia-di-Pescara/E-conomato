@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>E-conomato — Impostazioni</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/fa/css/all.min.css" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+<div class="ec-app">
+  {{template "sidebar-magazzino" .}}
+
+  <div class="ec-main">
+
+    <header class="ec-topbar">
+      <div class="ec-topbar__title">
+        {{if .BrandName}}{{.BrandName}}{{else}}E-conomato{{end}}
+        <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
+        <b>Impostazioni</b>
+      </div>
+    </header>
+
+    <main class="ec-content">
+
+      <header class="ec-secthead">
+        <div>
+          <div class="ec-secthead__kicker">Configurazione</div>
+          <h1 class="ec-secthead__title">Impostazioni del gestionale</h1>
+          <p class="ec-secthead__sub">Branding aziendale, parametri operativi e preferenze di notifica. Le modifiche sono persistenti e prevalgono sulle variabili d'ambiente.</p>
+        </div>
+      </header>
+
+      <div class="ec-tabs">
+        <button type="button" class="ec-tab is-active" data-imp-tab="generale">
+          <i class="fa-solid fa-building" style="margin-right:4px"></i> Generale
+        </button>
+        <button type="button" class="ec-tab" data-imp-tab="operativita">
+          <i class="fa-solid fa-gears" style="margin-right:4px"></i> Operatività
+        </button>
+        <button type="button" class="ec-tab" data-imp-tab="notifiche">
+          <i class="fa-solid fa-bell" style="margin-right:4px"></i> Notifiche
+        </button>
+        <button type="button" class="ec-tab" data-imp-tab="sistema">
+          <i class="fa-solid fa-server" style="margin-right:4px"></i> Sistema
+        </button>
+      </div>
+
+      <form method="POST" action="/impostazioni" enctype="multipart/form-data">
+
+        <!-- ─── Generale (branding) ─── -->
+        <section data-imp-section="generale" class="ec-card" style="padding:24px;margin-top:18px">
+          <div class="ec-card-head" style="padding:0 0 18px;border-bottom:1px solid var(--ec-line);margin-bottom:18px">
+            <div>
+              <div class="ec-card-head__title">Branding</div>
+              <div class="ec-card-head__sub">Personalizza nome ente e logo mostrati in sidebar, topbar e login.</div>
+            </div>
+          </div>
+          <div class="ec-formgrid">
+            <div style="grid-column:1 / -1">
+              <label class="ec-label">Nome ente</label>
+              <input type="text" name="brand_name" class="ec-input" value="{{index .Impostazioni "brand_name"}}" placeholder="es. Provincia di Pescara">
+              <div class="ec-hint">Mostrato a fianco del wordmark "E-conomato".</div>
+            </div>
+            <div style="grid-column:1 / -1">
+              <label class="ec-label">Sottotitolo (opzionale)</label>
+              <input type="text" name="brand_sub" class="ec-input" value="{{index .Impostazioni "brand_sub"}}" placeholder="es. Ufficio Economato">
+            </div>
+            <div style="grid-column:1 / -1">
+              <label class="ec-label">Logo ente</label>
+              <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+                <div class="ec-side__ente-logo" style="width:64px;height:64px;border-radius:12px;background:var(--ec-surface);border:1px solid var(--ec-line);overflow:hidden">
+                  {{if .HasLogo}}<img src="/brand-logo" alt="Logo attuale" style="width:100%;height:100%;object-fit:contain">
+                  {{else}}<i class="fa-solid fa-building" style="color:var(--ec-ink-400);font-size:22px"></i>{{end}}
+                </div>
+                <div style="flex:1;min-width:240px">
+                  <input type="file" name="brand_logo" accept="image/*" class="ec-input" style="padding:7px 10px">
+                  <div class="ec-hint">PNG o SVG, max 2 MB. Sostituisce il logo corrente.</div>
+                  {{if .HasLogo}}
+                  <label style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:var(--ec-red-700)">
+                    <input type="checkbox" name="rimuovi_logo" value="1"> Rimuovi logo corrente
+                  </label>
+                  {{end}}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ─── Operatività ─── -->
+        <section data-imp-section="operativita" class="ec-card" style="padding:24px;margin-top:18px;display:none">
+          <div class="ec-card-head" style="padding:0 0 18px;border-bottom:1px solid var(--ec-line);margin-bottom:18px">
+            <div>
+              <div class="ec-card-head__title">Parametri operativi</div>
+              <div class="ec-card-head__sub">Regole di default per evasione FIFO, soglie e approvazioni.</div>
+            </div>
+          </div>
+          <div class="ec-formgrid">
+            <div>
+              <label class="ec-label">Soglia scorta di default</label>
+              <input type="number" name="soglia_scorta_default" min="0" class="ec-input mono" value="{{index .Impostazioni "soglia_scorta_default"}}" placeholder="0">
+              <div class="ec-hint">Usata quando un prodotto non ne definisce una propria.</div>
+            </div>
+            <div>
+              <label class="ec-label">Evasione parziale abilitata</label>
+              <select name="evasione_parziale_abilitata" class="ec-select">
+                <option value="1" {{if eq (index .Impostazioni "evasione_parziale_abilitata") "1"}}selected{{end}}>Sì (default)</option>
+                <option value="0" {{if eq (index .Impostazioni "evasione_parziale_abilitata") "0"}}selected{{end}}>No, solo evasioni totali</option>
+              </select>
+            </div>
+            <div style="grid-column:1 / -1">
+              <label class="ec-label">Auto-approvazione ordine del funzionario sul proprio settore</label>
+              <select name="auto_approva_funzionario_proprio_settore" class="ec-select">
+                <option value="1" {{if eq (index .Impostazioni "auto_approva_funzionario_proprio_settore") "1"}}selected{{end}}>Sì (default — il funzionario non si auto-approva)</option>
+                <option value="0" {{if eq (index .Impostazioni "auto_approva_funzionario_proprio_settore") "0"}}selected{{end}}>No, anche le sue richieste passano in approvazione</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- ─── Notifiche ─── -->
+        <section data-imp-section="notifiche" class="ec-card" style="padding:24px;margin-top:18px;display:none">
+          <div class="ec-card-head" style="padding:0 0 18px;border-bottom:1px solid var(--ec-line);margin-bottom:18px">
+            <div>
+              <div class="ec-card-head__title">Preferenze notifiche email</div>
+              <div class="ec-card-head__sub">Il worker email viene implementato in una release successiva (vedi TODO §7); queste preferenze sono già persistite.</div>
+            </div>
+          </div>
+          <div class="ec-formgrid">
+            <div style="grid-column:1 / -1">
+              <label style="display:flex;align-items:center;gap:10px">
+                <input type="checkbox" name="notif_email_cambio_stato" value="1" {{if eq (index .Impostazioni "notif_email_cambio_stato") "1"}}checked{{end}}>
+                <span>Notifica via email i cambi di stato degli ordini (utente e funzionario destinatari).</span>
+              </label>
+            </div>
+            <div style="grid-column:1 / -1">
+              <label style="display:flex;align-items:center;gap:10px">
+                <input type="checkbox" name="notif_email_soglia_scorta" value="1" {{if eq (index .Impostazioni "notif_email_soglia_scorta") "1"}}checked{{end}}>
+                <span>Avvisa il magazziniere quando un prodotto scende sotto soglia.</span>
+              </label>
+            </div>
+            <div style="grid-column:1 / -1">
+              <label style="display:flex;align-items:center;gap:10px">
+                <input type="checkbox" name="notif_riepilogo_settimanale" value="1" {{if eq (index .Impostazioni "notif_riepilogo_settimanale") "1"}}checked{{end}}>
+                <span>Riepilogo settimanale via email (lunedì mattina).</span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <!-- ─── Sistema ─── -->
+        <section data-imp-section="sistema" class="ec-card" style="padding:24px;margin-top:18px;display:none">
+          <div class="ec-card-head" style="padding:0 0 18px;border-bottom:1px solid var(--ec-line);margin-bottom:18px">
+            <div>
+              <div class="ec-card-head__title">Informazioni di sistema</div>
+              <div class="ec-card-head__sub">Configurazione di runtime read-only. Per modificare valori d'ambiente intervieni su `.env` e riavvia il container.</div>
+            </div>
+          </div>
+          <table class="ec-table">
+            <tbody>
+              <tr><td><b>Versione applicazione</b></td><td class="mono">{{.Version}}</td></tr>
+              <tr><td><b>Host LDAP</b></td><td class="mono">{{if .LDAPHost}}{{.LDAPHost}}{{else}}—{{end}}</td></tr>
+              <tr><td><b>SMTP server</b></td><td class="mono">{{if .SMTPServer}}{{.SMTPServer}}{{else}}— (worker email non attivo){{end}}</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:24px">
+          <a href="/dashboard/magazzino" class="ec-btn ec-btn--ghost">Annulla</a>
+          <button type="submit" class="ec-btn ec-btn--primary">
+            <i class="fa-solid fa-floppy-disk" style="margin-right:6px"></i>
+            Salva impostazioni
+          </button>
+        </div>
+      </form>
+
+    </main>
+  </div>
+</div>
+
+<script src="/static/js/htmx.min.js"></script>
+<script>
+  document.querySelectorAll('[data-imp-tab]').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var target = tab.getAttribute('data-imp-tab');
+      document.querySelectorAll('[data-imp-tab]').forEach(function (t) { t.classList.toggle('is-active', t === tab); });
+      document.querySelectorAll('[data-imp-section]').forEach(function (s) {
+        s.style.display = s.getAttribute('data-imp-section') === target ? '' : 'none';
+      });
+    });
+  });
+</script>
+</body>
+</html>

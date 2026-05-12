@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>E-conomato — {{if .Prodotto.ID}}Modifica prodotto{{else}}Nuovo prodotto{{end}}</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/fa/css/all.min.css" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+<div class="ec-app">
+  {{template "sidebar-magazzino" .}}
+
+  <div class="ec-main">
+
+    <header class="ec-topbar">
+      <div class="ec-topbar__title">
+        {{if .BrandName}}{{.BrandName}}{{else}}E-conomato{{end}}
+        <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
+        <a href="/prodotti" style="color:var(--ec-ink-500)">Prodotti</a>
+        <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
+        <b>{{if .Prodotto.ID}}Modifica{{else}}Nuovo prodotto{{end}}</b>
+      </div>
+    </header>
+
+    <main class="ec-content">
+
+      <header class="ec-secthead">
+        <div>
+          <div class="ec-secthead__kicker">Anagrafica</div>
+          <h1 class="ec-secthead__title">{{if .Prodotto.ID}}Modifica prodotto #{{.Prodotto.ID}}{{else}}Nuovo prodotto{{end}}</h1>
+          <p class="ec-secthead__sub">Le immagini vengono salvate come BLOB nel database SQLite — max 10 MB. In alternativa scegli un'icona Font Awesome.</p>
+        </div>
+        <div class="ec-secthead__right">
+          <a href="/prodotti" class="ec-btn ec-btn--ghost">Annulla</a>
+        </div>
+      </header>
+
+      <div class="ec-card">
+        <form method="POST" action="{{if .Prodotto.ID}}/prodotti/{{.Prodotto.ID}}{{else}}/prodotti{{end}}" enctype="multipart/form-data" style="padding:20px">
+          <div class="ec-formgrid">
+            <div>
+              <label class="ec-label">Codice articolo</label>
+              <input type="text" name="codice_articolo" value="{{.Prodotto.CodiceArticolo}}" placeholder="es. C0560" class="ec-input mono">
+            </div>
+            <div>
+              <label class="ec-label">Categoria</label>
+              <select name="categoria_id" class="ec-select">
+                <option value="0">— Nessuna —</option>
+                {{range .Categorie}}
+                <option value="{{.ID}}"{{if eq .ID $.Prodotto.CategoriaID}} selected{{end}}>{{.Nome}}</option>
+                {{end}}
+              </select>
+            </div>
+            <div style="grid-column:1 / -1">
+              <label class="ec-label">Nome *</label>
+              <input type="text" name="nome" value="{{.Prodotto.Nome}}" required autofocus class="ec-input">
+            </div>
+            <div style="grid-column:1 / -1">
+              <label class="ec-label">Descrizione</label>
+              <textarea name="descrizione" rows="3" placeholder="Descrizione opzionale" class="ec-textarea">{{.Prodotto.Descrizione}}</textarea>
+            </div>
+            <div>
+              <label class="ec-label">Scorta minima</label>
+              <input type="number" name="scorta_minima" value="{{.Prodotto.ScortaMinima}}" min="0" class="ec-input mono">
+            </div>
+            <div>
+              <label class="ec-label">Immagine (opzionale)</label>
+              <input type="file" name="immagine" accept="image/*" class="ec-input" style="padding:7px 10px">
+            </div>
+            <div style="grid-column:1 / -1">
+              <label class="ec-label">Icona (fallback se non c'è immagine)</label>
+              <input type="hidden" name="icona" id="icona-input" value="{{.Prodotto.Icona}}">
+              <div class="ec-icon-picker" data-target="#icona-input">
+                <button type="button" class="ec-icon-picker__cell{{if eq .Prodotto.Icona ""}} is-selected{{end}}" data-icona="" title="Nessuna icona">
+                  <span style="font-size:11px;color:var(--ec-ink-500)">—</span>
+                </button>
+                {{range .IconePicker}}
+                <button type="button" class="ec-icon-picker__cell{{if eq . $.Prodotto.Icona}} is-selected{{end}}" data-icona="{{.}}" title="{{.}}">
+                  <i class="{{.}}"></i>
+                </button>
+                {{end}}
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:24px">
+            <a href="/prodotti" class="ec-btn ec-btn--ghost">Annulla</a>
+            <button type="submit" class="ec-btn ec-btn--primary">{{if .Prodotto.ID}}Salva modifiche{{else}}Crea prodotto{{end}}</button>
+          </div>
+        </form>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script src="/static/js/htmx.min.js"></script>
+<script>
+  document.querySelectorAll('.ec-icon-picker').forEach(function (picker) {
+    var targetSel = picker.getAttribute('data-target');
+    var target = document.querySelector(targetSel);
+    picker.querySelectorAll('.ec-icon-picker__cell').forEach(function (cell) {
+      cell.addEventListener('click', function () {
+        picker.querySelectorAll('.ec-icon-picker__cell').forEach(function (c) { c.classList.remove('is-selected'); });
+        cell.classList.add('is-selected');
+        if (target) target.value = cell.getAttribute('data-icona') || '';
+      });
+    });
+  });
+</script>
+</body>
+</html>

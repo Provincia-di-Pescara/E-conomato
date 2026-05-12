@@ -98,7 +98,7 @@ img { display: block; max-width: 100%; }
   padding: 4px 8px 14px;
 }
 .ec-brandmark {
-  display: inline-flex; align-items: baseline; gap: 2px;
+  display: inline-flex; align-items: center; gap: 0;
   color: #fff;
   font-family: var(--font-display);
   font-weight: 700;
@@ -107,11 +107,15 @@ img { display: block; max-width: 100%; }
   line-height: 1;
 }
 .ec-brandmark__icon {
-  height: 30px;
-  width: auto;
-  transform: translateY(4px);
+  height: 28px;
+  width: 28px;
+  flex-shrink: 0;
+  object-fit: contain;
 }
-.ec-brandmark__word { color: #fff; }
+.ec-brandmark__word {
+  color: #fff;
+  line-height: 28px; /* match icon height for perfect vertical alignment */
+}
 
 .ec-side__ente {
   display: flex; align-items: center; gap: 10px;
@@ -1148,3 +1152,97 @@ img { display: block; max-width: 100%; }
 .htmx-indicator { opacity: 0; }
 .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
 @keyframes ec-spin { to { transform: rotate(360deg); } }
+
+/* ─── Topbar — pill ufficio attivo ───────────────────────────────────────── */
+.ec-topbar__settore {
+  display: inline-flex; align-items: center;
+  margin-left: 14px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--ec-sky-50, #EAF4FB);
+  color: var(--ec-navy-700, #14365B);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border: 1px solid var(--ec-sky-200, #BFDDF1);
+}
+
+/* ─── Carrello: stepper +/− ──────────────────────────────────────────────── */
+.ec-qty-stepper {
+  display: inline-flex; align-items: stretch;
+  border: 1px solid var(--ec-line);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 4px;
+  background: var(--ec-surface);
+}
+.ec-qty-stepper__btn {
+  width: 28px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: var(--ec-ink-700);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0;
+}
+.ec-qty-stepper__btn:hover { background: var(--ec-bg-soft); }
+.ec-qty-stepper__btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ec-qty-stepper__input {
+  width: 44px;
+  border: 0;
+  border-left: 1px solid var(--ec-line);
+  border-right: 1px solid var(--ec-line);
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  padding: 4px 0;
+  outline: none;
+  background: transparent;
+}
+.ec-qty-stepper__input:focus { background: var(--ec-sky-50, #EAF4FB); }
+
+/* ─── Form: icon picker (Font Awesome whitelist) ─────────────────────────── */
+.ec-icon-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
+  gap: 6px;
+  padding: 10px;
+  background: var(--ec-bg-soft, #F7F9FC);
+  border: 1px solid var(--ec-line);
+  border-radius: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.ec-icon-picker__cell {
+  height: 42px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--ec-surface, #fff);
+  border: 1px solid var(--ec-line);
+  border-radius: 8px;
+  color: var(--ec-ink-700);
+  cursor: pointer;
+  font-size: 17px;
+  transition: all 120ms ease;
+}
+.ec-icon-picker__cell:hover {
+  border-color: var(--ec-sky-500, #55AAD4);
+  color: var(--ec-navy-900, #0A1F3E);
+}
+.ec-icon-picker__cell.is-selected {
+  background: var(--ec-sky-50, #EAF4FB);
+  border-color: var(--ec-sky-500, #55AAD4);
+  color: var(--ec-navy-900, #0A1F3E);
+  box-shadow: 0 0 0 2px var(--ec-sky-50, #EAF4FB);
+}
+
+/* ─── Hint sotto label form ──────────────────────────────────────────────── */
+.ec-hint {
+  font-size: 11.5px;
+  color: var(--ec-ink-500);
+  margin-top: 4px;
+}
+
+/* ─── Tabs interni a /impostazioni (toggle JS) ───────────────────────────── */
+.ec-tab { cursor: pointer; }

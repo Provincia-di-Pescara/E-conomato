@@ -8,13 +8,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/fa/css/all.min.css" />
   <link rel="stylesheet" href="/static/css/style.css" />
 </head>
 <body>
 
 <div class="ec-app">
 
-  <!-- ═════════ Sidebar ═════════ -->
   <nav class="ec-side">
     <div class="ec-side__brand">
       <span class="ec-brandmark" aria-label="E-conomato">
@@ -30,7 +30,7 @@
       </div>
       <div style="min-width:0">
         <div class="ec-side__ente-name">{{if .BrandName}}{{.BrandName}}{{else}}Ente Pubblico{{end}}</div>
-        <div class="ec-side__ente-sub">Provincia di Pescara</div>
+        {{if .BrandSub}}<div class="ec-side__ente-sub">{{.BrandSub}}</div>{{end}}
       </div>
     </div>
 
@@ -40,12 +40,17 @@
       <span>Da approvare</span>
       {{if .DaApprovare}}<span class="ec-side__badge">{{len .DaApprovare}}</span>{{end}}
     </button>
+    <button class="ec-side__link" data-view="storico">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v5h5"/><path d="M12 7v5l3 3"/></svg>
+      <span>Storico settore</span>
+      {{if .StoricoSettore}}<span class="ec-side__badge">{{len .StoricoSettore}}</span>{{end}}
+    </button>
     <button class="ec-side__link" data-view="nuovo">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
       <span>Nuovo ordine</span>
     </button>
     <button class="ec-side__link" data-view="miei">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v5h5"/><path d="M12 7v5l3 3"/></svg>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4Z"/></svg>
       <span>I miei ordini</span>
       {{if .MieiOrdini}}<span class="ec-side__badge">{{len .MieiOrdini}}</span>{{end}}
     </button>
@@ -54,10 +59,6 @@
     <button class="ec-side__link">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2H4.5L6 16Z"/><path d="M10 21h4"/></svg>
       <span>Notifiche</span>
-    </button>
-    <button class="ec-side__link">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg>
-      <span>Impostazioni</span>
     </button>
 
     <div class="ec-side__foot">
@@ -74,22 +75,21 @@
     </div>
   </nav>
 
-  <!-- ═════════ Main ═════════ -->
   <div class="ec-main">
 
     <header class="ec-topbar">
       <div class="ec-topbar__title">
-        {{if .BrandName}}{{.BrandName}}{{else}}Provincia di Pescara{{end}}
+        {{if .BrandName}}{{.BrandName}}{{else}}E-conomato{{end}}
         <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
         <b data-topbar-title>Richieste da approvare</b>
+        {{if .SettoreNome}}<span class="ec-topbar__settore" title="Ufficio attivo">
+          <i class="fa-solid fa-building" style="margin-right:5px"></i>{{.SettoreNome}}
+        </span>{{end}}
       </div>
       <div class="ec-topbar__right">
         <button class="ec-iconbtn" title="Notifiche">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2H4.5L6 16Z"/><path d="M10 21h4"/></svg>
           {{if .DaApprovare}}<span class="ec-iconbtn__count">{{len .DaApprovare}}</span>{{end}}
-        </button>
-        <button class="ec-iconbtn" title="Aiuto">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8v.5"/></svg>
         </button>
       </div>
     </header>
@@ -128,8 +128,11 @@
                       <img src="/prodotti/{{.ProdottoID}}/immagine" alt="" onerror="this.style.display='none'">
                     </div>
                     <div>
-                      <div class="ec-order__row-name">{{.ProdottoNome}}</div>
-                      <div class="ec-order__row-meta">Riga #{{.ID}}</div>
+                      <div class="ec-order__row-name">
+                        {{.ProdottoNome}}
+                        {{if .Prenotazione}}<span class="ec-pill ec-pill--amber" style="margin-left:6px;font-size:10px">Prenotazione</span>{{end}}
+                      </div>
+                      <div class="ec-order__row-meta">Riga #{{.ID}}{{if .NotaUtente}} · <em>{{.NotaUtente}}</em>{{end}}</div>
                     </div>
                     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
                       <div style="font-size:11px;color:var(--ec-ink-500)">Richiesto</div>
@@ -146,7 +149,6 @@
                 </div>
               </div>
 
-              <!-- Pannello rifiuto (toggled) -->
               <div class="ec-note ec-note--gold" style="display:none" data-reject-panel>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2L12 3Z"/><path d="M12 10v5"/><path d="M12 18v.5"/></svg>
                 <div style="flex:1">
@@ -171,17 +173,13 @@
               </footer>
             </form>
 
-            <!-- Form di rifiuto separato -->
             <form method="POST" action="/ordini/{{.Ordine.ID}}/rifiuta" data-reject-form style="display:none;border-top:1px solid var(--ec-line);padding:14px 18px 18px;background:var(--ec-bg-soft)">
               <label class="ec-label" for="note-{{.Ordine.ID}}">Motivazione del rifiuto *</label>
               <textarea id="note-{{.Ordine.ID}}" name="note" class="ec-textarea" rows="3" required
                         placeholder="Es. quantità eccessiva, si invita a riformulare con un massimo di…"></textarea>
               <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px">
                 <button type="button" class="ec-btn ec-btn--ghost ec-btn--sm" data-cancel-reject>Annulla</button>
-                <button type="submit" class="ec-btn ec-btn--danger ec-btn--sm">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
-                  Conferma rifiuto
-                </button>
+                <button type="submit" class="ec-btn ec-btn--danger ec-btn--sm">Conferma rifiuto</button>
               </div>
             </form>
           </div>
@@ -194,6 +192,68 @@
           </div>
           <div class="ec-empty__title">Tutto in ordine</div>
           <div class="ec-empty__hint">Non ci sono richieste in attesa di approvazione nel tuo settore.</div>
+        </div>
+        {{end}}
+      </section>
+
+      <!-- ─── Vista: Storico settore ─── -->
+      <section data-view-section="storico" style="display:none">
+        <header class="ec-secthead">
+          <div>
+            <div class="ec-secthead__kicker">Settore {{if .SettoreNome}}{{.SettoreNome}}{{end}}</div>
+            <h1 class="ec-secthead__title">Storico ordini del settore</h1>
+            <p class="ec-secthead__sub">Tutti gli ordini dei tuoi utenti, in qualsiasi stato. Le tue richieste personali sono nella vista "I miei ordini".</p>
+          </div>
+        </header>
+
+        {{if .StoricoSettore}}
+        <div class="ec-stack">
+          {{range .StoricoSettore}}
+          <div class="ec-order">
+            <header class="ec-order__head">
+              <span class="ec-order__id">#{{.Ordine.ID}}</span>
+              <span class="ec-order__meta">
+                <b>{{.Ordine.UtenteUsername}}</b> · {{fmtDate .Ordine.DataCreazione}}
+              </span>
+              <span class="ec-pill ec-pill--{{statoTone .Ordine.Stato}}">{{statoLabel .Ordine.Stato}}</span>
+            </header>
+            <div class="ec-order__body">
+              <div class="ec-order__rows">
+                {{range .Righe}}
+                <div class="ec-order__row">
+                  <div class="ec-prod-img ec-prod-img--sm ec-prod-img--cat-default">
+                    <img src="/prodotti/{{.ProdottoID}}/immagine" alt="" onerror="this.style.display='none'">
+                  </div>
+                  <div>
+                    <div class="ec-order__row-name">
+                      {{.ProdottoNome}}
+                      {{if .Prenotazione}}<span class="ec-pill ec-pill--amber" style="margin-left:6px;font-size:10px">Prenotazione</span>{{end}}
+                    </div>
+                    <div class="ec-order__row-meta">Stato riga: {{.StatoRiga}}</div>
+                  </div>
+                  <span class="ec-order__row-qty">{{if .QtaApprovata}}{{.QtaApprovata}}{{else}}{{.QtaRichiesta}}{{end}} pz</span>
+                  <span style="width:90px;text-align:right">
+                    {{if eq .StatoRiga "evasa"}}<span class="ec-pill ec-pill--teal">Evasa</span>
+                    {{else if eq .StatoRiga "evasa_parziale"}}<span class="ec-pill ec-pill--amber">Parziale</span>{{end}}
+                  </span>
+                </div>
+                {{end}}
+              </div>
+            </div>
+            {{if .Ordine.NoteFunzionario}}
+            <div class="ec-note ec-note--info">
+              <i class="fa-solid fa-circle-info" style="margin-right:8px"></i>
+              <div>{{.Ordine.NoteFunzionario}}</div>
+            </div>
+            {{end}}
+          </div>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="ec-empty">
+          <div class="ec-empty__icon"><i class="fa-solid fa-folder-open" style="font-size:28px;color:var(--ec-ink-400)"></i></div>
+          <div class="ec-empty__title">Nessun ordine nel settore</div>
+          <div class="ec-empty__hint">Quando un utente del tuo settore invierà una richiesta, comparirà qui.</div>
         </div>
         {{end}}
       </section>
@@ -212,11 +272,13 @@
           <div>
             {{if .Categorie}}
             <div class="ec-catfilter">
-              <a href="/dashboard/funzionario" class="ec-catchip is-active">
-                Tutti <span class="ec-catchip__count">{{len .Prodotti}}</span>
+              <a href="/dashboard/funzionario" class="ec-catchip {{if not .CategoriaID}}is-active{{end}}">
+                <i class="fa-solid fa-list" style="margin-right:6px"></i> Tutti <span class="ec-catchip__count">{{len .Prodotti}}</span>
               </a>
               {{range .Categorie}}
-              <a href="/dashboard/funzionario?cat={{.ID}}" class="ec-catchip">{{.Nome}}</a>
+              <a href="/dashboard/funzionario?cat={{.ID}}" class="ec-catchip {{if eq .ID $.CategoriaID}}is-active{{end}}">
+                <i class="{{.Icona}}" style="margin-right:6px"></i>{{.Nome}}
+              </a>
               {{end}}
             </div>
             {{end}}
@@ -226,10 +288,11 @@
               {{range .Prodotti}}
               <div class="ec-prodcard">
                 <div class="ec-prod-img ec-prod-img--cat-default">
-                  <img src="/prodotti/{{.ID}}/immagine" alt="" onerror="this.style.display='none'">
+                  {{if .Icona}}<i class="{{.Icona}}" style="font-size:36px;color:var(--ec-navy-700)"></i>
+                  {{else}}<img src="/prodotti/{{.ID}}/immagine" alt="" onerror="this.style.display='none'">{{end}}
                   <span class="ec-prod-img__code">#{{.ID}}</span>
                 </div>
-                <div class="ec-prodcard__cat">{{.CategoriaNome}}</div>
+                <div class="ec-prodcard__cat">{{if .CategoriaIcona}}<i class="{{.CategoriaIcona}}" style="margin-right:4px"></i>{{end}}{{.CategoriaNome}}</div>
                 <div class="ec-prodcard__name">{{.Nome}}</div>
                 <div class="ec-prodcard__avail">
                   {{if gt .Disponibile 0}}
@@ -252,7 +315,13 @@
                     </button>
                   </form>
                   {{else}}
-                  <span class="ec-pill ec-pill--red">Esaurito</span>
+                  <button class="ec-btn ec-btn--ghost ec-btn--sm" style="width:100%"
+                          hx-get="/prodotti/{{.ID}}/prenota"
+                          hx-target="#modal-body" hx-swap="innerHTML"
+                          onclick="document.getElementById('modal').classList.add('is-open')">
+                    <i class="fa-regular fa-bookmark" style="margin-right:6px"></i>
+                    Prenota rifornimento
+                  </button>
                   {{end}}
                 </div>
               </div>
@@ -278,11 +347,26 @@
                       <img src="/prodotti/{{.ProdottoID}}/immagine" alt="" onerror="this.style.display='none'">
                     </div>
                     <div>
-                      <div class="ec-cart__row-name">{{.ProdottoNome}}</div>
-                      <input type="number" min="1" value="{{.QtaRichiesta}}" name="qta"
-                             class="ec-cart__row-qty"
-                             hx-post="/bozza/righe/{{.ProdottoID}}?cart=carrello-content"
-                             hx-target="#carrello-content" hx-swap="outerHTML" hx-trigger="change">
+                      <div class="ec-cart__row-name">
+                        {{.ProdottoNome}}
+                        {{if .Prenotazione}}<span class="ec-pill ec-pill--amber" style="margin-left:4px;font-size:10px">Prenot.</span>{{end}}
+                      </div>
+                      <div class="ec-qty-stepper">
+                        <button type="button" class="ec-qty-stepper__btn"
+                                hx-post="/bozza/righe/{{.ProdottoID}}?cart=carrello-content"
+                                hx-vals='{"delta":"-1"}'
+                                hx-target="#carrello-content" hx-swap="outerHTML"
+                                aria-label="Diminuisci">−</button>
+                        <input type="number" min="1" value="{{.QtaRichiesta}}" name="qta"
+                               class="ec-qty-stepper__input"
+                               hx-post="/bozza/righe/{{.ProdottoID}}?cart=carrello-content"
+                               hx-target="#carrello-content" hx-swap="outerHTML" hx-trigger="change">
+                        <button type="button" class="ec-qty-stepper__btn"
+                                hx-post="/bozza/righe/{{.ProdottoID}}?cart=carrello-content"
+                                hx-vals='{"delta":"1"}'
+                                hx-target="#carrello-content" hx-swap="outerHTML"
+                                aria-label="Aumenta">+</button>
+                      </div>
                     </div>
                     <button type="button" class="ec-cart__row-remove"
                             hx-delete="/bozza/righe/{{.ProdottoID}}?cart=carrello-content"
@@ -362,7 +446,7 @@
             </div>
             {{if .Ordine.NoteFunzionario}}
             <div class="ec-note ec-note--info">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8v.5"/></svg>
+              <i class="fa-solid fa-circle-info" style="margin-right:8px"></i>
               <div>{{.Ordine.NoteFunzionario}}</div>
             </div>
             {{end}}
@@ -382,11 +466,18 @@
   </div>
 </div>
 
+<!-- Modale prenotazione -->
+<div id="modal" class="ec-modal-bg" onclick="if(event.target===this)this.classList.remove('is-open')">
+  <div class="ec-modal" id="modal-body"></div>
+</div>
+<style>#modal{display:none}#modal.is-open{display:flex}</style>
+
 <script src="/static/js/htmx.min.js"></script>
 <script>
   (function () {
     var titles = {
       approva: "Richieste da approvare",
+      storico: "Storico settore",
       nuovo:   "Nuovo ordine personale",
       miei:    "I miei ordini"
     };
@@ -404,7 +495,6 @@
       b.addEventListener('click', function () { setView(b.getAttribute('data-view')); });
     });
 
-    // Toggle reject form per order card
     document.querySelectorAll('[data-order-card]').forEach(function (card) {
       var approve = card.querySelector('[data-approve-form]');
       var reject  = card.querySelector('[data-reject-form]');
