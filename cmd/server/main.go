@@ -1141,6 +1141,14 @@ logger.Error("init db: %v", err)
 os.Exit(1)
 }
 
+if cfg.LDAPHost == "mock" {
+if err := db.SeedMockData(); err != nil {
+logger.Error("seed mock data: %v", err)
+os.Exit(1)
+}
+logger.Warn("MOCK mode: seeded settore 'MOCK' + users mock.utente / mock.funzionario / mock.magazzino")
+}
+
 authKey := []byte(cfg.SessionSecret)
 if len(authKey) < 32 {
 authKey = append(authKey, make([]byte, 32-len(authKey))...)

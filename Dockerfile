@@ -30,14 +30,13 @@ FROM alpine:3.19
 
 RUN apk add --no-cache ca-certificates tzdata \
   && adduser -D -u 1001 econom \
-  && mkdir -p /data/uploads \
+  && mkdir -p /data \
   && chown -R econom:econom /data
 
 WORKDIR /app
 
-# Container-friendly defaults for paths
+# Default DB path inside the container
 ENV DB_PATH=/data/magazzino.db
-ENV UPLOAD_DIR=/data/uploads
 
 # Copy compiled binary
 COPY --from=builder /build/e-conomato .
@@ -45,8 +44,7 @@ COPY --from=builder /build/e-conomato .
 # Copy web assets (templates + static files)
 COPY --chown=econom:econom web/ ./web/
 
-# Data volumes: SQLite DB and uploaded files
-# Mount these as Docker/Podman volumes in production
+# Data volume: file SQLite del database (immagini prodotto incluse come BLOB)
 VOLUME ["/data"]
 
 # Run as non-root
