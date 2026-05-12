@@ -6,7 +6,7 @@
 
 **Architecture:** Route separate per ruolo (`/dashboard` → user, `/dashboard/funzionario` → funzionario, `/dashboard/magazzino` → magazziniere). Il carrello è un ordine in stato `bozza` persistito in SQLite con salvataggio automatico ad ogni modifica. Redirect post-login instrada per ruolo. HTMX gestisce aggiornamenti parziali carrello e liste.
 
-**Tech Stack:** Go 1.24, SQLite (`database/sql` + `go-sqlite3`), `html/template`, HTMX, Gorilla sessions. Modulo: `github.com/mirkochipdotcom/magazzino`.
+**Tech Stack:** Go 1.24, SQLite (`database/sql` + `go-sqlite3`), `html/template`, HTMX, Gorilla sessions. Modulo: `github.com/Provincia-di-Pescara/e-conomato`.
 
 ---
 

@@ -15,12 +15,12 @@ import (
 
 "github.com/gorilla/sessions"
 "github.com/joho/godotenv"
-"github.com/mirkochipdotcom/magazzino/internal/auth"
-"github.com/mirkochipdotcom/magazzino/internal/config"
-"github.com/mirkochipdotcom/magazzino/internal/database"
-"github.com/mirkochipdotcom/magazzino/internal/i18n"
-"github.com/mirkochipdotcom/magazzino/internal/logger"
-"github.com/mirkochipdotcom/magazzino/internal/models"
+"github.com/Provincia-di-Pescara/e-conomato/internal/auth"
+"github.com/Provincia-di-Pescara/e-conomato/internal/config"
+"github.com/Provincia-di-Pescara/e-conomato/internal/database"
+"github.com/Provincia-di-Pescara/e-conomato/internal/i18n"
+"github.com/Provincia-di-Pescara/e-conomato/internal/logger"
+"github.com/Provincia-di-Pescara/e-conomato/internal/models"
 )
 
 // AppVersion is injected at build time via -ldflags "-X main.AppVersion=<ver>"
@@ -1138,7 +1138,7 @@ logger.Warn("RUNNING IN MOCK MODE - any credentials accepted")
 }
 
 addr := ":" + cfg.Port
-logger.Info("Gestionale Magazzino started on http://0.0.0.0%s", addr)
+logger.Info("E-conomato started on http://0.0.0.0%s", addr)
 
 handler := http.Handler(mux)
 if strings.EqualFold(cfg.LogLevel, "debug") {

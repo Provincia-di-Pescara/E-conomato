@@ -1,4 +1,4 @@
-module github.com/mirkochipdotcom/magazzino
+module github.com/Provincia-di-Pescara/e-conomato
 
 go 1.24.0
 

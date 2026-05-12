@@ -1,7 +1,7 @@
 # Design: Dashboard per Ruolo
 
 **Data:** 2026-05-07
-**Progetto:** Gestionale Magazzino
+**Progetto:** E-conomato
 **Stato:** Approvato
 
 ---

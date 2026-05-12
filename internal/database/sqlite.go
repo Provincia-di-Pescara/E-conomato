@@ -6,7 +6,7 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/mirkochipdotcom/magazzino/internal/models"
+	"github.com/Provincia-di-Pescara/e-conomato/internal/models"
 )
 
 // DB wraps the underlying sql.DB connection.
@@ -30,7 +30,7 @@ func InitDB(dbPath string) (*DB, error) {
 	return &DB{conn: conn}, nil
 }
 
-// migrate crea le tabelle del gestionale magazzino se non esistono già.
+// migrate crea le tabelle del e-conomato se non esistono già.
 // Viene invocata ad ogni avvio dell'applicazione (idempotente grazie a IF NOT EXISTS).
 func migrate(conn *sql.DB) error {
 	_, err := conn.Exec(`

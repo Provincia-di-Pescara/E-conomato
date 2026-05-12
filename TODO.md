@@ -1,7 +1,7 @@
 # Checklist di Sviluppo: Gestionale E-conomato
 
 ## 1. Setup Infrastruttura e Base Dati
-- [x] **Inizializzazione Repository:** Clonare `gopulley` https://github.com/mirkochipdotcom/GoPulley e rimuovere i file demo non necessari.
+- [x] **Inizializzazione Repository:** Clonare `gopulley` https://github.com/Provincia-di-Pescara/E-conomato e rimuovere i file demo non necessari.
 - [x] **Configurazione Ambiente:** Creare il file `.env` con i parametri LDAP e SMTP.
 - [x] **Modulo SQLite:** Implementare la funzione `InitDB()` in `internal/database/sqlite.go`.
 - [x] **Script Schema:** Integrare lo script SQL di creazione tabelle nel processo di avvio dell'app.

@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/go-ldap/ldap/v3"
-	"github.com/mirkochipdotcom/magazzino/internal/config"
-	"github.com/mirkochipdotcom/magazzino/internal/logger"
+	"github.com/Provincia-di-Pescara/e-conomato/internal/config"
+	"github.com/Provincia-di-Pescara/e-conomato/internal/logger"
 )
 
 // Authenticate verifies username/password against the configured LDAP/AD server

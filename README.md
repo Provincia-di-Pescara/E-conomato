@@ -13,7 +13,7 @@
 [![SQLite](https://img.shields.io/badge/SQLite-embedded-003B57?logo=sqlite)](https://sqlite.org)
 [![Docker](https://img.shields.io/badge/Docker-alpine-2496ED?logo=docker)](https://docker.com)
 [![License](https://img.shields.io/badge/license-GNU%20AGPLv3-green)](LICENSE)
-[![Container](https://img.shields.io/badge/ghcr.io-gopulley-7c3aed?logo=github)](https://github.com/mirkochipdotcom/GoPulley/pkgs/container/gopulley)
+[![Container](https://img.shields.io/badge/ghcr.io-e-conomato-7c3aed?logo=github)](https://github.com/Provincia-di-Pescara/E-conomato/pkgs/container/gopulley)
 
 </div>
 
@@ -78,8 +78,8 @@ Persistent data lives under `/data` in the container:
 
 ```bash
 # 1) Download runtime files
-curl -O https://raw.githubusercontent.com/mirkochipdotcom/GoPulley/main/compose.yml
-curl -O https://raw.githubusercontent.com/mirkochipdotcom/GoPulley/main/.env.example
+curl -O https://raw.githubusercontent.com/Provincia-di-Pescara/E-conomato/main/compose.yml
+curl -O https://raw.githubusercontent.com/Provincia-di-Pescara/E-conomato/main/.env.example
 
 # 2) Configure env
 cp .env.example .env
@@ -227,10 +227,10 @@ Images are published automatically on GitHub Container Registry on tag push.
 
 ```bash
 # latest
-podman pull ghcr.io/mirkochipdotcom/gopulley:latest
+podman pull ghcr.io/Provincia-di-Pescara/e-conomato:latest
 
 # specific tag
-podman pull ghcr.io/mirkochipdotcom/gopulley:0.9.8
+podman pull ghcr.io/Provincia-di-Pescara/e-conomato:0.9.8
 ```
 
 ---

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mirkochipdotcom/magazzino/internal/config"
+	"github.com/Provincia-di-Pescara/e-conomato/internal/config"
 )
 
 // SendShareEmail sends an email with the download link to the specified recipient.
