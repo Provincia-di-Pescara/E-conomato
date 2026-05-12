@@ -6,7 +6,19 @@
       "Bash(bash *)",
       "Bash(git -C \"C:\\\\Users\\\\mirko.daddiego\\\\Documents\\\\magazzino\" init)",
       "Bash(git -C \"C:\\\\Users\\\\mirko.daddiego\\\\Documents\\\\magazzino\" add -A)",
-      "Bash(git -C \"C:\\\\Users\\\\mirko.daddiego\\\\Documents\\\\magazzino\" commit -m \"chore: initial commit before dashboard implementation\")"
+      "Bash(git -C \"C:\\\\Users\\\\mirko.daddiego\\\\Documents\\\\magazzino\" commit -m \"chore: initial commit before dashboard implementation\")",
+      "Bash(go build *)",
+      "Bash(docker run *)",
+      "Bash(git -C \"C:\\\\Users\\\\mirko.daddiego\\\\Documents\\\\magazzino\" add internal/models/models.go)",
+      "Bash(git -C \"C:\\\\Users\\\\mirko.daddiego\\\\Documents\\\\magazzino\" commit -m \"feat\\(models\\): add view types OrdineConRighe, RigaConProdotto, ProdottoCatalogo\")",
+      "Bash(git -C \"C:\\\\Users\\\\mirko.daddiego\\\\Documents\\\\magazzino\" add internal/database/sqlite.go)",
+      "Bash(git -C \"C:\\\\Users\\\\mirko.daddiego\\\\Documents\\\\magazzino\" commit -m \"feat\\(db\\): catalog, bozza CRUD, and unique index migration\")",
+      "Bash(git *)",
+      "Bash(Test-Path *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\mirko.daddiego\\\\Documents\\\\magazzino\" -Recurse -File -Filter \"*.go\")",
+      "Bash(Select-Object FullName)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(docker compose restart *)"
     ]
   }
 }

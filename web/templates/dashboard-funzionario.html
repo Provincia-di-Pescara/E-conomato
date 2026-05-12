@@ -3,350 +3,502 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gestionale Magazzino — Dashboard Funzionario</title>
+  <title>Gestionale — Funzionario</title>
   <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/style.css" />
   <style>
-    .page-header{padding:2rem 2rem 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem}
-    .page-header h1{font-size:1.5rem;font-weight:600;margin:0}
-    .main-content{padding:1.5rem 2rem}
-    .dashboard-grid{display:grid;grid-template-columns:2fr 1fr;gap:2rem;align-items:flex-start}
-    @media(max-width:1024px){.dashboard-grid{grid-template-columns:1fr}}
-    .section-title{font-size:1rem;font-weight:600;margin:0 0 1rem}
-    .products-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem;margin-bottom:2rem}
-    .product-card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:1rem;transition:border-color .15s,box-shadow .15s}
-    .product-card:hover{border-color:var(--c-accent);box-shadow:var(--shadow-glow)}
-    .product-name{font-weight:600;font-size:.95rem;margin-bottom:.25rem;color:var(--c-text)}
-    .product-category{font-size:.75rem;color:var(--c-text-2);margin-bottom:.5rem}
-    .product-stock{display:flex;align-items:center;gap:.5rem;margin-bottom:1rem;font-size:.85rem}
-    .stock-badge{background:var(--c-surface-2);padding:.15rem .5rem;border-radius:4px;color:var(--c-text-2)}
-    .cart-sticky{position:sticky;top:2rem;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:1.5rem;max-height:calc(100vh - 120px);overflow-y:auto}
-    .cart-row{display:flex;gap:.5rem;align-items:center;margin-bottom:.75rem;padding-bottom:.75rem;border-bottom:1px solid var(--c-border)}
-    .cart-row:last-of-type{border-bottom:none;padding-bottom:0}
-    .cart-product-name{flex:1;font-size:.9rem}
-    .cart-qta-input{width:70px;padding:.4rem .5rem;border:1px solid var(--c-border);border-radius:6px;background:var(--c-bg);color:var(--c-text);font-size:.85rem}
-    .cart-btn-remove{background:none;border:none;cursor:pointer;color:var(--c-danger);padding:.2rem;font-size:.85rem;opacity:.7;transition:opacity .15s}
-    .cart-btn-remove:hover{opacity:1}
-    .submit-button{width:100%;margin-top:1rem}
-    .orders-section{margin-top:3rem}
-    table{width:100%;border-collapse:collapse;font-size:0.875rem;margin-top:1rem}
-    th{text-align:left;padding:.6rem .75rem;background:var(--c-surface);border-bottom:2px solid var(--c-border);color:var(--c-text-2);font-weight:500}
-    td{padding:.6rem .75rem;border-bottom:1px solid var(--c-border);color:var(--c-text);vertical-align:middle}
-    tr:last-child td{border-bottom:none}
-    .badge-role{display:inline-block;padding:.2rem .55rem;border-radius:99px;font-size:.7rem;font-weight:600}
-    .badge-role.badge-user{background:rgba(99,102,241,0.15);color:var(--c-accent);border:1px solid rgba(99,102,241,0.3)}
-    .badge-role.badge-funzionario{background:rgba(139,92,246,0.15);color:var(--c-accent-2);border:1px solid rgba(139,92,246,0.3)}
-    .badge-stato{display:inline-block;padding:.2rem .55rem;border-radius:99px;font-size:.7rem;font-weight:600}
-    .badge-stato.badge-bozza{background:rgba(245,158,11,0.14);color:var(--c-warn);border:1px solid rgba(245,158,11,0.28)}
-    .badge-stato.badge-pending{background:rgba(245,158,11,0.14);color:var(--c-warn);border:1px solid rgba(245,158,11,0.28)}
-    .badge-stato.badge-approved{background:rgba(99,102,241,0.15);color:var(--c-accent);border:1px solid rgba(99,102,241,0.3)}
-    .badge-stato.badge-ready{background:rgba(34,197,94,0.15);color:var(--c-success);border:1px solid rgba(34,197,94,0.3)}
-    .badge-stato.badge-delivered{background:rgba(34,197,94,0.15);color:var(--c-success);border:1px solid rgba(34,197,94,0.3)}
-    .badge-stato.badge-rejected{background:rgba(239,68,68,0.12);color:var(--c-danger);border:1px solid rgba(239,68,68,0.25)}
-    .empty-state{text-align:center;padding:3rem 1rem;color:var(--c-text-2)}
-    .btn-sm{padding:.35rem .75rem;font-size:.8rem;border-radius:6px}
-    .btn-primary{background:linear-gradient(135deg,var(--c-accent),var(--c-accent-2));color:#fff;border:none;font-weight:500}
-    .btn-primary:hover{background:linear-gradient(135deg,var(--c-accent-h),var(--c-accent));box-shadow:var(--shadow-glow)}
-    .btn-primary:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
-    .btn-danger{background:rgba(239,68,68,0.15);color:var(--c-danger);border:1px solid rgba(239,68,68,0.25);padding:.4rem .75rem;border-radius:6px;font-size:.85rem;font-weight:500;cursor:pointer;transition:all .15s}
-    .btn-danger:hover{background:rgba(239,68,68,0.25);box-shadow:var(--shadow-glow)}
-    .btn-link{background:none;border:none;color:var(--c-accent);cursor:pointer;font-size:.85rem;padding:.3rem 0;text-decoration:underline;transition:color .15s}
-    .btn-link:hover{color:var(--c-accent-2)}
-    .qta-input-wrapper{display:flex;align-items:center;gap:.3rem;font-size:.85rem}
-    .qta-input-wrapper input{width:50px;padding:.3rem .4rem;border:1px solid var(--c-border);border-radius:4px;background:var(--c-bg);color:var(--c-text);font-family:inherit}
-    .tab-nav{display:flex;gap:.5rem;border-bottom:2px solid var(--c-border);margin-bottom:2rem;flex-wrap:wrap}
-    .tab-btn{background:none;border:none;padding:.75rem 1rem;color:var(--c-text-2);font-size:.9rem;font-weight:500;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s}
-    .tab-btn:hover{color:var(--c-text)}
-    .tab-btn.active{color:var(--c-accent);border-bottom-color:var(--c-accent)}
-    .tab-badge{display:inline-block;background:var(--c-danger);color:#fff;font-size:.65rem;padding:.15rem .35rem;border-radius:99px;margin-left:.35rem;font-weight:600}
-    .approval-card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:1rem;margin-bottom:1.5rem}
-    .approval-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;cursor:pointer}
-    .approval-header details > summary{cursor:pointer;display:flex;justify-content:space-between;align-items:center;width:100%}
-    .approval-meta{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;font-size:.85rem}
-    .approval-meta strong{color:var(--c-text)}
-    .approval-forms{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:1.5rem}
-    @media(max-width:768px){.approval-forms{grid-template-columns:1fr}}
-    .form-section{border:1px solid var(--c-border);border-radius:8px;padding:1rem;background:var(--c-surface-2)}
-    .form-section h4{margin:0 0 1rem;font-size:.9rem;color:var(--c-text)}
-    .form-field{margin-bottom:1rem}
-    .form-field label{display:block;font-size:.75rem;color:var(--c-text-2);margin-bottom:.35rem;font-weight:500}
-    .form-field input{width:100%;padding:.4rem .5rem;border:1px solid var(--c-border);border-radius:6px;background:var(--c-bg);color:var(--c-text);font-size:.85rem;font-family:inherit;box-sizing:border-box}
-    .form-field input:focus{outline:none;border-color:var(--c-accent);box-shadow:0 0 0 2px rgba(99,102,241,0.1)}
-    .form-field textarea{width:100%;padding:.4rem .5rem;border:1px solid var(--c-border);border-radius:6px;background:var(--c-bg);color:var(--c-text);font-size:.85rem;font-family:inherit;min-height:80px;box-sizing:border-box;resize:vertical}
-    .form-field textarea:focus{outline:none;border-color:var(--c-accent);box-shadow:0 0 0 2px rgba(99,102,241,0.1)}
-    .btn-sm-form{width:100%;padding:.4rem .5rem;font-size:.85rem;border:none;border-radius:6px;font-weight:500;cursor:pointer;transition:all .15s}
-    .tab-content{display:none}
-    .tab-content.active{display:block}
+    :root { --font: 'DM Sans', system-ui, sans-serif; }
+
+    /* Approval cards */
+    .approval-card {
+      background: var(--c-surface);
+      border: 1px solid var(--c-border);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+    }
+
+    .approval-card summary {
+      list-style: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem;
+      cursor: pointer;
+      user-select: none;
+      gap: 1rem;
+    }
+    .approval-card summary::-webkit-details-marker { display: none; }
+    .approval-card[open] summary { border-bottom: 1px solid var(--c-border); }
+
+    .approval-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      font-size: 0.85rem;
+    }
+    .approval-meta .order-id { font-weight: 600; }
+    .approval-meta .meta-dim { color: var(--c-text-3); }
+
+    .approval-chevron {
+      color: var(--c-text-3);
+      flex-shrink: 0;
+      transition: transform 0.2s;
+    }
+    details[open] .approval-chevron { transform: rotate(180deg); }
+
+    .approval-body { padding: 1.25rem; }
+    .approval-forms {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+    @media (max-width: 700px) { .approval-forms { grid-template-columns: 1fr; } }
+
+    .form-box {
+      border: 1px solid var(--c-border);
+      border-radius: 6px;
+      padding: 1rem;
+    }
+    .form-box-title {
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--c-text-3);
+      margin-bottom: 1rem;
+    }
+    .form-box table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+      margin-bottom: 0.85rem;
+    }
+    .form-box table th {
+      text-align: left;
+      padding: 0.35rem 0.5rem;
+      color: var(--c-text-3);
+      font-weight: 500;
+      font-size: 0.7rem;
+      border-bottom: 1px solid var(--c-border);
+    }
+    .form-box table td {
+      padding: 0.35rem 0.5rem;
+      border-bottom: 1px solid var(--c-border);
+    }
+    .form-box table tr:last-child td { border-bottom: none; }
+
+    .field-label {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--c-text-3);
+      font-weight: 500;
+      margin-bottom: 0.3rem;
+    }
+    .form-textarea {
+      width: 100%;
+      padding: 0.4rem 0.5rem;
+      border: 1px solid var(--c-border);
+      border-radius: 4px;
+      background: var(--c-bg);
+      color: var(--c-text);
+      font-size: 0.82rem;
+      font-family: inherit;
+      min-height: 72px;
+      resize: vertical;
+      box-sizing: border-box;
+      margin-bottom: 0.75rem;
+    }
+    .form-textarea:focus { outline: none; border-color: var(--c-accent); }
+
+    .qty-cell-input {
+      width: 56px;
+      padding: 0.25rem 0.35rem;
+      border: 1px solid var(--c-border);
+      border-radius: 3px;
+      background: var(--c-bg);
+      color: var(--c-text);
+      font-size: 0.8rem;
+      text-align: center;
+    }
+
+    .btn-approve {
+      display: block;
+      width: 100%;
+      padding: 0.5rem;
+      background: var(--c-accent);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.12s;
+    }
+    .btn-approve:hover { background: var(--c-accent-h); }
+
+    .btn-reject {
+      display: block;
+      width: 100%;
+      padding: 0.5rem;
+      background: rgba(239,68,68,0.1);
+      color: var(--c-danger);
+      border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 4px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.12s;
+    }
+    .btn-reject:hover { background: rgba(239,68,68,0.18); }
+
+    /* Catalog + cart (same as utente) */
+    .catalog-layout {
+      display: grid;
+      grid-template-columns: 1fr 260px;
+      gap: 2rem;
+      align-items: flex-start;
+    }
+    @media (max-width: 860px) { .catalog-layout { grid-template-columns: 1fr; } }
+
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      gap: 0.75rem;
+    }
+    .product-card {
+      background: var(--c-surface);
+      border: 1px solid var(--c-border);
+      border-radius: 8px;
+      padding: 0.9rem;
+      transition: border-color 0.12s;
+    }
+    .product-card:hover { border-color: rgba(255,255,255,0.12); }
+    .product-name { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.15rem; }
+    .product-cat { font-size: 0.7rem; color: var(--c-text-3); margin-bottom: 0.7rem; }
+    .product-footer { display: flex; align-items: center; gap: 0.4rem; }
+    .stock-n { font-size: 0.72rem; color: var(--c-text-3); margin-right: auto; }
+    .qty-in {
+      width: 52px; padding: 0.28rem 0.4rem;
+      border: 1px solid var(--c-border); border-radius: 4px;
+      background: var(--c-bg); color: var(--c-text);
+      font-size: 0.8rem; font-family: inherit; text-align: center;
+    }
+    .btn-add {
+      padding: 0.28rem 0.6rem;
+      background: var(--c-surface-2); border: 1px solid var(--c-border-2);
+      border-radius: 4px; color: var(--c-text-2);
+      font-size: 0.78rem; font-weight: 500; cursor: pointer; font-family: inherit;
+      transition: color 0.12s, border-color 0.12s, background 0.12s;
+      white-space: nowrap;
+    }
+    .btn-add:hover { color: var(--c-accent); border-color: rgba(99,102,241,0.4); background: rgba(99,102,241,0.08); }
+
+    .cart-panel {
+      position: sticky; top: 1.5rem;
+      background: var(--c-surface); border: 1px solid var(--c-border);
+      border-radius: 8px; padding: 1.1rem;
+      max-height: calc(100vh - 3rem); overflow-y: auto;
+    }
+    .cart-head { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--c-text-3); margin-bottom: 0.85rem; }
+    .cart-row { display: flex; align-items: center; gap: 0.4rem; padding: 0.45rem 0; border-bottom: 1px solid var(--c-border); }
+    .cart-row:last-of-type { border-bottom: none; }
+    .cart-pname { flex: 1; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cart-qty { width: 52px; padding: 0.25rem 0.3rem; border: 1px solid var(--c-border); border-radius: 4px; background: var(--c-bg); color: var(--c-text); font-size: 0.78rem; font-family: inherit; text-align: center; }
+    .cart-rm { background: none; border: none; cursor: pointer; color: var(--c-text-3); padding: 0.15rem; display: flex; align-items: center; transition: color 0.12s; }
+    .cart-rm:hover { color: var(--c-danger); }
+    .cart-empty { text-align: center; padding: 1.75rem 0; color: var(--c-text-3); font-size: 0.82rem; }
+    .btn-order {
+      display: block; width: 100%; margin-top: 0.85rem; padding: 0.55rem;
+      background: var(--c-accent); color: #fff; border: none; border-radius: 4px;
+      font-size: 0.84rem; font-weight: 600; cursor: pointer; font-family: inherit;
+      transition: background 0.12s;
+    }
+    .btn-order:hover { background: var(--c-accent-h); }
   </style>
 </head>
 <body class="dash-body">
+<div class="app-shell">
 
-  <nav class="navbar">
-    <div class="nav-brand">
-      <div class="logo-icon logo-icon--sm">
-        <img src="/static/img/logo-icon.svg" alt="Logo" class="logo-image">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-inner">
+        <img src="/static/img/logo-icon.svg" alt="Logo">
+        <span class="sidebar-logo-text">Gestionale</span>
       </div>
-      <span class="logo-text">Gestionale Magazzino</span>
       {{if .BrandName}}
-      <div class="brand-divider"></div>
-      <div class="brand-logo">
-        {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}" class="brand-image">{{end}}
-        <span class="brand-name">{{.BrandName}}</span>
+      <div class="sidebar-brand">
+        {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}">{{end}}
+        <span class="sidebar-brand-name">{{.BrandName}}</span>
       </div>
       {{end}}
     </div>
-    <div class="nav-user">
-      <span class="user-chip">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        {{.Username}}
-        <span class="badge-role badge-{{.Role}}">{{.Role}}</span>
-      </span>
+
+    <nav class="sidebar-nav">
+      <button class="sidebar-item active" onclick="showView('approvazioni',this)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        Da approvare
+        {{if gt (len .DaApprovare) 0}}<span class="sidebar-badge">{{len .DaApprovare}}</span>{{end}}
+      </button>
+      <button class="sidebar-item" onclick="showView('miei',this)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        I miei ordini
+      </button>
+      <button class="sidebar-item" onclick="showView('nuovo',this)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nuovo ordine
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user-info">
+        <div class="sidebar-avatar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div style="overflow:hidden;min-width:0">
+          <div class="sidebar-user-name">{{.Username}}</div>
+          <div class="sidebar-user-role">{{.Role}}</div>
+        </div>
+      </div>
       <form method="POST" action="/logout" style="margin:0">
-        <button type="submit" class="btn btn-ghost" title="Esci">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <button type="submit" class="sidebar-logout">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Esci
         </button>
       </form>
     </div>
-  </nav>
+  </aside>
 
-  <div class="page-header">
-    <h1>Dashboard Ordini</h1>
-  </div>
+  <!-- MAIN -->
+  <main class="sidebar-main">
 
-  <div class="main-content">
+    <!-- DA APPROVARE -->
+    <div id="view-approvazioni">
+      <div class="page-topbar">
+        <h1 class="page-title">Da approvare</h1>
+      </div>
+      <div class="page-content">
+        {{if .DaApprovare}}
+          {{range .DaApprovare}}
+          <div class="approval-card">
+            <details>
+              <summary>
+                <div class="approval-meta">
+                  <span class="order-id">#{{.Ordine.ID}}</span>
+                  <span class="meta-dim">da {{.Ordine.UtenteUsername}}</span>
+                  <span class="meta-dim">{{fmtDate .Ordine.DataCreazione}}</span>
+                  <span class="badge-stato badge-{{.Ordine.Stato}}">{{.Ordine.Stato}}</span>
+                </div>
+                <svg class="approval-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="6 9 12 15 18 9"/></svg>
+              </summary>
 
-    <!-- ── TAB NAVIGATION ── -->
-    <div class="tab-nav">
-      <button class="tab-btn active" onclick="showTab('approvazioni')">
-        Da approvare
-        {{if gt (len .DaApprovare) 0}}<span class="tab-badge">{{len .DaApprovare}}</span>{{end}}
-      </button>
-      <button class="tab-btn" onclick="showTab('miei')">I miei ordini</button>
-      <button class="tab-btn" onclick="showTab('nuovo')">Nuovo ordine</button>
-    </div>
+              <div class="approval-body">
+                <div class="approval-forms">
 
-    <!-- ── TAB 1: DA APPROVARE ── -->
-    <div id="tab-approvazioni" class="tab-content active">
-      {{if .DaApprovare}}
-        {{range .DaApprovare}}
-        <div class="approval-card">
-          <details style="width:100%">
-            <summary style="display:flex;justify-content:space-between;align-items:center;width:100%">
-              <div class="approval-meta">
-                <strong>Ordine #{{.Ordine.ID}}</strong>
-                <span>da {{.Ordine.UtenteUsername}}</span>
-                <span>{{fmtDate .Ordine.DataCreazione}}</span>
-                <span class="badge-stato badge-{{.Ordine.Stato}}">{{.Ordine.Stato}}</span>
-              </div>
-            </summary>
-
-            <div style="margin-top:1.5rem;border-top:1px solid var(--c-border);padding-top:1.5rem">
-              <!-- Approval Form -->
-              <div class="approval-forms">
-                <form method="POST" action="/ordini/{{.Ordine.ID}}/approva" style="grid-column:1">
-                  <div class="form-section">
-                    <h4>Quantità da approvare</h4>
-                    <table style="width:100%;margin-bottom:1rem">
-                      <thead>
-                        <tr style="border-bottom:1px solid var(--c-border)">
-                          <th style="text-align:left;padding:.4rem .5rem;background:transparent;border:none;font-size:.75rem">Prodotto</th>
-                          <th style="text-align:center;padding:.4rem .5rem;background:transparent;border:none;font-size:.75rem">Richiesta</th>
-                          <th style="text-align:center;padding:.4rem .5rem;background:transparent;border:none;font-size:.75rem">Approva</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {{range .Righe}}
-                        <tr style="border-bottom:1px solid var(--c-border);font-size:.85rem">
-                          <td style="padding:.4rem .5rem;border:none">{{.ProdottoNome}}</td>
-                          <td style="padding:.4rem .5rem;border:none;text-align:center">{{.QtaRichiesta}}</td>
-                          <td style="padding:.4rem .5rem;border:none;text-align:center">
-                            <input type="number" name="riga_{{.ID}}" min="0" max="{{.QtaRichiesta}}" value="{{.QtaRichiesta}}" style="width:60px;padding:.3rem .4rem;border:1px solid var(--c-border);border-radius:4px;background:var(--c-bg);color:var(--c-text);font-size:.85rem;text-align:center">
-                          </td>
-                        </tr>
-                        {{end}}
-                      </tbody>
-                    </table>
-                    <div class="form-field">
-                      <label>Note (opzionale)</label>
-                      <textarea name="note" placeholder="Aggiungi note se necessario..."></textarea>
+                  <form method="POST" action="/ordini/{{.Ordine.ID}}/approva">
+                    <div class="form-box">
+                      <div class="form-box-title">Approva</div>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Prodotto</th>
+                            <th style="text-align:center">Richiesta</th>
+                            <th style="text-align:center">Approva</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {{range .Righe}}
+                          <tr>
+                            <td>{{.ProdottoNome}}</td>
+                            <td style="text-align:center">{{.QtaRichiesta}}</td>
+                            <td style="text-align:center">
+                              <input type="number" name="riga_{{.ID}}"
+                                     min="0" max="{{.QtaRichiesta}}" value="{{.QtaRichiesta}}"
+                                     class="qty-cell-input">
+                            </td>
+                          </tr>
+                          {{end}}
+                        </tbody>
+                      </table>
+                      <label class="field-label">Note (opzionale)</label>
+                      <textarea class="form-textarea" name="note" placeholder="Aggiungi note..."></textarea>
+                      <button type="submit" class="btn-approve">Approva ordine</button>
                     </div>
-                    <button type="submit" class="btn-sm-form btn-primary">Approva ordine</button>
-                  </div>
-                </form>
+                  </form>
 
-                <!-- Rejection Form -->
-                <form method="POST" action="/ordini/{{.Ordine.ID}}/rifiuta" style="grid-column:2">
-                  <div class="form-section">
-                    <h4>Rifiuta ordine</h4>
-                    <div class="form-field">
-                      <label>Motivo del rifiuto <span style="color:var(--c-danger)">*</span></label>
-                      <textarea name="note" placeholder="Specifica il motivo del rifiuto..." required></textarea>
+                  <form method="POST" action="/ordini/{{.Ordine.ID}}/rifiuta">
+                    <div class="form-box">
+                      <div class="form-box-title">Rifiuta</div>
+                      <label class="field-label">Motivo <span style="color:var(--c-danger)">*</span></label>
+                      <textarea class="form-textarea" name="note"
+                                placeholder="Specifica il motivo del rifiuto..." required
+                                style="min-height:100px"></textarea>
+                      <button type="submit" class="btn-reject">Rifiuta ordine</button>
                     </div>
-                    <button type="submit" class="btn-sm-form btn-danger">Rifiuta</button>
-                  </div>
-                </form>
+                  </form>
+
+                </div>
               </div>
-            </div>
-          </details>
+            </details>
+          </div>
+          {{end}}
+        {{else}}
+        <div class="empty-sm">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          <p>Nessun ordine da approvare.</p>
         </div>
         {{end}}
-      {{else}}
-      <div class="empty-state">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-        <p style="margin-top:.75rem">Nessun ordine da approvare.</p>
       </div>
-      {{end}}
     </div>
 
-    <!-- ── TAB 2: I MIEI ORDINI ── -->
-    <div id="tab-miei" class="tab-content">
-      {{if .MieiOrdini}}
-      <table>
-        <thead>
-          <tr>
-            <th>ID Ordine</th>
-            <th>Data</th>
-            <th>Prodotti</th>
-            <th>Stato</th>
-            <th>Note funzionario</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{range .MieiOrdini}}
-          <tr>
-            <td><strong>#{{.Ordine.ID}}</strong></td>
-            <td>{{fmtDate .Ordine.DataCreazione}}</td>
-            <td>{{len .Righe}}</td>
-            <td><span class="badge-stato badge-{{.Ordine.Stato}}">{{.Ordine.Stato}}</span></td>
-            <td>{{if .Ordine.NoteFunzionario}}{{.Ordine.NoteFunzionario}}{{else}}<span style="opacity:.4">—</span>{{end}}</td>
-          </tr>
-          {{end}}
-        </tbody>
-      </table>
-      {{else}}
-      <div class="empty-state">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
-        <p style="margin-top:.75rem">Nessun ordine inviato.</p>
+    <!-- I MIEI ORDINI -->
+    <div id="view-miei" style="display:none">
+      <div class="page-topbar">
+        <h1 class="page-title">I miei ordini</h1>
       </div>
-      {{end}}
-    </div>
-
-    <!-- ── TAB 3: NUOVO ORDINE ── -->
-    <div id="tab-nuovo" class="tab-content">
-      <div class="dashboard-grid">
-
-        <!-- LEFT: CATALOG GRID -->
-        <section>
-          <p class="section-title">📦 Catalogo prodotti</p>
-          {{if .Prodotti}}
-          <div class="products-grid">
-            {{range .Prodotti}}
-            <div class="product-card" id="prod-card-{{.ID}}">
-              <div class="product-name">{{.Nome}}</div>
-              <div class="product-category">{{.CategoriaNome}}</div>
-              <div class="product-stock">
-                <span>Disponibile:</span>
-                <span class="stock-badge">{{.Disponibile}}</span>
-              </div>
-              {{if gt .Disponibile 0}}
-              <form style="display:flex;gap:.4rem;align-items:flex-end">
-                <div style="flex:1">
-                  <label style="display:block;font-size:.75rem;color:var(--c-text-2);margin-bottom:.3rem">Quantità</label>
-                  <input type="number" id="fn-qta-{{.ID}}" name="qta" min="1" max="{{.Disponibile}}" value="1" class="mock-input" style="width:100%;padding:.4rem .5rem;border:1px solid var(--c-border);border-radius:6px;background:var(--c-bg);color:var(--c-text);font-size:.85rem">
-                </div>
-                <button type="button" class="btn btn-primary btn-sm"
-                        hx-post="/bozza/righe/{{.ID}}?cart=fn-carrello-content"
-                        hx-target="#fn-carrello-content"
-                        hx-swap="outerHTML"
-                        hx-include="#fn-qta-{{.ID}}"
-                        style="padding:.4rem .6rem;white-space:nowrap">
-                  [+]
-                </button>
-              </form>
-              {{else}}
-              <button type="button" class="btn btn-sm" disabled style="width:100%;opacity:.4;cursor:not-allowed">Esaurito</button>
+      <div class="page-content">
+        {{if .MieiOrdini}}
+        <div class="d-card" style="overflow:hidden">
+          <table class="d-table">
+            <thead>
+              <tr>
+                <th>Ordine</th>
+                <th>Data</th>
+                <th>Articoli</th>
+                <th>Stato</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .MieiOrdini}}
+              <tr>
+                <td><strong>#{{.Ordine.ID}}</strong></td>
+                <td style="color:var(--c-text-2)">{{fmtDate .Ordine.DataCreazione}}</td>
+                <td>{{len .Righe}}</td>
+                <td><span class="badge-stato badge-{{.Ordine.Stato}}">{{.Ordine.Stato}}</span></td>
+                <td style="color:var(--c-text-3);font-size:.82rem">
+                  {{if .Ordine.NoteFunzionario}}{{.Ordine.NoteFunzionario}}{{else}}—{{end}}
+                </td>
+              </tr>
               {{end}}
-            </div>
-            {{end}}
-          </div>
-          {{else}}
-          <div class="empty-state">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
-            <p style="margin-top:.75rem">Nessun prodotto disponibile.</p>
-          </div>
-          {{end}}
-        </section>
+            </tbody>
+          </table>
+        </div>
+        {{else}}
+        <div class="empty-sm">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          <p>Nessun ordine inviato.</p>
+        </div>
+        {{end}}
+      </div>
+    </div>
 
-        <!-- RIGHT: CART (STICKY) -->
-        <aside>
-          <div class="cart-sticky">
-            <p class="section-title">🛒 Carrello</p>
+    <!-- NUOVO ORDINE -->
+    <div id="view-nuovo" style="display:none">
+      <div class="page-topbar">
+        <h1 class="page-title">Nuovo ordine</h1>
+      </div>
+      <div class="page-content">
+        <div class="catalog-layout">
 
-            {{if .Bozza}}
-              <div id="fn-carrello-content">
-                {{range .Bozza.Righe}}
-                <div class="cart-row" id="cart-row-{{.ID}}">
-                  <span class="cart-product-name">{{.ProdottoNome}}</span>
-                  <input type="number" min="1" value="{{.QtaRichiesta}}"
-                         class="cart-qta-input"
-                         name="qta"
-                         hx-post="/bozza/righe/{{.ProdottoID}}?cart=fn-carrello-content"
-                         hx-target="#fn-carrello-content"
-                         hx-swap="outerHTML"
-                         hx-trigger="change">
-                  <button type="button" class="cart-btn-remove"
-                          hx-delete="/bozza/righe/{{.ProdottoID}}?cart=fn-carrello-content"
-                          hx-target="#fn-carrello-content"
-                          hx-swap="outerHTML"
-                          title="Rimuovi">✕</button>
+          <section>
+            {{if .Prodotti}}
+            <div class="products-grid">
+              {{range .Prodotti}}
+              <div class="product-card">
+                <div class="product-name">{{.Nome}}</div>
+                <div class="product-cat">{{.CategoriaNome}}</div>
+                {{if gt .Disponibile 0}}
+                <form class="product-footer"
+                      hx-post="/bozza/righe/{{.ID}}?cart=fn-carrello-content"
+                      hx-target="#fn-carrello-content"
+                      hx-swap="outerHTML">
+                  <span class="stock-n">{{.Disponibile}} disp.</span>
+                  <input type="number" name="qta"
+                         min="1" max="{{.Disponibile}}" value="1"
+                         class="qty-in">
+                  <button type="submit" class="btn-add">Aggiungi</button>
+                </form>
+                {{else}}
+                <div class="product-footer">
+                  <span style="font-size:.72rem;color:var(--c-danger);opacity:.65">Esaurito</span>
                 </div>
                 {{end}}
               </div>
-              {{if .Bozza.ID}}
-              <form>
-                <button type="button" class="btn btn-primary submit-button"
+              {{end}}
+            </div>
+            {{else}}
+            <div class="empty-sm">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+              <p>Nessun prodotto disponibile.</p>
+            </div>
+            {{end}}
+          </section>
+
+          <aside>
+            <div class="cart-panel">
+              <div class="cart-head">Carrello</div>
+              {{if .Bozza}}
+                <div id="fn-carrello-content">
+                  {{range .Bozza.Righe}}
+                  <div class="cart-row">
+                    <span class="cart-pname">{{.ProdottoNome}}</span>
+                    <input type="number" min="1" value="{{.QtaRichiesta}}"
+                           class="cart-qty" name="qta"
+                           hx-post="/bozza/righe/{{.ProdottoID}}?cart=fn-carrello-content"
+                           hx-target="#fn-carrello-content"
+                           hx-swap="outerHTML"
+                           hx-trigger="change">
+                    <button type="button" class="cart-rm"
+                            hx-delete="/bozza/righe/{{.ProdottoID}}?cart=fn-carrello-content"
+                            hx-target="#fn-carrello-content"
+                            hx-swap="outerHTML"
+                            title="Rimuovi">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                  {{end}}
+                </div>
+                {{if .Bozza.ID}}
+                <button type="button" class="btn-order"
                         hx-post="/ordini/{{.Bozza.ID}}/invia"
                         hx-target="body"
                         hx-push-url="true">
-                  Invia Ordine
+                  Invia ordine
                 </button>
-              </form>
+                {{end}}
+              {{else}}
+              <div id="fn-carrello-content">
+                <div class="cart-empty">Carrello vuoto</div>
+              </div>
               {{end}}
-            {{else}}
-            <div id="fn-carrello-content">
-              <p class="empty-state">Carrello vuoto</p>
             </div>
-            {{end}}
-          </div>
-        </aside>
+          </aside>
 
+        </div>
       </div>
     </div>
 
-  </div>
+  </main>
+</div>
 
-  <script src="/static/js/htmx.min.js"></script>
-  <script>
-    function showTab(name) {
-      ['approvazioni', 'miei', 'nuovo'].forEach(function(t) {
-        document.getElementById('tab-' + t).style.display = t === name ? '' : 'none';
-        if (t === name) {
-          document.getElementById('tab-' + t).classList.add('active');
-        } else {
-          document.getElementById('tab-' + t).classList.remove('active');
-        }
-      });
-      document.querySelectorAll('.tab-btn').forEach(function(b, i) {
-        var tabs = ['approvazioni', 'miei', 'nuovo'];
-        if (tabs[i] === name) {
-          b.classList.add('active');
-        } else {
-          b.classList.remove('active');
-        }
-      });
-    }
-  </script>
+<script src="/static/js/htmx.min.js"></script>
+<script>
+  function showView(name, btn) {
+    ['approvazioni', 'miei', 'nuovo'].forEach(function(v) {
+      document.getElementById('view-' + v).style.display = v === name ? '' : 'none';
+    });
+    document.querySelectorAll('.sidebar-item').forEach(function(el) {
+      el.classList.remove('active');
+    });
+    if (btn) btn.classList.add('active');
+  }
+</script>
 </body>
 </html>

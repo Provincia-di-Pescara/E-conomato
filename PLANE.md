@@ -1,5 +1,5 @@
 # Documento di Analisi, Requisiti e Piano di Progetto Completo
-**Progetto:** Sistema Gestionale di Magazzino e Cancelleria per Ente Pubblico
+**Progetto:** E-conomato - Sistema Gestionale di Magazzino e Cancelleria per Ente Pubblico
 **Stack Tecnologico:** Go, HTMX, SQLite, Docker, Autenticazione LDAP (basato sul repository *gopulley*)
 
 ---

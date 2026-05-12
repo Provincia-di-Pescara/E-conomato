@@ -1,4 +1,4 @@
-# Checklist di Sviluppo: Gestionale Magazzino GOTH
+# Checklist di Sviluppo: Gestionale E-conomato
 
 ## 1. Setup Infrastruttura e Base Dati
 - [x] **Inizializzazione Repository:** Clonare `gopulley` https://github.com/mirkochipdotcom/GoPulley e rimuovere i file demo non necessari.
