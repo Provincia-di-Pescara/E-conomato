@@ -207,7 +207,7 @@
   {{range .Categorie}}
   <div class="cat-row" id="cat-{{.ID}}">
     <span class="cat-name">{{.Nome}}</span>
-    <button class="btn-icon" onclick="startEditCat({{.ID}}, '{{.Nome}}')" title="Modifica">&#9998;</button>
+    <button class="btn-icon" data-id="{{.ID}}" data-nome="{{.Nome}}" onclick="startEditCat(this.dataset.id, this.dataset.nome)" title="Modifica">&#9998;</button>
     <button class="btn-icon btn-danger" title="Elimina"
       hx-delete="/categorie/{{.ID}}"
       hx-confirm="Eliminare la categoria {{.Nome}}?"
