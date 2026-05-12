@@ -1,270 +1,87 @@
 <div align="center">
 
-<img src="web/static/img/logo-icon.svg" alt="GoPulley" width="120" />
+<img src="web/static/img/logo.svg" alt="E-conomato Logo" width="120" />
 
-# GoPulley
+# E-conomato
 
-**Fast, secure, containerized enterprise file sharing**
+**Sistema Gestionale di Magazzino e Cancelleria per Ente Pubblico**
 
-*Self-hosted WeTransfer-style alternative with Active Directory integration*
-
-[![Go](https://img.shields.io/badge/Go-1.22-00ADD8?logo=go)](https://go.dev)
+[![Go](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go)](https://go.dev)
 [![HTMX](https://img.shields.io/badge/HTMX-2.0-3D72D7?logo=html5)](https://htmx.org)
 [![SQLite](https://img.shields.io/badge/SQLite-embedded-003B57?logo=sqlite)](https://sqlite.org)
 [![Docker](https://img.shields.io/badge/Docker-alpine-2496ED?logo=docker)](https://docker.com)
-[![License](https://img.shields.io/badge/license-GNU%20AGPLv3-green)](LICENSE)
-[![Container](https://img.shields.io/badge/ghcr.io-e-conomato-7c3aed?logo=github)](https://github.com/Provincia-di-Pescara/E-conomato/pkgs/container/gopulley)
 
 </div>
 
 ---
 
-Italian version: [README.it.md](README.it.md)
+## 🎯 Cos'è E-conomato?
+E-conomato è un gestionale web sviluppato su misura per le pubbliche amministrazioni. È progettato per digitalizzare e tracciare le richieste di cancelleria e materiale di consumo interno. 
+Consente agli uffici di effettuare ordini, ai funzionari di approvarli e al magazzino di gestire scorte ed evasioni con scarico automatico dei costi tramite logica FIFO.
 
 ---
 
-## What is GoPulley
-
-GoPulley is an internal file-sharing application for enterprise and public organizations.
-Authenticated users (Active Directory / LDAP) can upload files and share them with temporary links and configurable expiration.
-
-The app runs in a **single lightweight container**, with no external runtime stack.
-
----
-
-## Features
-
-| Feature | Details |
-|---|---|
-| AD/LDAP authentication | Direct bind to Domain Controller, supports `ldap://` and `ldaps://` |
-| Optional group restriction | Limit access to members of one AD group (`memberOf`) |
-| Modern upload UI | Drag and drop workflow with HTMX, no full page refresh |
-| Configurable expiration | 1 / 7 / 30 days / 1 year plus max constraints |
-| Public links | Recipients can download using the link |
-| Optional link password | Add password protection at share creation |
-| Optional max downloads | Auto-expire links after N downloads |
-| Chunked/resumable upload | Large files are uploaded in chunks and can resume |
-| User upload quotas | Per-user storage quota (`USER_QUOTA_MB`) |
-| Admin dashboard | Global file inventory and disk usage visibility |
-| Automatic cleanup | Removes expired shares and stale upload sessions |
-| Optional SHA-256 | Compute and show checksum for integrity verification |
-| Single container deploy | Docker/Podman, SQLite embedded |
+## 🏗️ Architettura e Scelte Tecnologiche
+Il sistema è un monolita moderno, leggero e ultra-veloce:
+- **Backend**: Go (Golang) - Eseguibile singolo senza dipendenze runtime pesanti.
+- **Frontend**: SSR (Server-Side Rendering) potenziato con **HTMX** (nessuna SPA javascript-heavy) per interazioni asincrone fluide.
+- **Database**: SQLite embedded - L'intero schema e perfino i BLOB delle immagini dei prodotti risiedono in un singolo file per massimizzare la portabilità e semplificare i backup.
+- **Infrastruttura**: Container Docker singolo con integrazione LDAP nativa.
 
 ---
 
-## Architecture
-
-GoPulley is intentionally simple:
-- `cmd/server/main.go`: HTTP server, routes, sessions, handlers
-- `internal/auth/ldap.go`: LDAP bind and group checks
-- `internal/database/sqlite.go`: schema + CRUD
-- `internal/storage/file.go`: file persistence and streaming
-- `web/templates/*`: server-side HTML templates
-- `web/static/*`: CSS and vendored HTMX
-
-Persistent data lives under `/data` in the container:
-- SQLite database (`/data/gopulley.db`)
-- uploaded files (`/data/uploads/...`)
+## 👥 Ruoli e Permessi
+L'autenticazione è centralizzata tramite Active Directory (LDAP). I ruoli sono associati in base ai gruppi e ai settori di appartenenza:
+- **Utente Base**: Naviga il catalogo, inserisce richieste nel carrello e visualizza lo storico dei propri ordini.
+- **Funzionario**: Approva, riduce le quantità o rifiuta (motivandolo) le richieste del proprio settore di competenza. Le richieste personali dei funzionari sono invece auto-approvate.
+- **Magazziniere**: Gestisce l'anagrafica, carica fatture/DDT (creando "lotti" di acquisto), evade le richieste, monitora le scorte minime e conclude il flusso di consegna.
+- **Amministratore**: Accede a dashboard direzionali, reportistica JSON/CSV esportabile e grafici analitici (Chart.js) sul budget e i consumi per singolo reparto.
 
 ---
 
-## Quick start
+## 🔄 Il Flusso di Lavoro (Iter dell'Ordine)
+1. **Creazione**: L'utente fa richiesta dei materiali. L'ordine entra nello stato `in_approvazione`.
+2. **Approvazione**: Il funzionario del settore valida e autorizza la richiesta (Stato: `in_preparazione`).
+3. **Evasione e Logica FIFO**: Il magazziniere processa l'ordine. Il sistema Go calcola automaticamente i costi scalando le giacenze dai lotti d'acquisto più vecchi (`ORDER BY data_acquisto ASC`), garantendo la tracciabilità finanziaria.
+4. **Pronto al Ritiro**: L'ordine viene confezionato e una notifica email avvisa l'utente (Stato: `pronto`).
+5. **Consegna**: Al momento del ritiro fisico, l'ordine viene chiuso (Stato: `ritirato`).
 
-### Prerequisites
+---
 
-- Podman 4.7+ (or Docker with Compose plugin)
+## 🚀 Roadmap e Checklist di Sviluppo
+*(Tratta dal documento `TODO.md` interno)*
+- [x] **Setup Iniziale & Database**: Struttura Go, Modelli SQLite, File env.
+- [ ] **Autenticazione e RBAC**: Integrazione Active Directory/LDAP e Middleware ruoli.
+- [ ] **Catalogo & Magazzino**: CRUD Prodotti e Categorie, upload BLOB, caricamento merce.
+- [ ] **Negozio & Carrello**: UI asincrona via HTMX e checkout.
+- [ ] **Workflow Funzionari**: Dashboard di approvazione per settore.
+- [ ] **Motore di Evasione FIFO**: Logica per il prelievo lotti ed eventuale evasione parziale.
+- [ ] **Notifiche Transazionali**: Email asincrone per i cambi di stato dell'ordine.
+- [ ] **Reportistica**: Dashboard amministratore, grafici e export CSV.
+- [ ] **Deploy**: Configurazione Docker multi-stage e script di backup.
 
-### Start in 3 steps
+---
+
+## 🐳 Quick Start (Sviluppo & Deploy)
+
+L'applicazione funziona sia con Podman che con Docker.
 
 ```bash
-# 1) Download runtime files
-curl -O https://raw.githubusercontent.com/Provincia-di-Pescara/E-conomato/main/compose.yml
-curl -O https://raw.githubusercontent.com/Provincia-di-Pescara/E-conomato/main/.env.example
+# 1) Clona il repository
+git clone https://github.com/Provincia-di-Pescara/E-conomato.git
+cd E-conomato
 
-# 2) Configure env
+# 2) Configura l'ambiente
 cp .env.example .env
-# Edit .env for LDAP; keep LDAP_HOST=mock for local dev
+# Configura i parametri per LDAP e SMTP (per l'ambiente locale di test puoi lasciare LDAP_HOST=mock)
 
-# 3) Create data dir and start
-mkdir -p ./data/uploads
+# 3) Esegui il Container
 podman compose up -d
+# (Oppure: docker compose up -d)
 ```
 
-Open `http://localhost:8080`.
-
-Docker works the same way (`docker compose ...`).
+L'applicazione sarà immediatamente disponibile su `http://localhost:8080`.
+I dati e il database verranno preservati nativamente nel volume specificato o nella cartella `./data`.
 
 ---
-
-## Data directory
-
-By default, host data is mapped to `./data`.
-Use `DATA_DIR` in `.env` to move DB/uploads to another disk or a mounted network path.
-
-```env
-DATA_DIR=./data
-# DATA_DIR=/mnt/storage/gopulley
-# DATA_DIR=/mnt/nas/gopulley
-```
-
----
-
-## Configuration
-
-Copy `.env.example` to `.env` and adjust values.
-
-### Important variables
-
-- `SESSION_SECRET`
-- `SECURE_COOKIES`
-- `LDAP_HOST`, `LDAP_BASE_DN`, `LDAP_USER_DN_TEMPLATE`
-- `LDAP_REQUIRED_GROUP`, `LDAP_ADMIN_GROUP`, `ADMIN_USERS`, `LDAP_TLS_SKIP_VERIFY`
-- `MAX_GLOBAL_DAYS`, `MAX_UPLOAD_SIZE_MB`, `USER_QUOTA_MB`
-- `UPLOAD_CHUNK_SIZE_MB`, `UPLOAD_SESSION_TTL_HOURS`, `MAX_UPLOAD_SESSIONS_PER_USER`
-- `PUBLIC_BASE_URL`, `DATA_DIR`, `DB_PATH`, `UPLOAD_DIR`
-- `ENABLE_SHA256`
-
-### Upload behavior
-
-- Chunk size defaults to 10 MB (`UPLOAD_CHUNK_SIZE_MB`)
-- In-progress sessions are auto-expired (`UPLOAD_SESSION_TTL_HOURS`)
-- Concurrent in-progress uploads per user are capped (`MAX_UPLOAD_SESSIONS_PER_USER`)
-
-### Share protection options
-
-- Optional password at upload time
-- Optional max download count ("burn after N downloads")
-
-### Email behavior
-
-- SMTP link sharing is configured via `SMTP_SERVER`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`
-- `SMTP_USER_AUTH=true`: uses authenticated AD user email/password for sending (where supported)
-- `SMTP_USER_AUTH=false`: uses shared SMTP sender credentials and messages should be treated as **non-monitored mailbox** (no-reply)
-
-### Session cookie security
-
-To protect credentials stored in session cookies (when `SMTP_USER_AUTH=true`), GoPulley implements:
-
-- **Dual-key encryption**: cookies encrypted with AES-256 using a key derived from `SESSION_SECRET`
-- **Dynamic `Secure` flag**: automatic protocol detection via `X-Forwarded-Proto` header
-
-#### HTTPS Reverse Proxy (recommended configuration)
-
-GoPulley automatically detects if the original request was HTTPS by reading the `X-Forwarded-Proto` header set by the reverse proxy:
-
-```nginx
-# Nginx example
-proxy_set_header X-Forwarded-Proto $scheme;
-```
-
-```yaml
-# Traefik example (automatic with entryPoints)
-labels:
-  - "traefik.http.routers.gopulley.entrypoints=websecure"
-  - "traefik.http.routers.gopulley.tls=true"
-```
-
-With this configuration:
-- **Browser → Reverse Proxy**: HTTPS (TLS terminated at proxy)
-- **Reverse Proxy → GoPulley**: HTTP local (trusted network)
-- **Cookie `Secure` flag**: automatically `true` because `X-Forwarded-Proto: https`
-
-#### Fallback configuration
-
-If the `X-Forwarded-Proto` header is not present (direct access without reverse proxy), GoPulley uses the `SECURE_COOKIES` variable:
-
-```env
-# Direct HTTPS access to the app (no reverse proxy)
-SECURE_COOKIES=true
-
-# Direct HTTP access (local testing only - NOT for production)
-SECURE_COOKIES=false
-```
-
-**Note**: in production with a properly configured HTTPS reverse proxy, `SECURE_COOKIES` is ignored and the `Secure` flag is set automatically.
-
-### LDAP examples
-
-UPN style (modern AD):
-
-```env
-LDAP_HOST=ldaps://dc.example.com:636
-LDAP_BASE_DN=DC=example,DC=com
-LDAP_USER_DN_TEMPLATE=%s@example.com
-```
-
-Classic DN style:
-
-```env
-LDAP_HOST=ldap://ldap.example.com:389
-LDAP_BASE_DN=dc=example,dc=com
-LDAP_USER_DN_TEMPLATE=uid=%s,ou=Users,dc=example,dc=com
-```
-
----
-
-## Production operations
-
-```bash
-# first run
-podman compose up -d
-
-# update to latest image
-podman compose pull && podman compose up -d
-
-# logs
-podman compose logs -f
-
-# stop
-podman compose down
-```
-
----
-
-## Container images
-
-Images are published automatically on GitHub Container Registry on tag push.
-
-```bash
-# latest
-podman pull ghcr.io/Provincia-di-Pescara/e-conomato:latest
-
-# specific tag
-podman pull ghcr.io/Provincia-di-Pescara/e-conomato:0.9.8
-```
-
----
-
-## Build from source
-
-Requires Go 1.22+ and gcc (`go-sqlite3` uses CGO).
-
-```bash
-CGO_ENABLED=1 go build -ldflags="-s -w" -o gopulley ./cmd/server
-```
-
-Run local dev:
-
-```bash
-LDAP_HOST=mock SESSION_SECRET=dev-secret ./gopulley
-```
-
----
-
-## Internationalization
-
-UI strings are served via i18n bundles.
-Current supported locales in code:
-- `en`
-- `it`
-- `es`
-- `de`
-- `fr`
-
-Locale is resolved from `Accept-Language` with fallback to English.
-
----
-
-## License
-
-GNU AGPLv3 - see [LICENSE](LICENSE).
+*Progetto creato per la Provincia di Pescara.*
