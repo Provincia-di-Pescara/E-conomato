@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>E-conomato — Fornitori</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/fa/css/all.min.css" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+<div class="ec-app">
+  {{template "sidebar-magazzino" .}}
+
+  <div class="ec-main">
+
+    <header class="ec-topbar">
+      <div class="ec-topbar__title">
+        {{if .BrandName}}{{.BrandName}}{{else}}E-conomato{{end}}
+        <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
+        <b>Fornitori</b>
+      </div>
+    </header>
+
+    <main class="ec-content">
+
+      <header class="ec-secthead">
+        <div>
+          <div class="ec-secthead__kicker">Anagrafica</div>
+          <h1 class="ec-secthead__title">Fornitori</h1>
+          <p class="ec-secthead__sub">Anagrafica fornitori associabili agli acquisti. Campo opzionale sui lotti.</p>
+        </div>
+        <div class="ec-secthead__right">
+          <a href="/fornitori/new" class="ec-btn ec-btn--primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            Nuovo fornitore
+          </a>
+        </div>
+      </header>
+
+      <div class="ec-card">
+        {{if .Fornitori}}
+        <table class="ec-table">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>P.IVA</th>
+              <th>Email</th>
+              <th>Telefono</th>
+              <th style="width:120px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Fornitori}}
+            <tr id="forn-row-{{.ID}}">
+              <td><strong>{{.Nome}}</strong>{{if .Note}}<div style="font-size:11.5px;color:var(--ec-ink-500);margin-top:2px">{{.Note}}</div>{{end}}</td>
+              <td class="mono">{{if .PartitaIVA}}{{.PartitaIVA}}{{else}}<span style="opacity:.4">—</span>{{end}}</td>
+              <td>{{if .Email}}<a href="mailto:{{.Email}}">{{.Email}}</a>{{else}}<span style="opacity:.4">—</span>{{end}}</td>
+              <td class="mono">{{if .Telefono}}{{.Telefono}}{{else}}<span style="opacity:.4">—</span>{{end}}</td>
+              <td style="text-align:right;white-space:nowrap">
+                <a href="/fornitori/{{.ID}}/edit" class="ec-btn ec-btn--ghost ec-btn--sm" title="Modifica">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l6 6-10 10H4v-6L14 4Z"/></svg>
+                </a>
+                <button class="ec-btn ec-btn--danger ec-btn--sm" title="Elimina"
+                  hx-delete="/fornitori/{{.ID}}"
+                  hx-confirm="Eliminare il fornitore {{.Nome}}?"
+                  hx-target="#forn-row-{{.ID}}" hx-swap="delete">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
+                </button>
+              </td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+        {{else}}
+        <div class="ec-empty">
+          <div class="ec-empty__icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h11l3 4h4v6H3z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg>
+          </div>
+          <div class="ec-empty__title">Nessun fornitore</div>
+          <div class="ec-empty__hint">Crea il primo fornitore per associarlo agli acquisti.</div>
+        </div>
+        {{end}}
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script src="/static/js/htmx.min.js"></script>
+</body>
+</html>

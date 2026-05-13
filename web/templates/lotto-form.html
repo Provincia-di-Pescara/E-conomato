@@ -31,53 +31,228 @@
       <header class="ec-secthead">
         <div>
           <div class="ec-secthead__kicker">Magazzino</div>
-          <h1 class="ec-secthead__title">Nuovo lotto di acquisto</h1>
-          <p class="ec-secthead__sub">Il lotto entra nel calcolo FIFO con data acquisto crescente. Il costo unitario congelato qui sarà usato in tutti i movimenti che scaricheranno questo lotto.</p>
+          <h1 class="ec-secthead__title">Nuovo acquisto</h1>
+          <p class="ec-secthead__sub">Un acquisto è una bolla/fattura del fornitore che raggruppa più prodotti. Ogni riga entra nel FIFO come lotto autonomo con il proprio costo unitario.</p>
         </div>
         <div class="ec-secthead__right">
-          <a href="/prodotti" class="ec-btn ec-btn--ghost">Annulla</a>
+          <a href="/acquisti" class="ec-btn ec-btn--ghost">Annulla</a>
         </div>
       </header>
 
-      <div class="ec-card">
-        <form method="POST" action="/lotti" style="padding:20px">
-          <div class="ec-formgrid">
-            <div style="grid-column:1 / -1">
-              <label class="ec-label">Prodotto *</label>
-              <select name="prodotto_id" required class="ec-select">
-                <option value="">— Seleziona prodotto —</option>
-                {{range .Prodotti}}
-                <option value="{{.ID}}">{{if .CodiceArticolo}}[{{.CodiceArticolo}}] {{end}}{{.Nome}}</option>
-                {{end}}
-              </select>
-            </div>
+      <form method="POST" action="/lotti" id="acquisto-form">
+
+        <div class="ec-card" style="margin-bottom:16px">
+          <div class="ec-card-head">
             <div>
-              <label class="ec-label">Data acquisto</label>
-              <input type="date" name="data_acquisto" class="ec-input">
-            </div>
-            <div>
-              <label class="ec-label">Quantità *</label>
-              <input type="number" name="quantita" min="1" required class="ec-input mono">
-            </div>
-            <div style="grid-column:1 / -1">
-              <label class="ec-label">Costo unitario (€)</label>
-              <input type="text" name="costo_unitario" placeholder="0.00" class="ec-input mono">
+              <div class="ec-card-head__title">Documento</div>
+              <div class="ec-card-head__sub">Header dell'acquisto — fornitore e numero documento sono opzionali.</div>
             </div>
           </div>
-          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:24px">
-            <a href="/prodotti" class="ec-btn ec-btn--ghost">Annulla</a>
-            <button type="submit" class="ec-btn ec-btn--primary">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg>
-              Registra lotto
-            </button>
+          <div style="padding:20px">
+            <div class="ec-formgrid">
+              <div>
+                <label class="ec-label">Data acquisto</label>
+                <input type="date" name="data_acquisto" class="ec-input">
+              </div>
+              <div>
+                <label class="ec-label">Fornitore</label>
+                <select name="fornitore_id" class="ec-select">
+                  <option value="">— Nessuno —</option>
+                  {{range .Fornitori}}
+                  <option value="{{.ID}}">{{.Nome}}</option>
+                  {{end}}
+                </select>
+              </div>
+              <div>
+                <label class="ec-label">Numero documento</label>
+                <input type="text" name="numero_doc" placeholder="es. B-2025-001" class="ec-input">
+              </div>
+              <div style="grid-column:1 / -1">
+                <label class="ec-label">Note</label>
+                <textarea name="note" rows="2" class="ec-input" placeholder="Note interne sull'acquisto (opzionale)"></textarea>
+              </div>
+            </div>
           </div>
-        </form>
-      </div>
+        </div>
+
+        <div class="ec-card">
+          <div class="ec-card-head">
+            <div>
+              <div class="ec-card-head__title">Righe</div>
+              <div class="ec-card-head__sub">Prodotti acquistati. Quantità e costo unitario per ogni riga.</div>
+            </div>
+          </div>
+          <div style="padding:8px 14px">
+            <table class="ec-table" id="righe-table">
+              <thead>
+                <tr>
+                  <th style="width:50%">Prodotto</th>
+                  <th style="text-align:right;width:15%">Quantità</th>
+                  <th style="text-align:right;width:20%">Costo unit. (€)</th>
+                  <th style="width:60px"></th>
+                </tr>
+              </thead>
+              <tbody id="righe-body">
+                <!-- popolata da JS -->
+              </tbody>
+            </table>
+            <div style="display:flex;gap:10px;padding:12px 6px;border-top:1px solid var(--ec-line-2)">
+              <button type="button" class="ec-btn ec-btn--ghost" onclick="aggiungiRiga()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                Aggiungi riga
+              </button>
+              <button type="button" class="ec-btn ec-btn--ghost"
+                      hx-get="/prodotti/quick" hx-target="#modal-host" hx-swap="innerHTML">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7"/></svg>
+                Nuovo prodotto
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:24px">
+          <a href="/acquisti" class="ec-btn ec-btn--ghost">Annulla</a>
+          <button type="submit" class="ec-btn ec-btn--primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg>
+            Registra acquisto
+          </button>
+        </div>
+      </form>
+
+      <!-- Container modal HTMX -->
+      <div id="modal-host"></div>
 
     </main>
   </div>
 </div>
 
+<!-- Opzioni prodotto serializzate per i clone JS. -->
+<script id="prodotti-options" type="application/json">[
+  {{range $i, $p := .Prodotti}}{{if $i}},{{end}}{"id":{{$p.ID}},"label":"{{if $p.CodiceArticolo}}[{{$p.CodiceArticolo}}] {{end}}{{$p.Nome}}"}{{end}}
+]</script>
+
+<script>
+(function() {
+  const optsEl = document.getElementById('prodotti-options');
+  let prodotti = [];
+  try { prodotti = JSON.parse(optsEl.textContent || '[]'); } catch (_) {}
+
+  function buildOptionsHtml(selectedId) {
+    let html = '<option value="">— Seleziona prodotto —</option>';
+    prodotti.forEach(function (p) {
+      const sel = (selectedId && String(p.id) === String(selectedId)) ? ' selected' : '';
+      const lbl = (p.label || '').replace(/</g, '&lt;');
+      html += '<option value="' + p.id + '"' + sel + '>' + lbl + '</option>';
+    });
+    return html;
+  }
+
+  window.aggiungiRiga = function (selectedId) {
+    const tbody = document.getElementById('righe-body');
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' +
+        '<select name="riga_prodotto_id" required class="ec-select">' +
+          buildOptionsHtml(selectedId) +
+        '</select>' +
+      '</td>' +
+      '<td style="text-align:right"><input type="number" name="riga_qta" min="1" required class="ec-input mono" style="text-align:right"></td>' +
+      '<td style="text-align:right"><input type="text" name="riga_costo" placeholder="0.00" required class="ec-input mono" style="text-align:right"></td>' +
+      '<td style="text-align:right">' +
+        '<button type="button" class="ec-btn ec-btn--danger ec-btn--sm" onclick="this.closest(\'tr\').remove()" title="Rimuovi">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>' +
+        '</button>' +
+      '</td>';
+    tbody.appendChild(tr);
+    return tr;
+  };
+
+  // Una riga vuota all'avvio.
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!document.querySelector('#righe-body tr')) {
+      window.aggiungiRiga();
+    }
+  });
+
+  // HX-Trigger del quick-create prodotto: aggiunge l'option a tutte le select
+  // esistenti e popola l'ultima riga (o ne crea una nuova) con il prodotto.
+  document.body.addEventListener('prodotto-creato', function (ev) {
+    const d = ev.detail || {};
+    if (!d.id || !d.nome) return;
+    prodotti.push({ id: d.id, label: d.nome });
+    document.querySelectorAll('select[name="riga_prodotto_id"]').forEach(function (sel) {
+      const opt = document.createElement('option');
+      opt.value = String(d.id);
+      opt.textContent = d.nome;
+      sel.appendChild(opt);
+    });
+    // Trova la prima riga senza prodotto selezionato, altrimenti aggiungine una.
+    let target = null;
+    document.querySelectorAll('#righe-body select[name="riga_prodotto_id"]').forEach(function (sel) {
+      if (!target && !sel.value) target = sel;
+    });
+    if (!target) {
+      const tr = window.aggiungiRiga(d.id);
+      target = tr.querySelector('select[name="riga_prodotto_id"]');
+    } else {
+      target.value = String(d.id);
+    }
+    // Chiude il modal.
+    const host = document.getElementById('modal-host');
+    if (host) host.innerHTML = '';
+  });
+})();
+</script>
+
 <script src="/static/js/htmx.min.js"></script>
+
+{{define "modal-prodotto"}}
+<div class="ec-modal-backdrop" onclick="if(event.target===this){document.getElementById('modal-host').innerHTML='';}"
+     style="position:fixed;inset:0;background:rgba(20,28,48,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px">
+  <div class="ec-card" style="width:100%;max-width:520px;max-height:90vh;overflow:auto">
+    <div class="ec-card-head">
+      <div>
+        <div class="ec-card-head__title">Nuovo prodotto</div>
+        <div class="ec-card-head__sub">Crea un articolo veloce. Potrai completarlo da Anagrafica.</div>
+      </div>
+      <button type="button" class="ec-btn ec-btn--ghost ec-btn--sm"
+              onclick="document.getElementById('modal-host').innerHTML=''" aria-label="Chiudi">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
+      </button>
+    </div>
+    <form hx-post="/prodotti/quick" hx-swap="none" style="padding:20px">
+      <div class="ec-formgrid">
+        <div style="grid-column:1 / -1">
+          <label class="ec-label">Nome *</label>
+          <input type="text" name="nome" required autofocus class="ec-input">
+        </div>
+        <div>
+          <label class="ec-label">Categoria</label>
+          <select name="categoria_id" class="ec-select">
+            <option value="">—</option>
+            {{range .Categorie}}
+            <option value="{{.ID}}">{{.Nome}}</option>
+            {{end}}
+          </select>
+        </div>
+        <div>
+          <label class="ec-label">Scorta minima</label>
+          <input type="number" name="scorta_minima" min="0" value="0" class="ec-input mono">
+        </div>
+        <div style="grid-column:1 / -1">
+          <label class="ec-label">Descrizione</label>
+          <textarea name="descrizione" rows="2" class="ec-input"></textarea>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px">
+        <button type="button" class="ec-btn ec-btn--ghost"
+                onclick="document.getElementById('modal-host').innerHTML=''">Annulla</button>
+        <button type="submit" class="ec-btn ec-btn--primary">Crea</button>
+      </div>
+    </form>
+  </div>
+</div>
+{{end}}
+
 </body>
 </html>

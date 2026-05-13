@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>E-conomato — Fornitore</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/fa/css/all.min.css" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+<div class="ec-app">
+  {{template "sidebar-magazzino" .}}
+
+  <div class="ec-main">
+
+    <header class="ec-topbar">
+      <div class="ec-topbar__title">
+        {{if .BrandName}}{{.BrandName}}{{else}}E-conomato{{end}}
+        <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
+        <b>{{if .Fornitore.ID}}Modifica fornitore{{else}}Nuovo fornitore{{end}}</b>
+      </div>
+    </header>
+
+    <main class="ec-content">
+
+      <header class="ec-secthead">
+        <div>
+          <div class="ec-secthead__kicker">Anagrafica</div>
+          <h1 class="ec-secthead__title">{{if .Fornitore.ID}}Modifica fornitore{{else}}Nuovo fornitore{{end}}</h1>
+        </div>
+        <div class="ec-secthead__right">
+          <a href="/fornitori" class="ec-btn ec-btn--ghost">Annulla</a>
+        </div>
+      </header>
+
+      <div class="ec-card">
+        <form method="POST" action="{{if .Fornitore.ID}}/fornitori/{{.Fornitore.ID}}{{else}}/fornitori{{end}}" style="padding:20px">
+          <div class="ec-formgrid">
+            <div style="grid-column:1 / -1">
+              <label class="ec-label">Nome *</label>
+              <input type="text" name="nome" required value="{{.Fornitore.Nome}}" class="ec-input">
+            </div>
+            <div>
+              <label class="ec-label">Partita IVA</label>
+              <input type="text" name="partita_iva" value="{{.Fornitore.PartitaIVA}}" class="ec-input mono">
+            </div>
+            <div>
+              <label class="ec-label">Telefono</label>
+              <input type="text" name="telefono" value="{{.Fornitore.Telefono}}" class="ec-input">
+            </div>
+            <div style="grid-column:1 / -1">
+              <label class="ec-label">Email</label>
+              <input type="email" name="email" value="{{.Fornitore.Email}}" class="ec-input">
+            </div>
+            <div style="grid-column:1 / -1">
+              <label class="ec-label">Note</label>
+              <textarea name="note" rows="3" class="ec-input">{{.Fornitore.Note}}</textarea>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:24px">
+            <a href="/fornitori" class="ec-btn ec-btn--ghost">Annulla</a>
+            <button type="submit" class="ec-btn ec-btn--primary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg>
+              Salva
+            </button>
+          </div>
+        </form>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script src="/static/js/htmx.min.js"></script>
+</body>
+</html>

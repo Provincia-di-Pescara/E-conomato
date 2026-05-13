@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>E-conomato — Acquisto #{{.Acquisto.ID}}</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/fa/css/all.min.css" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+<div class="ec-app">
+  {{template "sidebar-magazzino" .}}
+
+  <div class="ec-main">
+
+    <header class="ec-topbar">
+      <div class="ec-topbar__title">
+        {{if .BrandName}}{{.BrandName}}{{else}}E-conomato{{end}}
+        <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
+        <a href="/acquisti" style="color:inherit">Acquisti</a>
+        <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
+        <b>#{{.Acquisto.ID}}</b>
+      </div>
+    </header>
+
+    <main class="ec-content">
+
+      <header class="ec-secthead">
+        <div>
+          <div class="ec-secthead__kicker">Acquisto</div>
+          <h1 class="ec-secthead__title">Acquisto #{{.Acquisto.ID}}</h1>
+          <p class="ec-secthead__sub">Documento di carico merce con {{len .Acquisto.Righe}} righe.</p>
+        </div>
+        <div class="ec-secthead__right">
+          <a href="/acquisti" class="ec-btn ec-btn--ghost">← Lista</a>
+        </div>
+      </header>
+
+      <div class="ec-card" style="margin-bottom:16px">
+        <div class="ec-card-head">
+          <div>
+            <div class="ec-card-head__title">Documento</div>
+          </div>
+        </div>
+        <div style="padding:20px">
+          <div class="ec-formgrid">
+            <div>
+              <div style="font-size:12px;color:var(--ec-ink-500);text-transform:uppercase;letter-spacing:.5px">Data acquisto</div>
+              <div class="mono" style="margin-top:4px;font-weight:600">{{fmtDate .Acquisto.DataAcquisto}}</div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:var(--ec-ink-500);text-transform:uppercase;letter-spacing:.5px">Fornitore</div>
+              <div style="margin-top:4px;font-weight:600">{{if .Acquisto.FornitoreNome}}{{.Acquisto.FornitoreNome}}{{else}}<span style="opacity:.5">— Nessuno —</span>{{end}}</div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:var(--ec-ink-500);text-transform:uppercase;letter-spacing:.5px">Numero doc.</div>
+              <div class="mono" style="margin-top:4px;font-weight:600">{{if .Acquisto.NumeroDoc}}{{.Acquisto.NumeroDoc}}{{else}}<span style="opacity:.5">—</span>{{end}}</div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:var(--ec-ink-500);text-transform:uppercase;letter-spacing:.5px">Operatore</div>
+              <div style="margin-top:4px;font-weight:600">{{if .Acquisto.CreatedBy}}{{.Acquisto.CreatedBy}}{{else}}<span style="opacity:.5">—</span>{{end}}</div>
+            </div>
+            {{if .Acquisto.Note}}
+            <div style="grid-column:1 / -1">
+              <div style="font-size:12px;color:var(--ec-ink-500);text-transform:uppercase;letter-spacing:.5px">Note</div>
+              <div style="margin-top:4px">{{.Acquisto.Note}}</div>
+            </div>
+            {{end}}
+          </div>
+        </div>
+      </div>
+
+      <div class="ec-card">
+        <div class="ec-card-head">
+          <div>
+            <div class="ec-card-head__title">Righe</div>
+            <div class="ec-card-head__sub">Lotti FIFO generati da questo acquisto.</div>
+          </div>
+          <span class="ec-pill ec-pill--navy">{{len .Acquisto.Righe}} righe</span>
+        </div>
+        <table class="ec-table">
+          <thead>
+            <tr>
+              <th>Codice</th>
+              <th>Prodotto</th>
+              <th style="text-align:right">Qta iniziale</th>
+              <th style="text-align:right">Qta rimanente</th>
+              <th style="text-align:right">Costo unit. (€)</th>
+              <th style="text-align:right">Totale (€)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Acquisto.Righe}}
+            <tr>
+              <td class="mono">{{if .ProdottoCodice}}{{.ProdottoCodice}}{{else}}<span style="opacity:.4">—</span>{{end}}</td>
+              <td><strong>{{.ProdottoNome}}</strong></td>
+              <td class="mono" style="text-align:right">{{.QuantitaIniziale}}</td>
+              <td class="mono" style="text-align:right">{{.QuantitaRimanente}}</td>
+              <td class="mono" style="text-align:right">{{printf "%.2f" .CostoUnitario}}</td>
+              <td class="mono" style="text-align:right;font-weight:600">{{printf "%.2f" (mulFloat .CostoUnitario .QuantitaIniziale)}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script src="/static/js/htmx.min.js"></script>
+</body>
+</html>

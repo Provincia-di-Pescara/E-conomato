@@ -37,7 +37,8 @@ type Prodotto struct {
 	Icona          string // classe Font Awesome (es. "fa-solid fa-pen"); vuoto = usa immagine BLOB
 }
 
-// LottoAcquisto rappresenta un carico di merce acquistata (usato per FIFO).
+// LottoAcquisto rappresenta una riga di acquisto per un singolo prodotto
+// (base FIFO). AcquistoID raggruppa più righe nello stesso documento (head).
 type LottoAcquisto struct {
 	ID                int64
 	ProdottoID        int64
@@ -45,6 +46,35 @@ type LottoAcquisto struct {
 	QuantitaIniziale  int
 	QuantitaRimanente int
 	CostoUnitario     float64
+	AcquistoID        *int64
+	// Campi joinati in lettura (popolati da GetAcquistoConRighe).
+	ProdottoNome   string
+	ProdottoCodice string
+}
+
+// Fornitore rappresenta un fornitore opzionale per i documenti di acquisto.
+type Fornitore struct {
+	ID         int64
+	Nome       string
+	PartitaIVA string
+	Email      string
+	Telefono   string
+	Note       string
+	Attivo     bool
+}
+
+// Acquisto è il documento head di un carico merce: una bolla/fattura del
+// fornitore che raggruppa N righe (lotti) di prodotti diversi.
+type Acquisto struct {
+	ID            int64
+	DataAcquisto  time.Time
+	FornitoreID   *int64
+	FornitoreNome string
+	NumeroDoc     string
+	Note          string
+	CreatedBy     string
+	CreatedAt     time.Time
+	Righe         []LottoAcquisto
 }
 
 // Ordine rappresenta una richiesta di materiale effettuata da un utente.
