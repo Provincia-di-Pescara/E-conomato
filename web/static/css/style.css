@@ -1203,7 +1203,8 @@ img { display: block; max-width: 100%; }
 }
 .ec-qty-stepper__input:focus { background: var(--ec-sky-50, #EAF4FB); }
 
-/* ─── Form: icon picker (Font Awesome whitelist) ─────────────────────────── */
+/* ─── Form: icon picker (Font Awesome) ───────────────────────────────────── */
+/* Picker statico (whitelist legacy): .ec-icon-picker è esso stesso la griglia. */
 .ec-icon-picker {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
@@ -1214,6 +1215,62 @@ img { display: block; max-width: 100%; }
   border-radius: 10px;
   max-height: 280px;
   overflow-y: auto;
+}
+/* Picker ricercabile: la griglia è in un figlio dedicato, il contenitore ospita
+   anche la search bar e l'anteprima dell'icona selezionata. */
+.ec-icon-picker[data-searchable="1"] {
+  display: block;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  max-height: none;
+  overflow: visible;
+}
+.ec-icon-picker__head {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.ec-icon-picker__search {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  font-size: 13px;
+  border: 1px solid var(--ec-line);
+  border-radius: 8px;
+  background: var(--ec-surface, #fff);
+  outline: none;
+}
+.ec-icon-picker__search:focus { border-color: var(--ec-sky-500, #55AAD4); box-shadow: 0 0 0 3px var(--ec-sky-50, #EAF4FB); }
+.ec-icon-picker__preview {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 38px;
+  border: 1px dashed var(--ec-line);
+  border-radius: 8px;
+  background: var(--ec-surface, #fff);
+  color: var(--ec-navy-700);
+  font-size: 18px;
+}
+.ec-icon-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
+  gap: 6px;
+  padding: 10px;
+  background: var(--ec-bg-soft, #F7F9FC);
+  border: 1px solid var(--ec-line);
+  border-radius: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.ec-icon-picker__loading,
+.ec-icon-picker__empty,
+.ec-icon-picker__hint {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--ec-ink-500);
+  padding: 8px 4px;
+  text-align: center;
 }
 .ec-icon-picker__cell {
   height: 42px;

@@ -2,12 +2,14 @@ package main
 
 import (
 "crypto/sha256"
+"encoding/json"
 "fmt"
 "html/template"
 "io"
 "net/http"
 "os"
 "path/filepath"
+"regexp"
 "sort"
 "strconv"
 "strings"
@@ -85,6 +87,7 @@ return t.Format("02 Jan 2006 15:04")
 "add":        func(a, b int) int { return a + b },
 "sub":        func(a, b int) int { return a - b },
 "mul":        func(a, b int) int { return a * b },
+"mulFloat":   func(c float64, q int) float64 { return c * float64(q) },
 }
 
 // I template magazziniere riusano la sidebar tramite il partial _sidebar-magazzino.
@@ -95,11 +98,16 @@ magazzinoTemplates := map[string]bool{
 "prodotto-form":       true,
 "lotto-form":          true,
 "impostazioni":        true,
+"fornitori":           true,
+"fornitore-form":      true,
+"acquisti":            true,
+"acquisto-detail":     true,
+"storico-ordini":      true,
 }
 sidebarMagazzino := filepath.Join(baseDir, "_sidebar-magazzino.html")
 prenotPartial := filepath.Join(baseDir, "_prenotazione-form.html")
 
-names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino", "prodotto-form", "lotto-form", "impostazioni"}
+names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino", "prodotto-form", "lotto-form", "impostazioni", "fornitori", "fornitore-form", "acquisti", "acquisto-detail", "storico-ordini"}
 a.templates = make(map[string]*template.Template, len(names))
 for _, name := range names {
 files := []string{filepath.Join(baseDir, name+".html")}
@@ -305,10 +313,21 @@ func (a *App) settoreNomeFor(username string) string {
 	return nome
 }
 
+// redirectToLogin emette un redirect verso /login compatibile sia con navigazioni
+// normali sia con richieste HTMX (che non seguono 3xx come full-page navigation).
+func redirectToLogin(w http.ResponseWriter, r *http.Request) {
+if r.Header.Get("HX-Request") == "true" {
+w.Header().Set("HX-Redirect", "/login")
+w.WriteHeader(http.StatusNoContent)
+return
+}
+http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
 func (a *App) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 return func(w http.ResponseWriter, r *http.Request) {
 if a.getUsername(r) == "" {
-http.Redirect(w, r, "/login", http.StatusSeeOther)
+redirectToLogin(w, r)
 return
 }
 next(w, r)
@@ -321,7 +340,7 @@ func (a *App) requireRole(roles ...string) func(http.HandlerFunc) http.HandlerFu
 return func(next http.HandlerFunc) http.HandlerFunc {
 return func(w http.ResponseWriter, r *http.Request) {
 if a.getUsername(r) == "" {
-http.Redirect(w, r, "/login", http.StatusSeeOther)
+redirectToLogin(w, r)
 return
 }
 role := a.getRole(r)
@@ -347,6 +366,58 @@ return "/dashboard/magazzino"
 default:
 return "/dashboard"
 }
+}
+
+// dashboardURLWithView restituisce l'URL della dashboard del ruolo aggiungendo
+// un fragment "#view=<view>" se utile (le dashboard utente/funzionario sono SPA
+// con tab data-view che leggono location.hash).
+//
+// I nomi delle viste differiscono per ruolo:
+//   - funzionario: "approva", "storico", "nuovo", "miei"
+//   - user:        "catalogo", "ordini"
+// `intent` astrae l'intenzione (es. "ordini-personali") e mappa al nome corretto.
+func (a *App) dashboardURLWithView(role, intent string) string {
+	base := a.dashboardURL(role)
+	if intent == "" {
+		return base
+	}
+	var view string
+	switch role {
+	case "funzionario":
+		switch intent {
+		case "ordini-personali", "miei":
+			view = "miei"
+		case "nuovo":
+			view = "nuovo"
+		case "storico":
+			view = "storico"
+		case "approva":
+			view = "approva"
+		}
+	case "user":
+		switch intent {
+		case "ordini-personali", "ordini", "miei":
+			view = "ordini"
+		case "catalogo":
+			view = "catalogo"
+		}
+	}
+	if view == "" {
+		return base
+	}
+	return base + "#view=" + view
+}
+
+// hxRedirect emette un redirect coerente con HTMX (HX-Redirect) o con la
+// navigazione classica (303). Preserva i fragment "#..." anche per le
+// richieste HTMX.
+func hxRedirect(w http.ResponseWriter, r *http.Request, url string) {
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Redirect", url)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	http.Redirect(w, r, url, http.StatusSeeOther)
 }
 
 // GET /
@@ -426,10 +497,30 @@ fmt.Fprintf(w, `<p id="login-error" class="ec-auth__error">%s</p>`, template.HTM
 }
 
 // POST /logout
+// Pubblico: chiunque può chiamarlo per liberarsi della sessione. Idempotente:
+// se non c'è sessione attiva, redirige comunque a /login senza errore.
 func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
 sess, _ := a.store.Get(r, sessionName)
-sess.Options.MaxAge = -1
-sess.Save(r, w)
+// Svuota i valori e forza la scadenza del cookie con Path "/" (stesso scope
+// usato in handleLogin), così il browser lo elimina davvero.
+for k := range sess.Values {
+delete(sess.Values, k)
+}
+sess.Options = &sessions.Options{
+Path:     "/",
+MaxAge:   -1,
+HttpOnly: true,
+SameSite: http.SameSiteLaxMode,
+Secure:   shouldUseSecureCookie(r, a.cfg),
+}
+if err := sess.Save(r, w); err != nil {
+logger.Error("logout session save: %v", err)
+}
+if r.Header.Get("HX-Request") == "true" {
+w.Header().Set("HX-Redirect", "/login")
+w.WriteHeader(http.StatusNoContent)
+return
+}
 http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
@@ -474,10 +565,15 @@ func (a *App) handleDashboardUtente(w http.ResponseWriter, r *http.Request) {
 // renderCarrello writes an HTMX-swappable cart fragment that fits the
 // ec-cart design system. The host template owns the <aside class="ec-cart">
 // wrapper and the static head; this fragment replaces the inner body+foot
-// (#{targetID}).
+// (#{targetID}). Appende anche un fragment OOB per aggiornare il contatore
+// `#cart-badge` mostrato nell'header del carrello.
 func (a *App) renderCarrello(w http.ResponseWriter, targetID string, bozza *models.OrdineConRighe) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if bozza == nil || len(bozza.Righe) == 0 {
+	righeCount := 0
+	if bozza != nil {
+		righeCount = len(bozza.Righe)
+	}
+	if righeCount == 0 {
 		fmt.Fprintf(w, `<div id="%s">
   <div class="ec-cart__empty">
     <div class="ec-cart__empty-icon">
@@ -487,6 +583,7 @@ func (a *App) renderCarrello(w http.ResponseWriter, targetID string, bozza *mode
     <div>Aggiungi prodotti dal catalogo</div>
   </div>
 </div>`, targetID)
+		fmt.Fprint(w, `<span id="cart-badge" hx-swap-oob="true" class="ec-cart__count" style="display:none"></span>`)
 		return
 	}
 	totalPz := 0
@@ -495,16 +592,32 @@ func (a *App) renderCarrello(w http.ResponseWriter, targetID string, bozza *mode
 	}
 	fmt.Fprintf(w, `<div id="%s"><div class="ec-cart__body">`, targetID)
 	for _, r := range bozza.Righe {
+		prenotPill := ""
+		if r.Prenotazione {
+			prenotPill = `<span class="ec-pill ec-pill--amber" style="margin-left:4px;font-size:10px">Prenot.</span>`
+		}
 		fmt.Fprintf(w,
 			`<div class="ec-cart__row">
   <div class="ec-prod-img ec-prod-img--sm ec-prod-img--cat-default">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>
+    <img src="/prodotti/%d/immagine" alt="" onerror="this.style.display='none'">
   </div>
   <div>
-    <div class="ec-cart__row-name">%s</div>
-    <input type="number" min="1" value="%d" name="qta"
-           class="ec-cart__row-qty"
-           hx-post="/bozza/righe/%d?cart=%s" hx-target="#%s" hx-swap="outerHTML" hx-trigger="change">
+    <div class="ec-cart__row-name">%s%s</div>
+    <div class="ec-qty-stepper">
+      <button type="button" class="ec-qty-stepper__btn"
+              hx-post="/bozza/righe/%d?cart=%s"
+              hx-vals='{"delta":"-1"}'
+              hx-target="#%s" hx-swap="outerHTML"
+              aria-label="Diminuisci">−</button>
+      <input type="number" min="1" value="%d" name="qta"
+             class="ec-qty-stepper__input"
+             hx-post="/bozza/righe/%d?cart=%s" hx-target="#%s" hx-swap="outerHTML" hx-trigger="change">
+      <button type="button" class="ec-qty-stepper__btn"
+              hx-post="/bozza/righe/%d?cart=%s"
+              hx-vals='{"delta":"1"}'
+              hx-target="#%s" hx-swap="outerHTML"
+              aria-label="Aumenta">+</button>
+    </div>
   </div>
   <button type="button" class="ec-cart__row-remove"
           hx-delete="/bozza/righe/%d?cart=%s" hx-target="#%s" hx-swap="outerHTML"
@@ -512,7 +625,11 @@ func (a *App) renderCarrello(w http.ResponseWriter, targetID string, bozza *mode
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
   </button>
 </div>`,
-			template.HTMLEscapeString(r.ProdottoNome), r.QtaRichiesta,
+			r.ProdottoID,
+			template.HTMLEscapeString(r.ProdottoNome), prenotPill,
+			r.ProdottoID, targetID, targetID,
+			r.QtaRichiesta,
+			r.ProdottoID, targetID, targetID,
 			r.ProdottoID, targetID, targetID,
 			r.ProdottoID, targetID, targetID,
 		)
@@ -528,7 +645,8 @@ func (a *App) renderCarrello(w http.ResponseWriter, targetID string, bozza *mode
     <span style="flex:1;text-align:left">Invia richiesta</span>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
   </button>
-</div></div>`, totalPz, len(bozza.Righe), bozza.ID)
+</div></div>`, totalPz, righeCount, bozza.ID)
+	fmt.Fprintf(w, `<span id="cart-badge" hx-swap-oob="true" class="ec-cart__count">%d prodotti</span>`, righeCount)
 }
 
 // POST /bozza/righe/{prodotto_id} — upsert riga bozza (HTMX).
@@ -551,7 +669,9 @@ func (a *App) handleUpsertRigaBozza(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "settore non assegnato — contattare l'amministratore", 400)
 		return
 	}
+	addMode := r.FormValue("add") == "1"
 	var qta int
+	var addedDelta int
 	if deltaStr := r.FormValue("delta"); deltaStr != "" {
 		delta, err := strconv.Atoi(deltaStr)
 		if err != nil {
@@ -566,11 +686,22 @@ func (a *App) handleUpsertRigaBozza(w http.ResponseWriter, r *http.Request) {
 		if disp, err := a.db.GetDisponibilitaProdotto(prodottoID); err == nil && disp > 0 && qta > disp {
 			qta = disp
 		}
+		addedDelta = qta - corrente
 	} else {
-		qta, err = strconv.Atoi(r.FormValue("qta"))
+		input, err := strconv.Atoi(r.FormValue("qta"))
 		if err != nil {
 			http.Error(w, "quantità non valida", 400)
 			return
+		}
+		if addMode {
+			corrente, _ := a.db.GetRigaBozzaCorrente(bozzaID, prodottoID)
+			qta = corrente + input
+			if disp, err := a.db.GetDisponibilitaProdotto(prodottoID); err == nil && disp > 0 && qta > disp {
+				qta = disp
+			}
+			addedDelta = qta - corrente
+		} else {
+			qta = input
 		}
 	}
 	if err := a.db.UpsertRigaBozza(bozzaID, prodottoID, qta); err != nil {
@@ -581,6 +712,17 @@ func (a *App) handleUpsertRigaBozza(w http.ResponseWriter, r *http.Request) {
 	targetID := r.URL.Query().Get("cart")
 	if targetID == "" {
 		targetID = "carrello-content"
+	}
+	if addMode {
+		var nome string
+		if p, err := a.db.GetProdottoByID(prodottoID); err == nil {
+			nome = p.Nome
+		}
+		nomeJSON, _ := json.Marshal(nome)
+		w.Header().Set("HX-Trigger", fmt.Sprintf(
+			`{"econ:added":{"prodottoID":%d,"qta":%d,"delta":%d,"totale":%d,"nome":%s}}`,
+			prodottoID, qta, addedDelta, qta, nomeJSON,
+		))
 	}
 	bozza, _ := a.db.GetBozzaConRighe(username)
 	a.renderCarrello(w, targetID, bozza)
@@ -623,7 +765,7 @@ func (a *App) handleInviaOrdine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	logger.Info("ordine %d inviato da %s", ordineID, username)
-	http.Redirect(w, r, a.dashboardURL(a.getRole(r)), http.StatusSeeOther)
+	hxRedirect(w, r, a.dashboardURLWithView(a.getRole(r), "ordini-personali"))
 }
 
 // -- Funzionario Handlers ──────────────────────────────────────────────────────
@@ -754,6 +896,58 @@ func (a *App) handleDashboardMagazzino(w http.ResponseWriter, r *http.Request) {
 	}))
 }
 
+// GET /storico-ordini — vista magazzino dello storico ordini con filtri.
+// HTMX-aware: se HX-Request è presente ritorna solo il partial della lista.
+func (a *App) handleStoricoOrdini(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	stato := strings.TrimSpace(r.URL.Query().Get("stato"))
+	prodID, _ := strconv.ParseInt(r.URL.Query().Get("prodotto"), 10, 64)
+
+	ordini, err := a.db.GetOrdiniStorico(stato, q, prodID)
+	if err != nil {
+		logger.Error("storico ordini: %v", err)
+		http.Error(w, "errore interno", 500)
+		return
+	}
+
+	var prodottoNome, prodottoCodice string
+	if prodID > 0 {
+		if p, err := a.db.GetProdottoByID(prodID); err == nil {
+			prodottoNome = p.Nome
+			prodottoCodice = p.CodiceArticolo
+		}
+	}
+
+	data := a.viewData(r, map[string]any{
+		"Username":       a.getUsername(r),
+		"Role":           a.getRole(r),
+		"Ordini":         ordini,
+		"Stato":          stato,
+		"Query":          q,
+		"ProdottoID":     prodID,
+		"ProdottoNome":   prodottoNome,
+		"ProdottoCodice": prodottoCodice,
+		"ActiveNav":      "storico",
+		"SectionName":    "Storico ordini",
+	})
+
+	if r.Header.Get("HX-Request") == "true" {
+		a.renderPartial(w, r, "storico-ordini", "storico-list", data)
+		return
+	}
+	a.render(w, r, "storico-ordini", data)
+}
+
+// GET /prodotti/{id}/storico — scorciatoia che apre lo storico filtrato per prodotto.
+func (a *App) handleProdottoStorico(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if _, err := strconv.ParseInt(id, 10, 64); err != nil {
+		http.Error(w, "id non valido", 400)
+		return
+	}
+	http.Redirect(w, r, "/storico-ordini?prodotto="+id, http.StatusSeeOther)
+}
+
 // POST /ordini/{id}/prepara
 func (a *App) handlePreparaOrdine(w http.ResponseWriter, r *http.Request) {
 	ordineID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -854,16 +1048,32 @@ logger.Error("renderPartial %s/%s: %v", baseName, partialName, err)
 }
 }
 
-// GET /categorie — HTMX partial list
+// GET /categorie — HTMX partial list o full page (reload diretto / push-url).
 func (a *App) handleListCategorie(w http.ResponseWriter, r *http.Request) {
 cats, err := a.db.GetAllCategorie()
 if err != nil {
 http.Error(w, "Errore DB", http.StatusInternalServerError)
 return
 }
+if r.Header.Get("HX-Request") == "true" {
 a.renderPartial(w, r, "magazzino", "categorie-partial", map[string]any{
-"Categorie": cats,
+"Categorie":   cats,
+"IconePicker": IconePicker,
 })
+return
+}
+// Full-page render: stessa layout di /prodotti ma con tab Categorie attivo.
+prodotti, _ := a.db.GetAllProdotti()
+a.render(w, r, "magazzino", a.viewData(r, map[string]any{
+"Partial":     "categorie",
+"Prodotti":    prodotti,
+"Categorie":   cats,
+"Username":    a.getUsername(r),
+"Role":        a.getRole(r),
+"ActiveNav":   "prodotti",
+"SectionName": "Anagrafica prodotti",
+"IconePicker": IconePicker,
+}))
 }
 
 // POST /categorie
@@ -941,12 +1151,18 @@ a.renderCategorieListInner(w, r)
 
 // ── Prodotti ─────────────────────────────────────────────────────────────────
 
-// GET /prodotti
+// GET /prodotti — HTMX partial table o full page.
 func (a *App) handleMagazzino(w http.ResponseWriter, r *http.Request) {
 prodotti, err := a.db.GetAllProdotti()
 if err != nil {
 logger.Error("get prodotti: %v", err)
 prodotti = nil
+}
+if r.Header.Get("HX-Request") == "true" {
+a.renderPartial(w, r, "magazzino", "prodotti-partial", map[string]any{
+"Prodotti": prodotti,
+})
+return
 }
 categorie, err := a.db.GetAllCategorie()
 if err != nil {
@@ -1072,64 +1288,306 @@ w.Header().Set("Cache-Control", "public, max-age=86400")
 w.Write(blob) //nolint:errcheck
 }
 
-// ── Lotti ────────────────────────────────────────────────────────────────────
+// ── Acquisti / Lotti ────────────────────────────────────────────────────────
 
-// GET /lotti/new — full-page form
+// GET /lotti/new — form acquisto (head + N righe lotto).
 func (a *App) handleNewLottoForm(w http.ResponseWriter, r *http.Request) {
 prodotti, _ := a.db.GetAllProdotti()
+fornitori, _ := a.db.GetAllFornitori()
+categorie, _ := a.db.GetAllCategorie()
 a.render(w, r, "lotto-form", a.viewData(r, map[string]any{
 "Username":    a.getUsername(r),
 "Role":        a.getRole(r),
 "Prodotti":    prodotti,
+"Fornitori":   fornitori,
+"Categorie":   categorie,
 "ActiveNav":   "carico-merce",
 "SectionName": "Carico merce",
 }))
 }
 
-// POST /lotti — create
-func (a *App) handleCreateLotto(w http.ResponseWriter, r *http.Request) {
+// POST /lotti — crea acquisto multi-riga.
+// Form fields: data_acquisto, fornitore_id (opzionale), numero_doc, note,
+// e per ogni riga: riga_prodotto_id[], riga_qta[], riga_costo[].
+func (a *App) handleCreateAcquisto(w http.ResponseWriter, r *http.Request) {
 if err := r.ParseForm(); err != nil {
 http.Error(w, "bad request", http.StatusBadRequest)
 return
 }
-prodottoID, err := strconv.ParseInt(r.FormValue("prodotto_id"), 10, 64)
-if err != nil || prodottoID == 0 {
-http.Error(w, "prodotto non valido", http.StatusBadRequest)
-return
-}
-qta, err := strconv.Atoi(r.FormValue("quantita"))
-if err != nil || qta <= 0 {
-http.Error(w, "quantità non valida", http.StatusBadRequest)
-return
-}
-costo, err := strconv.ParseFloat(strings.ReplaceAll(r.FormValue("costo_unitario"), ",", "."), 64)
-if err != nil || costo < 0 {
-http.Error(w, "costo non valido", http.StatusBadRequest)
-return
-}
+// Header.
 dataStr := r.FormValue("data_acquisto")
 var dataAcquisto time.Time
 if dataStr != "" {
-dataAcquisto, err = time.Parse("2006-01-02", dataStr)
+dt, err := time.Parse("2006-01-02", dataStr)
 if err != nil {
 http.Error(w, "data non valida (YYYY-MM-DD)", http.StatusBadRequest)
 return
 }
+dataAcquisto = dt
 } else {
 dataAcquisto = time.Now()
 }
-lotto := models.LottoAcquisto{
-ProdottoID:       prodottoID,
+var fornitoreID *int64
+if v := strings.TrimSpace(r.FormValue("fornitore_id")); v != "" {
+id, err := strconv.ParseInt(v, 10, 64)
+if err != nil || id <= 0 {
+http.Error(w, "fornitore non valido", http.StatusBadRequest)
+return
+}
+fornitoreID = &id
+}
+acq := models.Acquisto{
+DataAcquisto: dataAcquisto,
+FornitoreID:  fornitoreID,
+NumeroDoc:    strings.TrimSpace(r.FormValue("numero_doc")),
+Note:         strings.TrimSpace(r.FormValue("note")),
+CreatedBy:    a.getUsername(r),
+}
+// Righe: parse array-style. Tutti gli slice devono avere stessa length.
+prodIDs := r.Form["riga_prodotto_id"]
+qtas := r.Form["riga_qta"]
+costi := r.Form["riga_costo"]
+if len(prodIDs) == 0 {
+http.Error(w, "almeno una riga richiesta", http.StatusBadRequest)
+return
+}
+if len(prodIDs) != len(qtas) || len(prodIDs) != len(costi) {
+http.Error(w, "righe inconsistenti", http.StatusBadRequest)
+return
+}
+var righe []models.LottoAcquisto
+for i := range prodIDs {
+pidStr := strings.TrimSpace(prodIDs[i])
+if pidStr == "" {
+continue // skip riga vuota
+}
+pid, err := strconv.ParseInt(pidStr, 10, 64)
+if err != nil || pid <= 0 {
+http.Error(w, fmt.Sprintf("prodotto non valido riga %d", i+1), http.StatusBadRequest)
+return
+}
+qta, err := strconv.Atoi(strings.TrimSpace(qtas[i]))
+if err != nil || qta <= 0 {
+http.Error(w, fmt.Sprintf("quantità non valida riga %d", i+1), http.StatusBadRequest)
+return
+}
+costo, err := strconv.ParseFloat(strings.ReplaceAll(strings.TrimSpace(costi[i]), ",", "."), 64)
+if err != nil || costo < 0 {
+http.Error(w, fmt.Sprintf("costo non valido riga %d", i+1), http.StatusBadRequest)
+return
+}
+righe = append(righe, models.LottoAcquisto{
+ProdottoID:       pid,
 DataAcquisto:     dataAcquisto,
 QuantitaIniziale: qta,
 CostoUnitario:    costo,
+})
 }
-if _, err := a.db.CreateLotto(lotto); err != nil {
-logger.Error("create lotto: %v", err)
+if len(righe) == 0 {
+http.Error(w, "almeno una riga richiesta", http.StatusBadRequest)
+return
+}
+acqID, err := a.db.CreateAcquisto(acq, righe)
+if err != nil {
+logger.Error("create acquisto: %v", err)
+http.Error(w, "Errore DB: "+err.Error(), http.StatusInternalServerError)
+return
+}
+logger.Info("acquisto %d creato da %s con %d righe", acqID, acq.CreatedBy, len(righe))
+http.Redirect(w, r, fmt.Sprintf("/acquisti/%d", acqID), http.StatusSeeOther)
+}
+
+// GET /acquisti — storico carichi merce.
+func (a *App) handleListAcquisti(w http.ResponseWriter, r *http.Request) {
+acquisti, err := a.db.GetAcquistiList(100)
+if err != nil {
+logger.Error("list acquisti: %v", err)
 http.Error(w, "Errore DB", http.StatusInternalServerError)
 return
 }
-http.Redirect(w, r, "/prodotti", http.StatusSeeOther)
+a.render(w, r, "acquisti", a.viewData(r, map[string]any{
+"Username":    a.getUsername(r),
+"Role":        a.getRole(r),
+"Acquisti":    acquisti,
+"ActiveNav":   "acquisti",
+"SectionName": "Storico acquisti",
+}))
+}
+
+// GET /acquisti/{id} — dettaglio acquisto.
+func (a *App) handleAcquistoDetail(w http.ResponseWriter, r *http.Request) {
+id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+if err != nil {
+http.Error(w, "id non valido", http.StatusBadRequest)
+return
+}
+acq, err := a.db.GetAcquistoConRighe(id)
+if err != nil {
+http.Error(w, "acquisto non trovato", http.StatusNotFound)
+return
+}
+a.render(w, r, "acquisto-detail", a.viewData(r, map[string]any{
+"Username":    a.getUsername(r),
+"Role":        a.getRole(r),
+"Acquisto":    acq,
+"ActiveNav":   "acquisti",
+"SectionName": "Dettaglio acquisto",
+}))
+}
+
+// ── Fornitori (CRUD magazziniere) ────────────────────────────────────────────
+
+func (a *App) handleListFornitori(w http.ResponseWriter, r *http.Request) {
+fornitori, err := a.db.GetAllFornitori()
+if err != nil {
+logger.Error("list fornitori: %v", err)
+http.Error(w, "Errore DB", http.StatusInternalServerError)
+return
+}
+a.render(w, r, "fornitori", a.viewData(r, map[string]any{
+"Username":    a.getUsername(r),
+"Role":        a.getRole(r),
+"Fornitori":   fornitori,
+"ActiveNav":   "fornitori",
+"SectionName": "Fornitori",
+}))
+}
+
+func (a *App) handleNewFornitoreForm(w http.ResponseWriter, r *http.Request) {
+a.render(w, r, "fornitore-form", a.viewData(r, map[string]any{
+"Username":    a.getUsername(r),
+"Role":        a.getRole(r),
+"Fornitore":   models.Fornitore{},
+"ActiveNav":   "fornitori",
+"SectionName": "Nuovo fornitore",
+}))
+}
+
+func (a *App) handleEditFornitoreForm(w http.ResponseWriter, r *http.Request) {
+id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+if err != nil {
+http.Error(w, "id non valido", http.StatusBadRequest)
+return
+}
+f, err := a.db.GetFornitoreByID(id)
+if err != nil {
+http.Error(w, "fornitore non trovato", http.StatusNotFound)
+return
+}
+a.render(w, r, "fornitore-form", a.viewData(r, map[string]any{
+"Username":    a.getUsername(r),
+"Role":        a.getRole(r),
+"Fornitore":   f,
+"ActiveNav":   "fornitori",
+"SectionName": "Modifica fornitore",
+}))
+}
+
+func (a *App) handleCreateFornitore(w http.ResponseWriter, r *http.Request) {
+f, err := parseFornitoreForm(r)
+if err != nil {
+http.Error(w, err.Error(), http.StatusBadRequest)
+return
+}
+if _, err := a.db.CreateFornitore(f); err != nil {
+logger.Error("create fornitore: %v", err)
+http.Error(w, "Errore DB: "+err.Error(), http.StatusInternalServerError)
+return
+}
+http.Redirect(w, r, "/fornitori", http.StatusSeeOther)
+}
+
+func (a *App) handleUpdateFornitore(w http.ResponseWriter, r *http.Request) {
+id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+if err != nil {
+http.Error(w, "id non valido", http.StatusBadRequest)
+return
+}
+f, err := parseFornitoreForm(r)
+if err != nil {
+http.Error(w, err.Error(), http.StatusBadRequest)
+return
+}
+f.ID = id
+if err := a.db.UpdateFornitore(f); err != nil {
+logger.Error("update fornitore %d: %v", id, err)
+http.Error(w, "Errore DB", http.StatusInternalServerError)
+return
+}
+http.Redirect(w, r, "/fornitori", http.StatusSeeOther)
+}
+
+func (a *App) handleDeleteFornitore(w http.ResponseWriter, r *http.Request) {
+id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+if err != nil {
+http.Error(w, "id non valido", http.StatusBadRequest)
+return
+}
+if err := a.db.DeleteFornitore(id); err != nil {
+logger.Error("delete fornitore %d: %v", id, err)
+http.Error(w, "Errore DB", http.StatusInternalServerError)
+return
+}
+w.WriteHeader(http.StatusOK)
+}
+
+func parseFornitoreForm(r *http.Request) (models.Fornitore, error) {
+if err := r.ParseForm(); err != nil {
+return models.Fornitore{}, fmt.Errorf("bad request")
+}
+nome := strings.TrimSpace(r.FormValue("nome"))
+if nome == "" {
+return models.Fornitore{}, fmt.Errorf("nome obbligatorio")
+}
+return models.Fornitore{
+Nome:       nome,
+PartitaIVA: strings.TrimSpace(r.FormValue("partita_iva")),
+Email:      strings.TrimSpace(r.FormValue("email")),
+Telefono:   strings.TrimSpace(r.FormValue("telefono")),
+Note:       strings.TrimSpace(r.FormValue("note")),
+Attivo:     true,
+}, nil
+}
+
+// ── Quick-create prodotto (modal HTMX da form acquisto) ─────────────────────
+
+// GET /prodotti/quick — modal con form minimal.
+func (a *App) handleQuickProdottoForm(w http.ResponseWriter, r *http.Request) {
+categorie, _ := a.db.GetAllCategorie()
+a.renderPartial(w, r, "lotto-form", "modal-prodotto", map[string]any{
+"Categorie": categorie,
+})
+}
+
+// POST /prodotti/quick — crea prodotto minimal e ritorna HX-Trigger con i dati
+// per consentire al form chiamante di aggiungere l'option alle select prodotto.
+func (a *App) handleQuickCreateProdotto(w http.ResponseWriter, r *http.Request) {
+if err := r.ParseForm(); err != nil {
+http.Error(w, "bad request", http.StatusBadRequest)
+return
+}
+nome := strings.TrimSpace(r.FormValue("nome"))
+if nome == "" {
+http.Error(w, "nome obbligatorio", http.StatusBadRequest)
+return
+}
+catID, _ := strconv.ParseInt(r.FormValue("categoria_id"), 10, 64)
+scorta, _ := strconv.Atoi(r.FormValue("scorta_minima"))
+p := models.Prodotto{
+Nome:         nome,
+Descrizione:  strings.TrimSpace(r.FormValue("descrizione")),
+CategoriaID:  catID,
+ScortaMinima: scorta,
+}
+id, err := a.db.CreateProdotto(p)
+if err != nil {
+logger.Error("quick create prodotto: %v", err)
+http.Error(w, "Errore DB: "+err.Error(), http.StatusInternalServerError)
+return
+}
+payload := fmt.Sprintf(`{"prodotto-creato":{"id":%d,"nome":%q}}`, id, nome)
+w.Header().Set("HX-Trigger", payload)
+w.WriteHeader(http.StatusNoContent)
 }
 
 // ── Form parsing helper ───────────────────────────────────────────────────────
@@ -1248,13 +1706,24 @@ m[ic] = struct{}{}
 return m
 }()
 
-// normalizeIcon valida l'icona richiesta contro la whitelist; ritorna fallback
-// se non valida. fallback="" è ammesso (campo opzionale, es. prodotti).
+// iconClassRe valida la shape di una classe Font Awesome:
+// "fa-solid fa-NAME" | "fa-regular fa-NAME" | "fa-brands fa-NAME".
+// NAME accetta solo [a-z0-9-] per evitare injection nel DOM via classe.
+var iconClassRe = regexp.MustCompile(`^fa-(solid|regular|brands) fa-[a-z0-9]+(?:-[a-z0-9]+)*$`)
+
+// normalizeIcon valida la shape della classe FA richiesta; ritorna fallback
+// se vuota o malformata. La whitelist statica resta come elenco di icone
+// "suggerite" ma non è più vincolante: il picker dinamico copre tutta la
+// catalogo FA Free. fallback="" è ammesso (campo opzionale, es. prodotti).
 func normalizeIcon(raw, fallback string) string {
 v := strings.TrimSpace(raw)
 if v == "" {
 return fallback
 }
+if iconClassRe.MatchString(v) {
+return v
+}
+// retro-compatibilità: la legacy whitelist resta valida (es. valori già in DB).
 if _, ok := iconeSet[v]; ok {
 return v
 }
@@ -1310,8 +1779,8 @@ http.Error(w, "errore interno", 500)
 return
 }
 logger.Info("prenotazione registrata: utente=%s prodotto=%d qta=%d", username, id, qta)
-// HTMX: chiudere la modale e ricaricare la pagina (carrello aggiornato).
-w.Header().Set("HX-Redirect", a.dashboardURL(a.getRole(r)))
+// HTMX: chiudere la modale e ricaricare la pagina sulla tab "I miei ordini".
+w.Header().Set("HX-Redirect", a.dashboardURLWithView(a.getRole(r), "ordini-personali"))
 w.WriteHeader(http.StatusOK)
 }
 
@@ -1551,7 +2020,8 @@ default:
 http.Error(w, "method not allowed", 405)
 }
 })
-mux.HandleFunc("/logout", app.handleLogout)
+// /logout pubblico (anti-loop se sessione invalida) ma solo POST per CSRF.
+mux.HandleFunc("POST /logout", app.handleLogout)
 
 // Dashboard per ruolo
 mux.HandleFunc("/dashboard", app.requireRole("user", "funzionario")(app.handleDashboardUtente))
@@ -1569,6 +2039,8 @@ mux.HandleFunc("POST /ordini/{id}/approva", app.requireRole("funzionario")(app.h
 mux.HandleFunc("POST /ordini/{id}/rifiuta", app.requireRole("funzionario")(app.handleRifiutaOrdine))
 
 // Azioni magazziniere
+mux.HandleFunc("GET /storico-ordini", app.requireRole("magazziniere")(app.handleStoricoOrdini))
+mux.HandleFunc("GET /prodotti/{id}/storico", app.requireRole("magazziniere")(app.handleProdottoStorico))
 mux.HandleFunc("POST /ordini/{id}/prepara", app.requireRole("magazziniere")(app.handlePreparaOrdine))
 mux.HandleFunc("POST /ordini/{id}/pronto", app.requireRole("magazziniere")(app.handleSegnaPronte))
 mux.HandleFunc("POST /ordini/{id}/consegna", app.requireRole("magazziniere")(app.handleConsegnaOrdine))
@@ -1583,14 +2055,26 @@ mux.HandleFunc("DELETE /categorie/{id}", app.requireRole("magazziniere")(app.han
 mux.HandleFunc("GET /prodotti", app.requireRole("magazziniere")(app.handleMagazzino))
 mux.HandleFunc("GET /prodotti/new", app.requireRole("magazziniere")(app.handleNewProdottoForm))
 mux.HandleFunc("POST /prodotti", app.requireRole("magazziniere")(app.handleCreateProdotto))
+mux.HandleFunc("GET /prodotti/quick", app.requireRole("magazziniere")(app.handleQuickProdottoForm))
+mux.HandleFunc("POST /prodotti/quick", app.requireRole("magazziniere")(app.handleQuickCreateProdotto))
 mux.HandleFunc("GET /prodotti/{id}/edit", app.requireRole("magazziniere")(app.handleEditProdottoForm))
 mux.HandleFunc("POST /prodotti/{id}", app.requireRole("magazziniere")(app.handleUpdateProdotto))
 mux.HandleFunc("DELETE /prodotti/{id}", app.requireRole("magazziniere")(app.handleDeleteProdotto))
 mux.HandleFunc("GET /prodotti/{id}/immagine", app.requireAuth(app.handleProdottoImmagine))
 
-// Lotti
+// Fornitori (CRUD magazziniere)
+mux.HandleFunc("GET /fornitori", app.requireRole("magazziniere")(app.handleListFornitori))
+mux.HandleFunc("GET /fornitori/new", app.requireRole("magazziniere")(app.handleNewFornitoreForm))
+mux.HandleFunc("POST /fornitori", app.requireRole("magazziniere")(app.handleCreateFornitore))
+mux.HandleFunc("GET /fornitori/{id}/edit", app.requireRole("magazziniere")(app.handleEditFornitoreForm))
+mux.HandleFunc("POST /fornitori/{id}", app.requireRole("magazziniere")(app.handleUpdateFornitore))
+mux.HandleFunc("DELETE /fornitori/{id}", app.requireRole("magazziniere")(app.handleDeleteFornitore))
+
+// Acquisti (carico merce: head + righe lotto)
 mux.HandleFunc("GET /lotti/new", app.requireRole("magazziniere")(app.handleNewLottoForm))
-mux.HandleFunc("POST /lotti", app.requireRole("magazziniere")(app.handleCreateLotto))
+mux.HandleFunc("POST /lotti", app.requireRole("magazziniere")(app.handleCreateAcquisto))
+mux.HandleFunc("GET /acquisti", app.requireRole("magazziniere")(app.handleListAcquisti))
+mux.HandleFunc("GET /acquisti/{id}", app.requireRole("magazziniere")(app.handleAcquistoDetail))
 
 // Impostazioni (magazziniere)
 mux.HandleFunc("GET /impostazioni", app.requireRole("magazziniere")(app.handleImpostazioniPage))

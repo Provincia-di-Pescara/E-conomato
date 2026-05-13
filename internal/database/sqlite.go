@@ -69,7 +69,34 @@ func migrate(conn *sql.DB) error {
 			FOREIGN KEY(categoria_id) REFERENCES categorie(id)
 		);
 
-		-- Lotti di acquisto (base per algoritmo FIFO)
+		-- Anagrafica fornitori (opzionale, referenziata dagli acquisti).
+		CREATE TABLE IF NOT EXISTS fornitori (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			nome        TEXT NOT NULL UNIQUE,
+			partita_iva TEXT,
+			email       TEXT,
+			telefono    TEXT,
+			note        TEXT,
+			attivo      INTEGER NOT NULL DEFAULT 1
+		);
+
+		-- Documento di acquisto (head). Raggruppa N righe lotti_acquisto in
+		-- un'unica bolla/ordine al fornitore. Retro-compatibile: i lotti
+		-- pre-esistenti restano con acquisto_id NULL.
+		CREATE TABLE IF NOT EXISTS acquisti (
+			id            INTEGER PRIMARY KEY AUTOINCREMENT,
+			data_acquisto DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			fornitore_id  INTEGER,
+			numero_doc    TEXT,
+			note          TEXT,
+			created_by    TEXT,
+			created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY(fornitore_id) REFERENCES fornitori(id)
+		);
+
+		-- Lotti di acquisto (base per algoritmo FIFO).
+		-- Ogni riga è una coppia (prodotto, lotto) con costo congelato.
+		-- acquisto_id opzionale: lega più lotti allo stesso documento (head).
 		CREATE TABLE IF NOT EXISTS lotti_acquisto (
 			id                  INTEGER PRIMARY KEY AUTOINCREMENT,
 			prodotto_id         INTEGER NOT NULL,
@@ -77,7 +104,9 @@ func migrate(conn *sql.DB) error {
 			quantita_iniziale   INTEGER NOT NULL,
 			quantita_rimanente  INTEGER NOT NULL,
 			costo_unitario      REAL NOT NULL,
-			FOREIGN KEY(prodotto_id) REFERENCES prodotti(id)
+			acquisto_id         INTEGER,
+			FOREIGN KEY(prodotto_id) REFERENCES prodotti(id),
+			FOREIGN KEY(acquisto_id) REFERENCES acquisti(id)
 		);
 
 		-- Ordini di materiale
@@ -151,6 +180,10 @@ func migrate(conn *sql.DB) error {
 		return err
 	}
 	if err := ensureColumn(conn, "righe_ordine", "nota_utente", `ALTER TABLE righe_ordine ADD COLUMN nota_utente TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	// Retro-compat: DB esistenti pre-acquisti hanno lotti_acquisto senza acquisto_id.
+	if err := ensureColumn(conn, "lotti_acquisto", "acquisto_id", `ALTER TABLE lotti_acquisto ADD COLUMN acquisto_id INTEGER`); err != nil {
 		return err
 	}
 	return nil
@@ -968,6 +1001,271 @@ func (db *DB) GetOrdiniSettoreAll(settoreID string) ([]models.OrdineConRighe, er
 		return nil, err
 	}
 	return db.scanOrdini(rows)
+}
+
+// GetOrdiniStorico restituisce ordini per la vista storico del magazzino.
+// stato vuoto = tutti gli stati (escluso bozza). query è una stringa libera
+// matchata contro ordine.id, utente_username, settore.nome, prodotto.nome
+// e prodotto.codice_articolo. prodottoID > 0 limita agli ordini che
+// contengono quel prodotto.
+func (db *DB) GetOrdiniStorico(stato, query string, prodottoID int64) ([]models.OrdineConRighe, error) {
+	sb := `
+		SELECT DISTINCT o.id, o.utente_username, o.settore_id, o.data_creazione,
+		       o.stato, COALESCE(o.note_funzionario,'')
+		FROM ordini o
+		LEFT JOIN settori s ON s.id = o.settore_id
+	`
+	needRighe := prodottoID > 0 || query != ""
+	if needRighe {
+		sb += `
+		LEFT JOIN righe_ordine r ON r.ordine_id = o.id
+		LEFT JOIN prodotti p ON p.id = r.prodotto_id
+		`
+	}
+	sb += ` WHERE o.stato != 'bozza' `
+	args := []any{}
+	if stato != "" {
+		sb += ` AND o.stato = ? `
+		args = append(args, stato)
+	}
+	if prodottoID > 0 {
+		sb += ` AND r.prodotto_id = ? `
+		args = append(args, prodottoID)
+	}
+	if query != "" {
+		like := "%" + query + "%"
+		sb += ` AND (
+			CAST(o.id AS TEXT) LIKE ?
+			OR o.utente_username LIKE ?
+			OR COALESCE(s.nome,'') LIKE ?
+			OR COALESCE(p.nome,'') LIKE ?
+			OR COALESCE(p.codice_articolo,'') LIKE ?
+		) `
+		args = append(args, like, like, like, like, like)
+	}
+	sb += ` ORDER BY o.data_creazione DESC `
+
+	rows, err := db.conn.Query(sb, args...)
+	if err != nil {
+		return nil, err
+	}
+	return db.scanOrdini(rows)
+}
+
+// ── Fornitori ────────────────────────────────────────────────────────────────
+
+// GetAllFornitori restituisce i fornitori attivi, ordinati per nome.
+func (db *DB) GetAllFornitori() ([]models.Fornitore, error) {
+	rows, err := db.conn.Query(`
+		SELECT id, nome, COALESCE(partita_iva,''), COALESCE(email,''),
+		       COALESCE(telefono,''), COALESCE(note,''), attivo
+		FROM fornitori WHERE attivo=1 ORDER BY nome`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.Fornitore
+	for rows.Next() {
+		var f models.Fornitore
+		var attivo int
+		if err := rows.Scan(&f.ID, &f.Nome, &f.PartitaIVA, &f.Email, &f.Telefono, &f.Note, &attivo); err != nil {
+			return nil, err
+		}
+		f.Attivo = attivo != 0
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// GetFornitoreByID restituisce il fornitore o sql.ErrNoRows.
+func (db *DB) GetFornitoreByID(id int64) (models.Fornitore, error) {
+	var f models.Fornitore
+	var attivo int
+	err := db.conn.QueryRow(`
+		SELECT id, nome, COALESCE(partita_iva,''), COALESCE(email,''),
+		       COALESCE(telefono,''), COALESCE(note,''), attivo
+		FROM fornitori WHERE id=?`, id).
+		Scan(&f.ID, &f.Nome, &f.PartitaIVA, &f.Email, &f.Telefono, &f.Note, &attivo)
+	f.Attivo = attivo != 0
+	return f, err
+}
+
+// CreateFornitore inserisce un nuovo fornitore. Nome è UNIQUE: ritorna errore
+// se collide. attivo=1 di default.
+func (db *DB) CreateFornitore(f models.Fornitore) (int64, error) {
+	res, err := db.conn.Exec(`
+		INSERT INTO fornitori (nome, partita_iva, email, telefono, note, attivo)
+		VALUES (?,?,?,?,?,1)`,
+		f.Nome, nullableStr(f.PartitaIVA), nullableStr(f.Email),
+		nullableStr(f.Telefono), nullableStr(f.Note),
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (db *DB) UpdateFornitore(f models.Fornitore) error {
+	_, err := db.conn.Exec(`
+		UPDATE fornitori SET nome=?, partita_iva=?, email=?, telefono=?, note=?
+		WHERE id=?`,
+		f.Nome, nullableStr(f.PartitaIVA), nullableStr(f.Email),
+		nullableStr(f.Telefono), nullableStr(f.Note), f.ID,
+	)
+	return err
+}
+
+// DeleteFornitore prova un hard delete; se il fornitore è referenziato da
+// uno o più acquisti applica soft delete (attivo=0) per preservare lo storico.
+func (db *DB) DeleteFornitore(id int64) error {
+	var n int
+	if err := db.conn.QueryRow(`SELECT COUNT(*) FROM acquisti WHERE fornitore_id=?`, id).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		_, err := db.conn.Exec(`UPDATE fornitori SET attivo=0 WHERE id=?`, id)
+		return err
+	}
+	_, err := db.conn.Exec(`DELETE FROM fornitori WHERE id=?`, id)
+	return err
+}
+
+// ── Acquisti (documento head + lotti righe) ─────────────────────────────────
+
+// CreateAcquisto crea il documento head e le N righe lotti_acquisto in
+// un'unica transazione. La data_acquisto del head viene denormalizzata su
+// ogni riga lotti_acquisto per non rompere il FIFO esistente.
+func (db *DB) CreateAcquisto(a models.Acquisto, righe []models.LottoAcquisto) (int64, error) {
+	if len(righe) == 0 {
+		return 0, fmt.Errorf("acquisto senza righe")
+	}
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback() //nolint:errcheck
+	dataStr := a.DataAcquisto.UTC().Format(time.RFC3339)
+	var fornID interface{}
+	if a.FornitoreID != nil {
+		fornID = *a.FornitoreID
+	}
+	res, err := tx.Exec(`
+		INSERT INTO acquisti (data_acquisto, fornitore_id, numero_doc, note, created_by)
+		VALUES (?,?,?,?,?)`,
+		dataStr, fornID, nullableStr(a.NumeroDoc), nullableStr(a.Note), nullableStr(a.CreatedBy),
+	)
+	if err != nil {
+		return 0, fmt.Errorf("insert acquisti: %w", err)
+	}
+	acqID, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	for _, r := range righe {
+		if r.QuantitaIniziale <= 0 {
+			return 0, fmt.Errorf("quantita non valida per prodotto %d", r.ProdottoID)
+		}
+		if _, err := tx.Exec(`
+			INSERT INTO lotti_acquisto
+			  (prodotto_id, data_acquisto, quantita_iniziale, quantita_rimanente, costo_unitario, acquisto_id)
+			VALUES (?,?,?,?,?,?)`,
+			r.ProdottoID, dataStr, r.QuantitaIniziale, r.QuantitaIniziale, r.CostoUnitario, acqID,
+		); err != nil {
+			return 0, fmt.Errorf("insert lotto prodotto %d: %w", r.ProdottoID, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return acqID, nil
+}
+
+// GetAcquistiList restituisce gli ultimi `limit` acquisti (head + nome fornitore).
+// Limit <= 0 → 100 default.
+func (db *DB) GetAcquistiList(limit int) ([]models.Acquisto, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := db.conn.Query(`
+		SELECT a.id, a.data_acquisto, a.fornitore_id, COALESCE(f.nome,''),
+		       COALESCE(a.numero_doc,''), COALESCE(a.note,''),
+		       COALESCE(a.created_by,''), a.created_at
+		FROM acquisti a
+		LEFT JOIN fornitori f ON f.id = a.fornitore_id
+		ORDER BY a.data_acquisto DESC, a.id DESC
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.Acquisto
+	for rows.Next() {
+		var a models.Acquisto
+		var fornID sql.NullInt64
+		var daStr, caStr string
+		if err := rows.Scan(&a.ID, &daStr, &fornID, &a.FornitoreNome,
+			&a.NumeroDoc, &a.Note, &a.CreatedBy, &caStr); err != nil {
+			return nil, err
+		}
+		if fornID.Valid {
+			id := fornID.Int64
+			a.FornitoreID = &id
+		}
+		a.DataAcquisto, _ = time.Parse(time.RFC3339, daStr)
+		a.CreatedAt, _ = time.Parse(time.RFC3339, caStr)
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// GetAcquistoConRighe carica un acquisto con le sue righe (lotti) + nome prodotto.
+func (db *DB) GetAcquistoConRighe(id int64) (models.Acquisto, error) {
+	var a models.Acquisto
+	var fornID sql.NullInt64
+	var daStr, caStr string
+	err := db.conn.QueryRow(`
+		SELECT a.id, a.data_acquisto, a.fornitore_id, COALESCE(f.nome,''),
+		       COALESCE(a.numero_doc,''), COALESCE(a.note,''),
+		       COALESCE(a.created_by,''), a.created_at
+		FROM acquisti a
+		LEFT JOIN fornitori f ON f.id = a.fornitore_id
+		WHERE a.id=?`, id).
+		Scan(&a.ID, &daStr, &fornID, &a.FornitoreNome, &a.NumeroDoc, &a.Note, &a.CreatedBy, &caStr)
+	if err != nil {
+		return a, err
+	}
+	if fornID.Valid {
+		v := fornID.Int64
+		a.FornitoreID = &v
+	}
+	a.DataAcquisto, _ = time.Parse(time.RFC3339, daStr)
+	a.CreatedAt, _ = time.Parse(time.RFC3339, caStr)
+	rows, err := db.conn.Query(`
+		SELECT l.id, l.prodotto_id, l.data_acquisto, l.quantita_iniziale,
+		       l.quantita_rimanente, l.costo_unitario,
+		       p.nome, COALESCE(p.codice_articolo,'')
+		FROM lotti_acquisto l
+		JOIN prodotti p ON p.id = l.prodotto_id
+		WHERE l.acquisto_id=?
+		ORDER BY l.id`, id)
+	if err != nil {
+		return a, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var lo models.LottoAcquisto
+		var rDaStr string
+		if err := rows.Scan(&lo.ID, &lo.ProdottoID, &rDaStr, &lo.QuantitaIniziale,
+			&lo.QuantitaRimanente, &lo.CostoUnitario,
+			&lo.ProdottoNome, &lo.ProdottoCodice); err != nil {
+			return a, err
+		}
+		lo.DataAcquisto, _ = time.Parse(time.RFC3339, rDaStr)
+		acqID := a.ID
+		lo.AcquistoID = &acqID
+		a.Righe = append(a.Righe, lo)
+	}
+	return a, rows.Err()
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

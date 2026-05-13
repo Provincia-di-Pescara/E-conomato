@@ -272,11 +272,11 @@
           <div>
             {{if .Categorie}}
             <div class="ec-catfilter">
-              <a href="/dashboard/funzionario" class="ec-catchip {{if not .CategoriaID}}is-active{{end}}">
+              <a href="/dashboard/funzionario#view=nuovo" class="ec-catchip {{if not .CategoriaID}}is-active{{end}}">
                 <i class="fa-solid fa-list" style="margin-right:6px"></i> Tutti <span class="ec-catchip__count">{{len .Prodotti}}</span>
               </a>
               {{range .Categorie}}
-              <a href="/dashboard/funzionario?cat={{.ID}}" class="ec-catchip {{if eq .ID $.CategoriaID}}is-active{{end}}">
+              <a href="/dashboard/funzionario?cat={{.ID}}#view=nuovo" class="ec-catchip {{if eq .ID $.CategoriaID}}is-active{{end}}">
                 <i class="{{.Icona}}" style="margin-right:6px"></i>{{.Nome}}
               </a>
               {{end}}
@@ -307,6 +307,7 @@
                   <form hx-post="/bozza/righe/{{.ID}}?cart=carrello-content"
                         hx-target="#carrello-content" hx-swap="outerHTML"
                         style="display:flex;align-items:center;gap:8px;width:100%">
+                    <input type="hidden" name="add" value="1">
                     <input type="number" name="qta" min="1" max="{{.Disponibile}}" value="1"
                            class="ec-order__row-qty-input" style="width:60px;padding:5px 6px;font-size:12.5px">
                     <button type="submit" class="ec-btn ec-btn--secondary ec-btn--sm" style="margin-left:auto">
@@ -336,7 +337,7 @@
             <header class="ec-cart__head">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.5l2.5 11h11l2-8H6.5"/><path d="M9 21a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M18 21a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/></svg>
               <span class="ec-cart__title">La mia richiesta</span>
-              {{if .Bozza}}{{if .Bozza.Righe}}<span class="ec-cart__count">{{len .Bozza.Righe}} prodotti</span>{{end}}{{end}}
+              {{if and .Bozza .Bozza.Righe}}<span id="cart-badge" class="ec-cart__count">{{len .Bozza.Righe}} prodotti</span>{{else}}<span id="cart-badge" class="ec-cart__count" style="display:none"></span>{{end}}
             </header>
             {{if and .Bozza .Bozza.Righe}}
               <div id="carrello-content">
@@ -481,7 +482,8 @@
       nuovo:   "Nuovo ordine personale",
       miei:    "I miei ordini"
     };
-    function setView(view) {
+    function setView(view, opts) {
+      opts = opts || {};
       document.querySelectorAll('[data-view-section]').forEach(function (s) {
         s.style.display = s.getAttribute('data-view-section') === view ? '' : 'none';
       });
@@ -490,9 +492,23 @@
       });
       var t = document.querySelector('[data-topbar-title]');
       if (t && titles[view]) t.textContent = titles[view];
+      if (opts.updateHash !== false && titles[view]) {
+        try { history.replaceState(null, '', '#view=' + view); } catch (e) {}
+      }
+    }
+    function parseHashView() {
+      var h = (location.hash || '').replace(/^#/, '');
+      var m = /(?:^|&)view=([a-z]+)/.exec(h);
+      return m ? m[1] : '';
     }
     document.querySelectorAll('[data-view]').forEach(function (b) {
       b.addEventListener('click', function () { setView(b.getAttribute('data-view')); });
+    });
+    var initial = parseHashView();
+    if (initial && titles[initial]) setView(initial, {updateHash: false});
+    window.addEventListener('hashchange', function () {
+      var v = parseHashView();
+      if (v && titles[v]) setView(v, {updateHash: false});
     });
 
     document.querySelectorAll('[data-order-card]').forEach(function (card) {
@@ -512,7 +528,36 @@
         if (approve) approve.querySelectorAll('button[type=submit]').forEach(function (b) { b.disabled = false; });
       });
     });
+
+    function showToast(msg) {
+      var t = document.createElement('div');
+      t.className = 'ec-toast';
+      t.textContent = msg;
+      document.body.appendChild(t);
+      requestAnimationFrame(function () { t.classList.add('is-on'); });
+      setTimeout(function () {
+        t.classList.remove('is-on');
+        setTimeout(function () { t.remove(); }, 250);
+      }, 2200);
+    }
+    document.body.addEventListener('econ:added', function (ev) {
+      var d = ev.detail || {};
+      var nome = d.nome || 'Prodotto';
+      var tot  = d.totale || d.qta || 0;
+      showToast('Aggiunto: ' + nome + ' (' + tot + ' pz nel carrello)');
+    });
   })();
 </script>
+<style>
+  .ec-toast {
+    position: fixed; bottom: 22px; left: 50%; transform: translate(-50%, 30px);
+    background: var(--ec-ink-900, #1b2238); color: #fff;
+    padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 500;
+    box-shadow: 0 8px 24px rgba(0,0,0,.25);
+    opacity: 0; transition: opacity .2s ease, transform .25s ease;
+    z-index: 9999; pointer-events: none;
+  }
+  .ec-toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+</style>
 </body>
 </html>

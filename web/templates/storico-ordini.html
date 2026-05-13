@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>E-conomato — Storico ordini</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/fa/css/all.min.css" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+<div class="ec-app">
+
+  {{template "sidebar-magazzino" .}}
+
+  <div class="ec-main">
+
+    <header class="ec-topbar">
+      <div class="ec-topbar__title">
+        {{if .BrandName}}{{.BrandName}}{{else}}E-conomato{{end}}
+        <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
+        <b>Storico ordini</b>
+        {{if .ProdottoID}}
+        <span class="ec-topbar__settore" title="Filtro prodotto">
+          <i class="fa-solid fa-filter" style="margin-right:5px"></i>
+          {{if .ProdottoCodice}}{{.ProdottoCodice}} · {{end}}{{.ProdottoNome}}
+        </span>
+        {{end}}
+      </div>
+    </header>
+
+    <main class="ec-content">
+
+      <header class="ec-secthead">
+        <div>
+          <div class="ec-secthead__kicker">Area magazzino</div>
+          <h1 class="ec-secthead__title">Storico ordini</h1>
+          <p class="ec-secthead__sub">Tutte le richieste evase, in lavorazione o respinte. Filtra per stato o cerca per codice, prodotto, utente, settore.</p>
+        </div>
+        {{if .ProdottoID}}
+        <div class="ec-secthead__right">
+          <a href="/storico-ordini" class="ec-btn ec-btn--ghost">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
+            Rimuovi filtro prodotto
+          </a>
+        </div>
+        {{end}}
+      </header>
+
+      <div class="ec-card" style="padding:14px;margin-bottom:18px">
+        <form class="ec-storico-filter"
+              hx-get="/storico-ordini"
+              hx-target="#storico-results"
+              hx-swap="innerHTML"
+              hx-push-url="true"
+              hx-trigger="keyup changed delay:300ms from:input[name='q'], change from:select[name='stato']"
+              style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          {{if .ProdottoID}}<input type="hidden" name="prodotto" value="{{.ProdottoID}}">{{end}}
+          <div style="flex:1;min-width:260px;position:relative">
+            <i class="fa-solid fa-magnifying-glass" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--ec-ink-400);font-size:13px"></i>
+            <input type="search" name="q" value="{{.Query}}" placeholder="Cerca per ID, prodotto, utente, settore…" class="ec-input" style="padding-left:30px">
+          </div>
+          <select name="stato" class="ec-select" style="max-width:220px">
+            <option value=""{{if eq .Stato ""}} selected{{end}}>Tutti gli stati</option>
+            <option value="in_approvazione"{{if eq .Stato "in_approvazione"}} selected{{end}}>In approvazione</option>
+            <option value="approvato"{{if eq .Stato "approvato"}} selected{{end}}>Approvato</option>
+            <option value="in_preparazione"{{if eq .Stato "in_preparazione"}} selected{{end}}>In preparazione</option>
+            <option value="pronto"{{if eq .Stato "pronto"}} selected{{end}}>Pronto</option>
+            <option value="ritirato"{{if eq .Stato "ritirato"}} selected{{end}}>Ritirato</option>
+            <option value="rifiutato"{{if eq .Stato "rifiutato"}} selected{{end}}>Rifiutato</option>
+          </select>
+          <noscript><button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">Filtra</button></noscript>
+        </form>
+      </div>
+
+      <div id="storico-results">
+        {{template "storico-list" .}}
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script src="/static/js/htmx.min.js"></script>
+</body>
+</html>
+
+{{define "storico-list"}}
+{{if .Ordini}}
+<div class="ec-stack">
+  {{range .Ordini}}
+  <div class="ec-order">
+    <header class="ec-order__head">
+      <span class="ec-order__id">#{{.Ordine.ID}}</span>
+      <span class="ec-order__meta">
+        <b>{{.Ordine.UtenteUsername}}</b> · {{fmtDate .Ordine.DataCreazione}}
+        {{if .Ordine.SettoreID}} · <i class="fa-solid fa-building" style="margin:0 4px;color:var(--ec-ink-400)"></i>{{.Ordine.SettoreID}}{{end}}
+      </span>
+      <span class="ec-pill ec-pill--{{statoTone .Ordine.Stato}}">{{statoLabel .Ordine.Stato}}</span>
+    </header>
+    <div class="ec-order__body">
+      <div class="ec-order__rows">
+        {{range .Righe}}
+        <div class="ec-order__row">
+          <div class="ec-prod-img ec-prod-img--sm ec-prod-img--cat-default">
+            <img src="/prodotti/{{.ProdottoID}}/immagine" alt="" onerror="this.style.display='none'">
+          </div>
+          <div>
+            <div class="ec-order__row-name">
+              {{.ProdottoNome}}
+              {{if .Prenotazione}}<span class="ec-pill ec-pill--amber" style="margin-left:6px;font-size:10px">Prenotazione</span>{{end}}
+            </div>
+            <div class="ec-order__row-meta">
+              {{if .ProdottoCodice}}<span class="mono">{{.ProdottoCodice}}</span> · {{end}}Stato riga: {{.StatoRiga}}
+            </div>
+          </div>
+          <span class="ec-order__row-qty">{{if .QtaApprovata}}{{.QtaApprovata}}{{else}}{{.QtaRichiesta}}{{end}} pz</span>
+          <span style="width:90px;text-align:right">
+            {{if eq .StatoRiga "evasa"}}<span class="ec-pill ec-pill--teal">Evasa</span>
+            {{else if eq .StatoRiga "evasa_parziale"}}<span class="ec-pill ec-pill--amber">Parziale</span>{{end}}
+          </span>
+          <a href="/storico-ordini?prodotto={{.ProdottoID}}" class="ec-btn ec-btn--ghost ec-btn--sm" title="Storico di questo prodotto">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+          </a>
+        </div>
+        {{end}}
+      </div>
+    </div>
+    {{if .Ordine.NoteFunzionario}}
+    <div class="ec-note ec-note--info">
+      <i class="fa-solid fa-circle-info" style="margin-right:8px"></i>
+      <div>{{.Ordine.NoteFunzionario}}</div>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+{{else}}
+<div class="ec-empty">
+  <div class="ec-empty__icon"><i class="fa-solid fa-folder-open" style="font-size:28px;color:var(--ec-ink-400)"></i></div>
+  <div class="ec-empty__title">Nessun ordine trovato</div>
+  <div class="ec-empty__hint">
+    {{if or .Query .Stato .ProdottoID}}Modifica i filtri per ampliare la ricerca.{{else}}Quando arriveranno ordini, li troverai qui.{{end}}
+  </div>
+</div>
+{{end}}
+{{end}}

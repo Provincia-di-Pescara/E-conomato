@@ -76,15 +76,12 @@
             <div style="grid-column:1 / -1">
               <label class="ec-label">Icona (fallback se non c'è immagine)</label>
               <input type="hidden" name="icona" id="icona-input" value="{{.Prodotto.Icona}}">
-              <div class="ec-icon-picker" data-target="#icona-input">
-                <button type="button" class="ec-icon-picker__cell{{if eq .Prodotto.Icona ""}} is-selected{{end}}" data-icona="" title="Nessuna icona">
-                  <span style="font-size:11px;color:var(--ec-ink-500)">—</span>
-                </button>
-                {{range .IconePicker}}
-                <button type="button" class="ec-icon-picker__cell{{if eq . $.Prodotto.Icona}} is-selected{{end}}" data-icona="{{.}}" title="{{.}}">
-                  <i class="{{.}}"></i>
-                </button>
-                {{end}}
+              <div class="ec-icon-picker" data-target="#icona-input" data-searchable="1">
+                <div class="ec-icon-picker__head">
+                  <span class="ec-icon-picker__preview" data-icon-preview></span>
+                  <input type="search" class="ec-icon-picker__search" placeholder="Cerca icona (es. scatola, matita, box, pencil…)" autocomplete="off">
+                </div>
+                <div class="ec-icon-picker__grid"></div>
               </div>
             </div>
           </div>
@@ -100,18 +97,6 @@
 </div>
 
 <script src="/static/js/htmx.min.js"></script>
-<script>
-  document.querySelectorAll('.ec-icon-picker').forEach(function (picker) {
-    var targetSel = picker.getAttribute('data-target');
-    var target = document.querySelector(targetSel);
-    picker.querySelectorAll('.ec-icon-picker__cell').forEach(function (cell) {
-      cell.addEventListener('click', function () {
-        picker.querySelectorAll('.ec-icon-picker__cell').forEach(function (c) { c.classList.remove('is-selected'); });
-        cell.classList.add('is-selected');
-        if (target) target.value = cell.getAttribute('data-icona') || '';
-      });
-    });
-  });
-</script>
+<script src="/static/js/icon-picker.js"></script>
 </body>
 </html>

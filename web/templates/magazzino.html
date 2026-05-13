@@ -11,12 +11,9 @@
   <link rel="stylesheet" href="/static/fa/css/all.min.css" />
   <link rel="stylesheet" href="/static/css/style.css" />
   <script src="/static/js/htmx.min.js" defer></script>
+  <script src="/static/js/icon-picker.js" defer></script>
 </head>
 <body>
-
-<script>
-  window.__econIcone = '{{if .IconePicker}}[{{range $i, $ic := .IconePicker}}{{if $i}},{{end}}"{{$ic}}"{{end}}]{{else}}[]{{end}}';
-</script>
 
 <div class="ec-app">
 
@@ -53,13 +50,16 @@
       </header>
 
       <div class="ec-tabs">
-        <a href="/prodotti" class="ec-tab {{if eq .Partial "prodotti"}}is-active{{end}}">
+        <a href="/prodotti" class="ec-tab {{if eq .Partial "prodotti"}}is-active{{end}}"
+           hx-get="/prodotti" hx-target="#main-panel" hx-swap="innerHTML" hx-push-url="/prodotti"
+           hx-on:click="this.parentElement.querySelectorAll('.ec-tab').forEach(t=>t.classList.remove('is-active'));this.classList.add('is-active')">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7"/></svg>
           Prodotti
           {{if .Prodotti}}<span class="ec-tab__badge">{{len .Prodotti}}</span>{{end}}
         </a>
         <a href="/categorie" class="ec-tab {{if eq .Partial "categorie"}}is-active{{end}}"
-           hx-get="/categorie" hx-target="#main-panel" hx-swap="innerHTML" hx-push-url="/categorie">
+           hx-get="/categorie" hx-target="#main-panel" hx-swap="innerHTML" hx-push-url="/categorie"
+           hx-on:click="this.parentElement.querySelectorAll('.ec-tab').forEach(t=>t.classList.remove('is-active'));this.classList.add('is-active')">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h7l2 2h9v12H3V6Z"/></svg>
           Categorie
           {{if .Categorie}}<span class="ec-tab__badge">{{len .Categorie}}</span>{{end}}
@@ -68,62 +68,7 @@
 
       <div id="main-panel">
         {{if eq .Partial "prodotti"}}
-          {{if .Prodotti}}
-          <table class="ec-table">
-            <thead>
-              <tr>
-                <th style="width:64px"></th>
-                <th>Codice</th>
-                <th>Articolo</th>
-                <th>Categoria</th>
-                <th style="text-align:right">Giacenza</th>
-                <th style="text-align:right">Scorta min.</th>
-                <th style="width:90px"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {{range .Prodotti}}
-              <tr id="prod-row-{{.ID}}">
-                <td>
-                  <div class="ec-prod-img ec-prod-img--sm ec-prod-img--cat-default">
-                    {{if .ImmagineBLOB}}<img src="/prodotti/{{.ID}}/immagine" alt="{{.Nome}}" loading="lazy">
-                    {{else if .Icona}}<i class="{{.Icona}}" style="font-size:18px;color:var(--ec-navy-700)"></i>
-                    {{else}}<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7"/></svg>{{end}}
-                  </div>
-                </td>
-                <td class="mono">{{if .CodiceArticolo}}{{.CodiceArticolo}}{{else}}<span style="opacity:.4">—</span>{{end}}</td>
-                <td>
-                  <strong>{{.Nome}}</strong>
-                  {{if .Descrizione}}<div style="font-size:11.5px;color:var(--ec-ink-500);margin-top:2px;max-width:36ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{.Descrizione}}</div>{{end}}
-                </td>
-                <td><span class="ec-pill ec-pill--navy">{{.CategoriaName}}</span></td>
-                <td class="mono" style="text-align:right{{if lt .ScortaRimanente .ScortaMinima}};color:var(--ec-red-700);font-weight:700{{end}}">{{.ScortaRimanente}}</td>
-                <td class="mono" style="text-align:right;color:var(--ec-ink-500)">{{.ScortaMinima}}</td>
-                <td style="text-align:right;white-space:nowrap">
-                  <a href="/prodotti/{{.ID}}/edit" class="ec-btn ec-btn--ghost ec-btn--sm" title="Modifica">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l6 6-10 10H4v-6L14 4Z"/></svg>
-                  </a>
-                  <button class="ec-btn ec-btn--danger ec-btn--sm" title="Elimina"
-                    hx-delete="/prodotti/{{.ID}}"
-                    hx-confirm="Eliminare il prodotto {{.Nome}}?"
-                    hx-target="#prod-row-{{.ID}}" hx-swap="delete">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
-                  </button>
-                </td>
-              </tr>
-              {{end}}
-            </tbody>
-          </table>
-          {{else}}
-          <div class="ec-empty">
-            <div class="ec-empty__icon">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4V7Z"/><path d="M3 7l9 4 9-4"/><path d="M12 11v10"/></svg>
-            </div>
-            <div class="ec-empty__title">Nessun prodotto</div>
-            <div class="ec-empty__hint">Clicca "Nuovo prodotto" per iniziare l'anagrafica.</div>
-          </div>
-          {{end}}
-
+          {{template "prodotti-partial" .}}
         {{else if eq .Partial "categorie"}}
           {{template "categorie-partial" .}}
         {{end}}
@@ -135,6 +80,67 @@
 
 </body>
 </html>
+
+{{define "prodotti-partial"}}
+{{if .Prodotti}}
+<table class="ec-table">
+  <thead>
+    <tr>
+      <th style="width:64px"></th>
+      <th>Codice</th>
+      <th>Articolo</th>
+      <th>Categoria</th>
+      <th style="text-align:right">Giacenza</th>
+      <th style="text-align:right">Scorta min.</th>
+      <th style="width:90px"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Prodotti}}
+    <tr id="prod-row-{{.ID}}">
+      <td>
+        <div class="ec-prod-img ec-prod-img--sm ec-prod-img--cat-default">
+          {{if .ImmagineBLOB}}<img src="/prodotti/{{.ID}}/immagine" alt="{{.Nome}}" loading="lazy">
+          {{else if .Icona}}<i class="{{.Icona}}" style="font-size:18px;color:var(--ec-navy-700)"></i>
+          {{else}}<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7"/></svg>{{end}}
+        </div>
+      </td>
+      <td class="mono">{{if .CodiceArticolo}}{{.CodiceArticolo}}{{else}}<span style="opacity:.4">—</span>{{end}}</td>
+      <td>
+        <strong>{{.Nome}}</strong>
+        {{if .Descrizione}}<div style="font-size:11.5px;color:var(--ec-ink-500);margin-top:2px;max-width:36ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{.Descrizione}}</div>{{end}}
+      </td>
+      <td><span class="ec-pill ec-pill--navy">{{.CategoriaName}}</span></td>
+      <td class="mono" style="text-align:right{{if lt .ScortaRimanente .ScortaMinima}};color:var(--ec-red-700);font-weight:700{{end}}">{{.ScortaRimanente}}</td>
+      <td class="mono" style="text-align:right;color:var(--ec-ink-500)">{{.ScortaMinima}}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <a href="/storico-ordini?prodotto={{.ID}}" class="ec-btn ec-btn--ghost ec-btn--sm" title="Storico ordini">
+          <i class="fa-solid fa-clock-rotate-left" style="font-size:13px"></i>
+        </a>
+        <a href="/prodotti/{{.ID}}/edit" class="ec-btn ec-btn--ghost ec-btn--sm" title="Modifica">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l6 6-10 10H4v-6L14 4Z"/></svg>
+        </a>
+        <button class="ec-btn ec-btn--danger ec-btn--sm" title="Elimina"
+          hx-delete="/prodotti/{{.ID}}"
+          hx-confirm="Eliminare il prodotto {{.Nome}}?"
+          hx-target="#prod-row-{{.ID}}" hx-swap="delete">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
+        </button>
+      </td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{else}}
+<div class="ec-empty">
+  <div class="ec-empty__icon">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4V7Z"/><path d="M3 7l9 4 9-4"/><path d="M12 11v10"/></svg>
+  </div>
+  <div class="ec-empty__title">Nessun prodotto</div>
+  <div class="ec-empty__hint">Clicca "Nuovo prodotto" per iniziare l'anagrafica.</div>
+</div>
+{{end}}
+{{end}}
 
 {{define "categorie-partial"}}
 <div class="ec-card">
@@ -149,15 +155,22 @@
     {{template "categorie-list-inner" .}}
   </div>
   <form hx-post="/categorie" hx-target="#cat-list" hx-swap="innerHTML"
-        style="display:flex;gap:10px;padding:14px;border-top:1px solid var(--ec-line);align-items:center;flex-wrap:wrap">
-    <input type="text" name="nome" placeholder="Nuova categoria" required class="ec-input" style="flex:1;min-width:200px">
-    <select name="icona" class="ec-select" style="max-width:220px">
-      {{range .IconePicker}}<option value="{{.}}">{{.}}</option>{{end}}
-    </select>
-    <button type="submit" class="ec-btn ec-btn--primary">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-      Aggiungi
-    </button>
+        style="padding:14px;border-top:1px solid var(--ec-line)">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <input type="text" name="nome" placeholder="Nuova categoria" required class="ec-input" style="flex:1;min-width:200px">
+      <input type="hidden" name="icona" id="cat-new-icona" value="fa-solid fa-box">
+      <button type="submit" class="ec-btn ec-btn--primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+        Aggiungi
+      </button>
+    </div>
+    <div class="ec-icon-picker" data-target="#cat-new-icona" data-searchable="1">
+      <div class="ec-icon-picker__head">
+        <span class="ec-icon-picker__preview" data-icon-preview></span>
+        <input type="search" class="ec-icon-picker__search" placeholder="Cerca icona (es. scatola, matita, box, pencil…)" autocomplete="off">
+      </div>
+      <div class="ec-icon-picker__grid"></div>
+    </div>
   </form>
 </div>
 {{end}}
@@ -187,22 +200,26 @@
 window.startEditCat = function (id, nome, icona) {
   var row = document.getElementById('cat-' + id);
   if (!row) return;
-  var iconeJson = window.__econIcone || '[]';
-  var opzioni = '';
-  try {
-    var icone = JSON.parse(iconeJson);
-    icone.forEach(function (ic) {
-      opzioni += '<option value="' + ic + '"' + (ic === icona ? ' selected' : '') + '>' + ic + '</option>';
-    });
-  } catch (e) {}
+  var safeNome = String(nome).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  var safeIcona = String(icona || '').replace(/"/g,'&quot;');
   row.innerHTML =
-    '<form hx-put="/categorie/' + id + '" hx-target="#cat-list" hx-swap="innerHTML" style="display:flex;flex:1;gap:8px;align-items:center;flex-wrap:wrap">' +
-      '<input type="text" name="nome" value="' + nome.replace(/"/g,'&quot;') + '" required autofocus class="ec-input" style="flex:1;min-width:160px">' +
-      '<select name="icona" class="ec-select" style="max-width:220px">' + opzioni + '</select>' +
-      '<button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">Salva</button>' +
-    '</form>' +
-    '<button class="ec-btn ec-btn--ghost ec-btn--sm" onclick="htmx.ajax(\'GET\',\'/categorie\',{target:\'#main-panel\',swap:\'innerHTML\'})">Annulla</button>';
+    '<form hx-put="/categorie/' + id + '" hx-target="#cat-list" hx-swap="innerHTML" style="width:100%">' +
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">' +
+        '<input type="text" name="nome" value="' + safeNome + '" required autofocus class="ec-input" style="flex:1;min-width:160px">' +
+        '<input type="hidden" name="icona" id="cat-edit-icona-' + id + '" value="' + safeIcona + '">' +
+        '<button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">Salva</button>' +
+        '<button type="button" class="ec-btn ec-btn--ghost ec-btn--sm" onclick="htmx.ajax(\'GET\',\'/categorie\',{target:\'#main-panel\',swap:\'innerHTML\'})">Annulla</button>' +
+      '</div>' +
+      '<div class="ec-icon-picker" data-target="#cat-edit-icona-' + id + '" data-searchable="1">' +
+        '<div class="ec-icon-picker__head">' +
+          '<span class="ec-icon-picker__preview" data-icon-preview></span>' +
+          '<input type="search" class="ec-icon-picker__search" placeholder="Cerca icona (it/en)" autocomplete="off">' +
+        '</div>' +
+        '<div class="ec-icon-picker__grid"></div>' +
+      '</div>' +
+    '</form>';
   if (window.htmx) htmx.process(row);
+  if (window.EconIconPicker) window.EconIconPicker.init(row);
 };
 </script>
 {{end}}
