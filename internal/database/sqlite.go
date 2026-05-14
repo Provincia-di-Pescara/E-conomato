@@ -161,11 +161,53 @@ func migrate(conn *sql.DB) error {
 			blob_data BLOB NOT NULL,
 			mime      TEXT NOT NULL
 		);
+
+		-- Notifiche in-app mostrate al singolo utente nella pagina /notifiche.
+		-- tipo: 'ordine_inviato' | 'ordine_approvato' | 'ordine_rifiutato'
+		--     | 'ordine_in_preparazione' | 'ordine_pronto' | 'scorta'
+		CREATE TABLE IF NOT EXISTS notifiche (
+			id              INTEGER PRIMARY KEY AUTOINCREMENT,
+			utente_username TEXT NOT NULL,
+			tipo            TEXT NOT NULL,
+			messaggio       TEXT NOT NULL,
+			ordine_id       INTEGER,
+			prodotto_id     INTEGER,
+			letta           INTEGER NOT NULL DEFAULT 0,
+			creata_il       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY(utente_username) REFERENCES utenti(username),
+			FOREIGN KEY(ordine_id)       REFERENCES ordini(id),
+			FOREIGN KEY(prodotto_id)     REFERENCES prodotti(id)
+		);
+
+		-- Coda durevole degli invii email transazionali. Il worker asincrono
+		-- consuma le righe con stato='in_attesa' e prossimo_tentativo <= now.
+		-- stato: 'in_attesa' | 'inviata' | 'abbandonata'
+		CREATE TABLE IF NOT EXISTS email_outbox (
+			id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+			destinatario        TEXT NOT NULL,
+			soggetto            TEXT NOT NULL,
+			corpo_html          TEXT NOT NULL,
+			tipo                TEXT NOT NULL,
+			notifica_id         INTEGER,
+			stato               TEXT NOT NULL DEFAULT 'in_attesa',
+			tentativi           INTEGER NOT NULL DEFAULT 0,
+			ultimo_errore       TEXT,
+			prossimo_tentativo  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			inviata_il          DATETIME,
+			creata_il           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY(notifica_id) REFERENCES notifiche(id)
+		);
 	`)
 	if err != nil {
 		return err
 	}
 	if _, err = conn.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_righe_ordine_uniq ON righe_ordine(ordine_id, prodotto_id)`); err != nil {
+		return err
+	}
+	if _, err = conn.Exec(`CREATE INDEX IF NOT EXISTS idx_notifiche_utente_letta ON notifiche(utente_username, letta, creata_il DESC)`); err != nil {
+		return err
+	}
+	if _, err = conn.Exec(`CREATE INDEX IF NOT EXISTS idx_email_outbox_pending ON email_outbox(stato, prossimo_tentativo)`); err != nil {
 		return err
 	}
 	// Migrazioni additive: colonne nuove su tabelle esistenti.
@@ -773,11 +815,13 @@ func (db *DB) RifiutaOrdine(ordineID int64, note string) error {
 }
 
 // PreparaOrdineFIFO scarica i lotti FIFO per ogni riga, crea movimenti_magazzino
-// e transita l'ordine a 'in_preparazione'.
-func (db *DB) PreparaOrdineFIFO(ordineID int64) error {
+// e transita l'ordine a 'in_preparazione'. Restituisce l'elenco dei prodotti
+// che, per effetto dello scarico, sono scesi sotto la propria scorta_minima
+// (utile per emettere notifiche `scorta` ai magazzinieri).
+func (db *DB) PreparaOrdineFIFO(ordineID int64) ([]models.ScortaSottoSoglia, error) {
 	tx, err := db.conn.Begin()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback()
 
@@ -786,7 +830,7 @@ func (db *DB) PreparaOrdineFIFO(ordineID int64) error {
 		FROM righe_ordine WHERE ordine_id = ?
 	`, ordineID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	type riga struct {
 		id           int64
@@ -798,13 +842,37 @@ func (db *DB) PreparaOrdineFIFO(ordineID int64) error {
 		var r riga
 		if err := rows.Scan(&r.id, &r.prodottoID, &r.qtaDaEvadere); err != nil {
 			rows.Close()
-			return err
+			return nil, err
 		}
 		righe = append(righe, r)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return err
+		return nil, err
+	}
+
+	// Snapshot pre-scarico per individuare i prodotti che attraversano la
+	// soglia minima durante questa transazione.
+	type stockSnap struct {
+		nome      string
+		soglia    int
+		preScarico int
+	}
+	pre := map[int64]stockSnap{}
+	for _, r := range righe {
+		if _, ok := pre[r.prodottoID]; ok {
+			continue
+		}
+		var s stockSnap
+		err := tx.QueryRow(`
+			SELECT p.nome, p.scorta_minima,
+			       COALESCE((SELECT SUM(quantita_rimanente) FROM lotti_acquisto WHERE prodotto_id = p.id AND quantita_rimanente > 0), 0)
+			FROM prodotti p WHERE p.id = ?
+		`, r.prodottoID).Scan(&s.nome, &s.soglia, &s.preScarico)
+		if err != nil {
+			return nil, err
+		}
+		pre[r.prodottoID] = s
 	}
 
 	for _, r := range righe {
@@ -817,7 +885,7 @@ func (db *DB) PreparaOrdineFIFO(ordineID int64) error {
 			ORDER BY data_acquisto ASC
 		`, r.prodottoID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		type lotto struct {
 			id        int64
@@ -829,7 +897,7 @@ func (db *DB) PreparaOrdineFIFO(ordineID int64) error {
 			var l lotto
 			if err := lotti.Scan(&l.id, &l.rimanente, &l.costoUnit); err != nil {
 				lotti.Close()
-				return err
+				return nil, err
 			}
 			ls = append(ls, l)
 		}
@@ -848,13 +916,13 @@ func (db *DB) PreparaOrdineFIFO(ordineID int64) error {
 				`INSERT INTO movimenti_magazzino (riga_ordine_id, lotto_id, quantita_prelevata, costo_totale) VALUES (?,?,?,?)`,
 				r.id, l.id, prelevato, costo,
 			); err != nil {
-				return err
+				return nil, err
 			}
 			if _, err = tx.Exec(
 				`UPDATE lotti_acquisto SET quantita_rimanente = quantita_rimanente - ? WHERE id = ?`,
 				prelevato, l.id,
 			); err != nil {
-				return err
+				return nil, err
 			}
 			qtaResidua -= prelevato
 			qtaEvasa += prelevato
@@ -870,14 +938,39 @@ func (db *DB) PreparaOrdineFIFO(ordineID int64) error {
 			`UPDATE righe_ordine SET qta_evasa = ?, stato_riga = ? WHERE id = ?`,
 			qtaEvasa, statoRiga, r.id,
 		); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	if _, err = tx.Exec(`UPDATE ordini SET stato = 'in_preparazione' WHERE id = ?`, ordineID); err != nil {
-		return err
+		return nil, err
 	}
-	return tx.Commit()
+
+	// Confronta post-scarico per costruire l'elenco di scorte sotto soglia.
+	var attraversate []models.ScortaSottoSoglia
+	for prodID, snap := range pre {
+		var post int
+		err := tx.QueryRow(`
+			SELECT COALESCE(SUM(quantita_rimanente), 0) FROM lotti_acquisto
+			WHERE prodotto_id = ? AND quantita_rimanente > 0
+		`, prodID).Scan(&post)
+		if err != nil {
+			return nil, err
+		}
+		if snap.preScarico >= snap.soglia && post < snap.soglia {
+			attraversate = append(attraversate, models.ScortaSottoSoglia{
+				ProdottoID:   prodID,
+				ProdottoNome: snap.nome,
+				Rimanente:    post,
+				SogliaMinima: snap.soglia,
+			})
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return attraversate, nil
 }
 
 // SegnaOrdinePronte transita l'ordine a 'pronto'. Restituisce l'username per notifica email.
@@ -1266,6 +1359,240 @@ func (db *DB) GetAcquistoConRighe(id int64) (models.Acquisto, error) {
 		a.Righe = append(a.Righe, lo)
 	}
 	return a, rows.Err()
+}
+
+// ── Notifiche & Email outbox ────────────────────────────────────────────────
+
+// GetUtente recupera username, email, ruolo e settore di un utente.
+func (db *DB) GetUtente(username string) (models.Utente, error) {
+	var u models.Utente
+	err := db.conn.QueryRow(`
+		SELECT username, COALESCE(email,''), ruolo, COALESCE(settore_id,'')
+		FROM utenti WHERE username = ?
+	`, username).Scan(&u.Username, &u.Email, &u.Ruolo, &u.SettoreID)
+	return u, err
+}
+
+// GetUtentiByRuolo restituisce gli utenti con il ruolo indicato.
+// Usato per broadcast notifiche ai magazzinieri.
+func (db *DB) GetUtentiByRuolo(ruolo string) ([]models.Utente, error) {
+	rows, err := db.conn.Query(`
+		SELECT username, COALESCE(email,''), ruolo, COALESCE(settore_id,'')
+		FROM utenti WHERE ruolo = ? ORDER BY username
+	`, ruolo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.Utente
+	for rows.Next() {
+		var u models.Utente
+		if err := rows.Scan(&u.Username, &u.Email, &u.Ruolo, &u.SettoreID); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+// GetFunzionarioSettore restituisce lo username del funzionario responsabile
+// del settore, oppure "" se non assegnato.
+func (db *DB) GetFunzionarioSettore(settoreID string) (string, error) {
+	var s sql.NullString
+	err := db.conn.QueryRow(`SELECT funzionario_username FROM settori WHERE id = ?`, settoreID).Scan(&s)
+	if err != nil {
+		return "", err
+	}
+	return s.String, nil
+}
+
+// GetOrdineMeta restituisce i metadati necessari per costruire una notifica
+// (proprietario, settore) per un dato ordine.
+func (db *DB) GetOrdineMeta(ordineID int64) (utenteUsername, settoreID, stato string, err error) {
+	err = db.conn.QueryRow(`
+		SELECT utente_username, settore_id, stato FROM ordini WHERE id = ?
+	`, ordineID).Scan(&utenteUsername, &settoreID, &stato)
+	return
+}
+
+// InsertNotifica crea una nuova riga in notifiche.
+func (db *DB) InsertNotifica(n models.Notifica) (int64, error) {
+	var ordineID, prodottoID interface{}
+	if n.OrdineID != nil {
+		ordineID = *n.OrdineID
+	}
+	if n.ProdottoID != nil {
+		prodottoID = *n.ProdottoID
+	}
+	res, err := db.conn.Exec(`
+		INSERT INTO notifiche (utente_username, tipo, messaggio, ordine_id, prodotto_id)
+		VALUES (?, ?, ?, ?, ?)
+	`, n.UtenteUsername, n.Tipo, n.Messaggio, ordineID, prodottoID)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// ListNotifiche restituisce le notifiche dell'utente filtrate per tab.
+// filtro: "" (Tutte) | "non_lette" | "ordini" | "scorte".
+func (db *DB) ListNotifiche(username, filtro string, limit int) ([]models.Notifica, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	where := "utente_username = ?"
+	args := []interface{}{username}
+	switch filtro {
+	case "non_lette":
+		where += " AND letta = 0"
+	case "ordini":
+		where += " AND tipo LIKE 'ordine_%'"
+	case "scorte":
+		where += " AND tipo = 'scorta'"
+	}
+	rows, err := db.conn.Query(`
+		SELECT id, utente_username, tipo, messaggio, ordine_id, prodotto_id, letta, creata_il
+		FROM notifiche
+		WHERE `+where+`
+		ORDER BY creata_il DESC, id DESC
+		LIMIT ?
+	`, append(args, limit)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.Notifica
+	for rows.Next() {
+		var n models.Notifica
+		var ordineID, prodottoID sql.NullInt64
+		var letta int
+		if err := rows.Scan(&n.ID, &n.UtenteUsername, &n.Tipo, &n.Messaggio, &ordineID, &prodottoID, &letta, &n.CreataIl); err != nil {
+			return nil, err
+		}
+		if ordineID.Valid {
+			v := ordineID.Int64
+			n.OrdineID = &v
+		}
+		if prodottoID.Valid {
+			v := prodottoID.Int64
+			n.ProdottoID = &v
+		}
+		n.Letta = letta != 0
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
+// CountNotificheNonLette è usato dal badge in topbar.
+func (db *DB) CountNotificheNonLette(username string) (int, error) {
+	var n int
+	err := db.conn.QueryRow(
+		`SELECT COUNT(*) FROM notifiche WHERE utente_username = ? AND letta = 0`,
+		username,
+	).Scan(&n)
+	return n, err
+}
+
+// MarcaNotificaLetta segna come letta una singola notifica, vincolata
+// all'utente proprietario per evitare cross-account writes.
+func (db *DB) MarcaNotificaLetta(id int64, username string) error {
+	_, err := db.conn.Exec(
+		`UPDATE notifiche SET letta = 1 WHERE id = ? AND utente_username = ?`,
+		id, username,
+	)
+	return err
+}
+
+// MarcaTutteLette segna come lette tutte le notifiche di un utente.
+func (db *DB) MarcaTutteLette(username string) error {
+	_, err := db.conn.Exec(
+		`UPDATE notifiche SET letta = 1 WHERE utente_username = ? AND letta = 0`,
+		username,
+	)
+	return err
+}
+
+// EnqueueEmail aggiunge un job di invio email alla outbox.
+func (db *DB) EnqueueEmail(out models.EmailOutbox) (int64, error) {
+	var notificaID interface{}
+	if out.NotificaID != nil {
+		notificaID = *out.NotificaID
+	}
+	res, err := db.conn.Exec(`
+		INSERT INTO email_outbox (destinatario, soggetto, corpo_html, tipo, notifica_id)
+		VALUES (?, ?, ?, ?, ?)
+	`, out.Destinatario, out.Soggetto, out.CorpoHTML, out.Tipo, notificaID)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// LeasePendingEmails restituisce fino a `limit` job pronti per essere inviati.
+// Non blocca le righe (SQLite con WAL gestisce serializzazione delle scritture).
+func (db *DB) LeasePendingEmails(now time.Time, limit int) ([]models.EmailOutbox, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := db.conn.Query(`
+		SELECT id, destinatario, soggetto, corpo_html, tipo,
+		       notifica_id, stato, tentativi, COALESCE(ultimo_errore,''),
+		       prossimo_tentativo, inviata_il, creata_il
+		FROM email_outbox
+		WHERE stato = 'in_attesa' AND prossimo_tentativo <= ?
+		ORDER BY prossimo_tentativo ASC
+		LIMIT ?
+	`, now, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.EmailOutbox
+	for rows.Next() {
+		var e models.EmailOutbox
+		var notificaID sql.NullInt64
+		var inviataIl sql.NullTime
+		if err := rows.Scan(&e.ID, &e.Destinatario, &e.Soggetto, &e.CorpoHTML, &e.Tipo,
+			&notificaID, &e.Stato, &e.Tentativi, &e.UltimoErrore,
+			&e.ProssimoTentativo, &inviataIl, &e.CreataIl); err != nil {
+			return nil, err
+		}
+		if notificaID.Valid {
+			v := notificaID.Int64
+			e.NotificaID = &v
+		}
+		if inviataIl.Valid {
+			t := inviataIl.Time
+			e.InviataIl = &t
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// MarkEmailSent segna un job come inviato con successo.
+func (db *DB) MarkEmailSent(id int64, sentAt time.Time) error {
+	_, err := db.conn.Exec(
+		`UPDATE email_outbox SET stato='inviata', inviata_il=?, ultimo_errore='' WHERE id = ?`,
+		sentAt, id,
+	)
+	return err
+}
+
+// MarkEmailFailed aggiorna il job dopo un tentativo fallito. Se `abbandona`
+// è true imposta stato='abbandonata', altrimenti rimette il job in attesa
+// con prossimo_tentativo aggiornato.
+func (db *DB) MarkEmailFailed(id int64, attempts int, errMsg string, nextAttempt time.Time, abbandona bool) error {
+	stato := "in_attesa"
+	if abbandona {
+		stato = "abbandonata"
+	}
+	_, err := db.conn.Exec(`
+		UPDATE email_outbox
+		SET stato=?, tentativi=?, ultimo_errore=?, prossimo_tentativo=?
+		WHERE id = ?
+	`, stato, attempts, errMsg, nextAttempt, id)
+	return err
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

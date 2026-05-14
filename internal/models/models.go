@@ -141,3 +141,43 @@ type ProdottoCatalogo struct {
 	ScortaMinima   int
 	Disponibile    int
 }
+
+// Notifica è un evento mostrato all'utente nella pagina /notifiche e nel
+// contatore in topbar. Tipi ammessi: "ordine_inviato", "ordine_approvato",
+// "ordine_rifiutato", "ordine_in_preparazione", "ordine_pronto", "scorta".
+type Notifica struct {
+	ID             int64
+	UtenteUsername string
+	Tipo           string
+	Messaggio      string
+	OrdineID       *int64
+	ProdottoID     *int64
+	Letta          bool
+	CreataIl       time.Time
+}
+
+// EmailOutbox è un job di invio email gestito dal worker asincrono.
+// Stati: "in_attesa", "inviata", "abbandonata".
+type EmailOutbox struct {
+	ID                int64
+	Destinatario      string
+	Soggetto          string
+	CorpoHTML         string
+	Tipo              string
+	NotificaID        *int64
+	Stato             string
+	Tentativi         int
+	UltimoErrore      string
+	ProssimoTentativo time.Time
+	InviataIl         *time.Time
+	CreataIl          time.Time
+}
+
+// ScortaSottoSoglia segnala un prodotto che, post-scarico FIFO, è sceso
+// sotto la soglia minima. Usato per emettere notifiche ai magazzinieri.
+type ScortaSottoSoglia struct {
+	ProdottoID    int64
+	ProdottoNome  string
+	Rimanente     int
+	SogliaMinima  int
+}

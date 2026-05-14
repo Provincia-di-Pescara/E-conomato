@@ -51,6 +51,11 @@
   </a>
 
   <div class="ec-side__group-label">Generale</div>
+  <a href="/notifiche" class="ec-side__link {{if eq .ActiveNav "notifiche"}}is-active{{end}}">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2H4.5L6 16Z"/><path d="M10 21h4"/></svg>
+    <span>Notifiche</span>
+    {{with .NotifNonLette}}{{if gt . 0}}<span class="ec-side__badge">{{.}}</span>{{end}}{{end}}
+  </a>
   <a href="/impostazioni" class="ec-side__link {{if eq .ActiveNav "impostazioni"}}is-active{{end}}">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 14.5a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V20a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1A2 2 0 1 1 4.1 16l.1-.1a1.7 1.7 0 0 0-1.2-2.9H2a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1A2 2 0 1 1 6 4.1l.1.1a1.7 1.7 0 0 0 2.9-1.2V2a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9H22a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.2 2.9Z"/></svg>
     <span>Impostazioni</span>

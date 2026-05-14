@@ -56,10 +56,11 @@
     </button>
 
     <div class="ec-side__group-label">Generale</div>
-    <button class="ec-side__link">
+    <a href="/notifiche" class="ec-side__link">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2H4.5L6 16Z"/><path d="M10 21h4"/></svg>
       <span>Notifiche</span>
-    </button>
+      {{with .NotifNonLette}}{{if gt . 0}}<span class="ec-side__badge">{{.}}</span>{{end}}{{end}}
+    </a>
 
     <div class="ec-side__foot">
       <span class="ec-avatar" style="width:36px;height:36px;font-size:13px">{{initials .Username}}</span>
@@ -87,10 +88,7 @@
         </span>{{end}}
       </div>
       <div class="ec-topbar__right">
-        <button class="ec-iconbtn" title="Notifiche">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2H4.5L6 16Z"/><path d="M10 21h4"/></svg>
-          {{if .DaApprovare}}<span class="ec-iconbtn__count">{{len .DaApprovare}}</span>{{end}}
-        </button>
+        {{template "topbar-bell" .}}
       </div>
     </header>
 

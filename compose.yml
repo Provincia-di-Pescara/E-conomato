@@ -9,7 +9,7 @@
 
 services:
   e-conomato:
-    image: ghcr.io/Provincia-di-Pescara/e-conomato:latest
+    image: ghcr.io/provincia-di-pescara/e-conomato:latest
     container_name: e-conomato
     restart: unless-stopped
     ports:

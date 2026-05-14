@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>E-conomato — Notifiche</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/fa/css/all.min.css" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body>
+
+<div class="ec-app">
+
+  {{template "sidebar-magazzino" .}}
+
+  <div class="ec-main">
+    <header class="ec-topbar">
+      <div class="ec-topbar__title">
+        {{if .BrandName}}{{.BrandName}}{{else}}E-conomato{{end}}
+        <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
+        <b>Notifiche</b>
+      </div>
+      <div class="ec-topbar__right">
+        {{template "topbar-bell" .}}
+      </div>
+    </header>
+
+    <main class="ec-content">
+      {{template "notifiche-body" .}}
+    </main>
+  </div>
+</div>
+
+</body>
+</html>

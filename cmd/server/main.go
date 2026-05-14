@@ -1,6 +1,7 @@
 package main
 
 import (
+"context"
 "crypto/sha256"
 "encoding/json"
 "fmt"
@@ -23,6 +24,7 @@ import (
 "github.com/Provincia-di-Pescara/e-conomato/internal/i18n"
 "github.com/Provincia-di-Pescara/e-conomato/internal/logger"
 "github.com/Provincia-di-Pescara/e-conomato/internal/models"
+"github.com/Provincia-di-Pescara/e-conomato/internal/notify"
 )
 
 // AppVersion is injected at build time via -ldflags "-X main.AppVersion=<ver>"
@@ -33,6 +35,7 @@ cfg       *config.Config
 db        *database.DB
 store     *sessions.CookieStore
 templates map[string]*template.Template
+notifier  *notify.Emitter
 }
 
 const sessionName = "magazzino-session"
@@ -93,21 +96,31 @@ return t.Format("02 Jan 2006 15:04")
 // I template magazziniere riusano la sidebar tramite il partial _sidebar-magazzino.
 // Lo associamo a parse-time così che {{template "sidebar-magazzino" .}} risolva.
 magazzinoTemplates := map[string]bool{
-"magazzino":           true,
-"dashboard-magazzino": true,
-"prodotto-form":       true,
-"lotto-form":          true,
-"impostazioni":        true,
-"fornitori":           true,
-"fornitore-form":      true,
-"acquisti":            true,
-"acquisto-detail":     true,
-"storico-ordini":      true,
+"magazzino":             true,
+"dashboard-magazzino":   true,
+"prodotto-form":         true,
+"lotto-form":            true,
+"impostazioni":          true,
+"fornitori":             true,
+"fornitore-form":        true,
+"acquisti":              true,
+"acquisto-detail":       true,
+"storico-ordini":        true,
+"notifiche-magazzino":   true,
 }
 sidebarMagazzino := filepath.Join(baseDir, "_sidebar-magazzino.html")
 prenotPartial := filepath.Join(baseDir, "_prenotazione-form.html")
+topbarBell := filepath.Join(baseDir, "_topbar-bell.html")
+notifBody := filepath.Join(baseDir, "_notifiche-body.html")
 
-names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino", "prodotto-form", "lotto-form", "impostazioni", "fornitori", "fornitore-form", "acquisti", "acquisto-detail", "storico-ordini"}
+names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino", "prodotto-form", "lotto-form", "impostazioni", "fornitori", "fornitore-form", "acquisti", "acquisto-detail", "storico-ordini", "notifiche-utente", "notifiche-funzionario", "notifiche-magazzino"}
+// template senza topbar (e quindi senza bell)
+noTopbar := map[string]bool{"login": true, "dashboard": true}
+notifiche := map[string]bool{
+"notifiche-utente":      true,
+"notifiche-funzionario": true,
+"notifiche-magazzino":   true,
+}
 a.templates = make(map[string]*template.Template, len(names))
 for _, name := range names {
 files := []string{filepath.Join(baseDir, name+".html")}
@@ -117,6 +130,12 @@ files = append(files, sidebarMagazzino)
 // dashboard-utente e dashboard-funzionario possono includere il form di prenotazione
 if name == "dashboard-utente" || name == "dashboard-funzionario" {
 files = append(files, prenotPartial)
+}
+if !noTopbar[name] {
+files = append(files, topbarBell)
+}
+if notifiche[name] {
+files = append(files, notifBody)
 }
 tmpl, err := template.New(name + ".html").Funcs(funcs).ParseFiles(files...)
 if err != nil {
@@ -300,6 +319,13 @@ func (a *App) viewData(r *http.Request, data map[string]any) map[string]any {
 	}
 	if _, ok := data["Version"]; !ok {
 		data["Version"] = AppVersion
+	}
+	if _, ok := data["NotifNonLette"]; !ok {
+		if u := a.getUsername(r); u != "" {
+			if n, err := a.db.CountNotificheNonLette(u); err == nil {
+				data["NotifNonLette"] = n
+			}
+		}
 	}
 	return data
 }
@@ -765,7 +791,48 @@ func (a *App) handleInviaOrdine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	logger.Info("ordine %d inviato da %s", ordineID, username)
+	a.notificaTransizione(ordineID, username)
 	hxRedirect(w, r, a.dashboardURLWithView(a.getRole(r), "ordini-personali"))
+}
+
+// notificaTransizione legge lo stato post-InviaOrdine e instrada le notifiche
+// al funzionario di settore (in_approvazione) o agli utenti+magazzinieri
+// (in_preparazione, in caso di auto-approvazione del funzionario).
+func (a *App) notificaTransizione(ordineID int64, attoreUsername string) {
+	if a.notifier == nil {
+		return
+	}
+	utente, settoreID, stato, err := a.db.GetOrdineMeta(ordineID)
+	if err != nil {
+		logger.Error("notify: GetOrdineMeta %d: %v", ordineID, err)
+		return
+	}
+	switch stato {
+	case "in_approvazione":
+		funz, err := a.db.GetFunzionarioSettore(settoreID)
+		if err != nil || funz == "" {
+			logger.Warn("notify: nessun funzionario per settore %s, salto notifica", settoreID)
+			return
+		}
+		a.notifier.EmitOrdine(notify.EventoOrdineParams{
+			Tipo:          "ordine_inviato",
+			OrdineID:      ordineID,
+			OrdineSettore: settoreID,
+			Destinatari:   []string{funz},
+			Mittente:      attoreUsername,
+			Messaggio:     fmt.Sprintf("Nuovo ordine #%d da approvare (settore %s).", ordineID, settoreID),
+		})
+	case "in_preparazione":
+		dest := append([]string{utente}, a.notifier.MagazzinieriUsernames()...)
+		a.notifier.EmitOrdine(notify.EventoOrdineParams{
+			Tipo:          "ordine_in_preparazione",
+			OrdineID:      ordineID,
+			OrdineSettore: settoreID,
+			Destinatari:   dest,
+			Mittente:      attoreUsername,
+			Messaggio:     fmt.Sprintf("Ordine #%d auto-approvato e in preparazione.", ordineID),
+		})
+	}
 }
 
 // -- Funzionario Handlers ──────────────────────────────────────────────────────
@@ -842,6 +909,20 @@ func (a *App) handleApprovaOrdine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	logger.Info("ordine %d approvato da %s", ordineID, a.getUsername(r))
+	if a.notifier != nil {
+		utente, settID, _, err := a.db.GetOrdineMeta(ordineID)
+		if err == nil {
+			dest := append([]string{utente}, a.notifier.MagazzinieriUsernames()...)
+			a.notifier.EmitOrdine(notify.EventoOrdineParams{
+				Tipo:          "ordine_approvato",
+				OrdineID:      ordineID,
+				OrdineSettore: settID,
+				Destinatari:   dest,
+				Mittente:      a.getUsername(r),
+				Messaggio:     fmt.Sprintf("Ordine #%d approvato.", ordineID),
+			})
+		}
+	}
 	http.Redirect(w, r, "/dashboard/funzionario", http.StatusSeeOther)
 }
 
@@ -877,6 +958,20 @@ func (a *App) handleRifiutaOrdine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	logger.Info("ordine %d rifiutato da %s", ordineID, a.getUsername(r))
+	if a.notifier != nil {
+		utente, settID, _, err := a.db.GetOrdineMeta(ordineID)
+		if err == nil {
+			a.notifier.EmitOrdine(notify.EventoOrdineParams{
+				Tipo:          "ordine_rifiutato",
+				OrdineID:      ordineID,
+				OrdineSettore: settID,
+				Destinatari:   []string{utente},
+				Mittente:      a.getUsername(r),
+				Messaggio:     fmt.Sprintf("Ordine #%d rifiutato.", ordineID),
+				NoteExtra:     note,
+			})
+		}
+	}
 	http.Redirect(w, r, "/dashboard/funzionario", http.StatusSeeOther)
 }
 
@@ -955,12 +1050,29 @@ func (a *App) handlePreparaOrdine(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "id non valido", 400)
 		return
 	}
-	if err := a.db.PreparaOrdineFIFO(ordineID); err != nil {
+	scorte, err := a.db.PreparaOrdineFIFO(ordineID)
+	if err != nil {
 		logger.Error("prepara FIFO ordine %d: %v", ordineID, err)
 		http.Error(w, "errore interno", 500)
 		return
 	}
 	logger.Info("ordine %d in preparazione (FIFO) da %s", ordineID, a.getUsername(r))
+	if a.notifier != nil {
+		utente, settID, _, err := a.db.GetOrdineMeta(ordineID)
+		if err == nil && utente != "" {
+			a.notifier.EmitOrdine(notify.EventoOrdineParams{
+				Tipo:          "ordine_in_preparazione",
+				OrdineID:      ordineID,
+				OrdineSettore: settID,
+				Destinatari:   []string{utente},
+				Mittente:      a.getUsername(r),
+				Messaggio:     fmt.Sprintf("Ordine #%d in preparazione.", ordineID),
+			})
+		}
+		for _, s := range scorte {
+			a.notifier.EmitScorta(s)
+		}
+	}
 	http.Redirect(w, r, "/dashboard/magazzino", http.StatusSeeOther)
 }
 
@@ -977,8 +1089,106 @@ func (a *App) handleSegnaPronte(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "errore interno", 500)
 		return
 	}
-	logger.Info("ordine %d pronto, notifica a %s (email TODO)", ordineID, utenteUsername)
+	logger.Info("ordine %d pronto, notifica a %s", ordineID, utenteUsername)
+	if a.notifier != nil && utenteUsername != "" {
+		_, settID, _, _ := a.db.GetOrdineMeta(ordineID)
+		a.notifier.EmitOrdine(notify.EventoOrdineParams{
+			Tipo:          "ordine_pronto",
+			OrdineID:      ordineID,
+			OrdineSettore: settID,
+			Destinatari:   []string{utenteUsername},
+			Mittente:      a.getUsername(r),
+			Messaggio:     fmt.Sprintf("Ordine #%d pronto al ritiro.", ordineID),
+		})
+	}
 	http.Redirect(w, r, "/dashboard/magazzino", http.StatusSeeOther)
+}
+
+// -- Notifiche Handlers ──────────────────────────────────────────────────────
+
+// GET /notifiche — pagina full delle notifiche dell'utente loggato.
+func (a *App) handleNotifichePage(w http.ResponseWriter, r *http.Request) {
+	username := a.getUsername(r)
+	tab := strings.TrimSpace(r.URL.Query().Get("tab"))
+	notifiche, err := a.db.ListNotifiche(username, tab, 200)
+	if err != nil {
+		logger.Error("list notifiche %s: %v", username, err)
+		http.Error(w, "errore interno", 500)
+		return
+	}
+	role := a.getRole(r)
+	tmplName := "notifiche-utente"
+	activeNav := "notifiche"
+	switch role {
+	case "funzionario":
+		tmplName = "notifiche-funzionario"
+	case "magazziniere", "admin":
+		tmplName = "notifiche-magazzino"
+	}
+	data := a.viewData(r, map[string]any{
+		"Username":    username,
+		"Role":        role,
+		"Notifiche":   notifiche,
+		"Tab":         tab,
+		"ActiveNav":   activeNav,
+		"SectionName": "Notifiche",
+		"SettoreNome": a.settoreNomeFor(username),
+	})
+	a.render(w, r, tmplName, data)
+}
+
+// GET /notifiche/badge — markup del bell aggiornato (per poll HTMX 60s).
+func (a *App) handleNotificheBadge(w http.ResponseWriter, r *http.Request) {
+	n, _ := a.db.CountNotificheNonLette(a.getUsername(r))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(renderTopbarBell(n))) //nolint:errcheck
+}
+
+// renderTopbarBell genera il markup del bell. Tenuto inline per evitare di
+// caricare un template intero per ogni poll.
+func renderTopbarBell(n int) string {
+	count := ""
+	if n > 0 {
+		count = fmt.Sprintf(`<span class="ec-iconbtn__count">%d</span>`, n)
+	}
+	return fmt.Sprintf(`<a href="/notifiche" class="ec-iconbtn" id="ec-topbar-bell" title="Notifiche" hx-get="/notifiche/badge" hx-trigger="every 60s" hx-swap="outerHTML"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2H4.5L6 16Z"/><path d="M10 21h4"/></svg>%s</a>`, count)
+}
+
+// POST /notifiche/{id}/letta — segna una singola notifica come letta.
+func (a *App) handleMarcaNotificaLetta(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", 400)
+		return
+	}
+	username := a.getUsername(r)
+	if err := a.db.MarcaNotificaLetta(id, username); err != nil {
+		logger.Error("marca letta notifica %d: %v", id, err)
+		http.Error(w, "errore interno", 500)
+		return
+	}
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Trigger", "notifiche-aggiornate")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	http.Redirect(w, r, "/notifiche", http.StatusSeeOther)
+}
+
+// POST /notifiche/leggi-tutte — segna come lette tutte le notifiche dell'utente.
+func (a *App) handleLeggiTutteNotifiche(w http.ResponseWriter, r *http.Request) {
+	username := a.getUsername(r)
+	if err := a.db.MarcaTutteLette(username); err != nil {
+		logger.Error("marca tutte lette %s: %v", username, err)
+		http.Error(w, "errore interno", 500)
+		return
+	}
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Trigger", "notifiche-aggiornate")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	http.Redirect(w, r, "/notifiche", http.StatusSeeOther)
 }
 
 // POST /ordini/{id}/consegna
@@ -1994,6 +2204,13 @@ cfg:   cfg,
 db:    db,
 store: sessions.NewCookieStore(authKey, encKey[:]),
 }
+app.notifier = notify.NewEmitter(db, cfg, func() (string, string) {
+b := app.brand()
+return b.Name, b.LogoSrc
+})
+ctx, cancel := context.WithCancel(context.Background())
+defer cancel()
+go notify.NewWorker(db, cfg, app.notifier).Run(ctx)
 
 webDir := "web"
 if _, err := os.Stat(webDir); os.IsNotExist(err) {
@@ -2083,6 +2300,12 @@ mux.HandleFunc("POST /impostazioni", app.requireRole("magazziniere")(app.handleI
 // Prenotazione prodotto esaurito (utente / funzionario)
 mux.HandleFunc("GET /prodotti/{id}/prenota", app.requireRole("user", "funzionario")(app.handlePrenotaProdottoForm))
 mux.HandleFunc("POST /prodotti/{id}/prenota", app.requireRole("user", "funzionario")(app.handlePrenotaProdotto))
+
+// Notifiche (tutti gli utenti autenticati)
+mux.HandleFunc("GET /notifiche", app.requireAuth(app.handleNotifichePage))
+mux.HandleFunc("GET /notifiche/badge", app.requireAuth(app.handleNotificheBadge))
+mux.HandleFunc("POST /notifiche/{id}/letta", app.requireAuth(app.handleMarcaNotificaLetta))
+mux.HandleFunc("POST /notifiche/leggi-tutte", app.requireAuth(app.handleLeggiTutteNotifiche))
 
 if cfg.LDAPHost == "mock" {
 logger.Warn("RUNNING IN MOCK MODE - any credentials accepted")

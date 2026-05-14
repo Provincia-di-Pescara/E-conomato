@@ -1,0 +1,59 @@
+publiccodeYmlVersion: 0.5.0
+name: E-conomato
+url: https://github.com/Provincia-di-Pescara/E-conomato
+softwareVersion: alpha
+releaseDate: 2026-05-14
+logo: https://github.com/Provincia-di-Pescara/E-conomato/blob/main/web/static/img/logo.png
+platforms:
+  - web
+categories:
+  - budgeting
+  - e-commerce
+  - sales-management
+organisation:
+  uri: https://www.provincia.pescara.it
+  name: Provincia di Pescara
+usedBy:
+  - Provincia di Pescara
+  - Comune di Montesilvano
+roadmap: https://github.com/Provincia-di-Pescara/E-conomato/blob/main/PLANE.md
+developmentStatus: development
+softwareType: standalone/web
+description:
+  it:
+    shortDescription: E-conomato è un gestionale per Enti Locali che dematerializza
+      magazzino e Fondo Economale, tracciando spese, P.E.G. e rendicontazioni.
+    longDescription: >-
+      E-conomato è un gestionale web sviluppato su misura per le pubbliche
+      amministrazioni. È progettato per digitalizzare e tracciare le richieste
+      di cancelleria e materiale di consumo interno.
+
+      Consente agli uffici di effettuare ordini, ai funzionari di approvarli e
+      al magazzino di gestire scorte ed evasioni con scarico automatico dei
+      costi tramite logica FIFO.
+
+
+      Il modulo **Cassa Economale** (in roadmap) estende la piattaforma alla
+      gestione del Fondo Economale per le piccole spese urgenti in contanti o
+      con carta dipartimentale, in conformità con il TUEL (D.Lgs. 267/2000) e
+      con i requisiti di Resa del Conto verso la Corte dei Conti (Modello 21
+      D.P.R. 194/1996).
+    features:
+      - economato
+      - magazzino
+      - spese
+      - rendiconto
+      - TUEL
+      - Modello 21 D.P.R. 194/1996
+legal:
+  license: AGPL-3.0-only
+maintenance:
+  type: internal
+  contacts:
+    - name: Mirko D'Addiego
+      email: mirko.daddiego@provincia.pecara.it
+      affiliation: Provincia di Pescara
+localisation:
+  localisationReady: false
+  availableLanguages:
+    - it

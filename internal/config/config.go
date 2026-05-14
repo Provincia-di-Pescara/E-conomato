@@ -59,6 +59,11 @@ type Config struct {
 	LogLevel string
 	// AppVersion: optional manual override for version string
 	AppVersion string
+
+	// AppBaseURL: base assoluto usato nei link delle email transazionali
+	// (es. "https://e-conomato.example.com"). Vuoto = i link nelle email usano
+	// path relativi.
+	AppBaseURL string
 }
 
 // Load reads environment variables and returns a populated Config.
@@ -96,6 +101,7 @@ func Load() *Config {
 
 		LogLevel:   strings.ToLower(getEnv("LOG_LEVEL", "info")),
 		AppVersion: getEnv("APP_VERSION", ""),
+		AppBaseURL: strings.TrimRight(getEnv("APP_BASE_URL", ""), "/"),
 	}
 }
 

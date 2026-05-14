@@ -1,0 +1,61 @@
+{{define "notifiche-body"}}
+<header class="ec-secthead">
+  <div>
+    <div class="ec-secthead__kicker">Centro notifiche</div>
+    <h1 class="ec-secthead__title">Le tue notifiche</h1>
+    <p class="ec-secthead__sub">Eventi degli ordini e degli scaffali. Le notifiche restano disponibili anche dopo la lettura.</p>
+  </div>
+  <div class="ec-secthead__right">
+    <form method="POST" action="/notifiche/leggi-tutte" style="margin:0">
+      <button type="submit" class="ec-btn">
+        <i class="fa-solid fa-check-double" style="margin-right:6px"></i>Segna tutte come lette
+      </button>
+    </form>
+  </div>
+</header>
+
+<nav class="ec-tabs" role="tablist" style="margin-bottom:18px">
+  <a href="/notifiche" class="ec-tab {{if eq .Tab ""}}is-active{{end}}" role="tab">Tutte</a>
+  <a href="/notifiche?tab=non_lette" class="ec-tab {{if eq .Tab "non_lette"}}is-active{{end}}" role="tab">Non lette</a>
+  <a href="/notifiche?tab=ordini" class="ec-tab {{if eq .Tab "ordini"}}is-active{{end}}" role="tab">Ordini</a>
+  <a href="/notifiche?tab=scorte" class="ec-tab {{if eq .Tab "scorte"}}is-active{{end}}" role="tab">Scorte</a>
+</nav>
+
+<div class="ec-card">
+  {{if .Notifiche}}
+    <ul class="ec-list" style="list-style:none;padding:0;margin:0">
+      {{range .Notifiche}}
+        <li class="ec-list__item {{if not .Letta}}is-unread{{end}}" style="display:flex;gap:14px;padding:14px 16px;border-bottom:1px solid var(--ec-line-100);align-items:flex-start">
+          <span class="ec-notif__icon" aria-hidden="true" style="font-size:18px;color:var(--ec-ink-300);min-width:24px">
+            {{if eq .Tipo "scorta"}}<i class="fa-solid fa-triangle-exclamation"></i>
+            {{else if eq .Tipo "ordine_inviato"}}<i class="fa-solid fa-paper-plane"></i>
+            {{else if eq .Tipo "ordine_approvato"}}<i class="fa-solid fa-circle-check"></i>
+            {{else if eq .Tipo "ordine_rifiutato"}}<i class="fa-solid fa-circle-xmark"></i>
+            {{else if eq .Tipo "ordine_in_preparazione"}}<i class="fa-solid fa-boxes-packing"></i>
+            {{else if eq .Tipo "ordine_pronto"}}<i class="fa-solid fa-hand-holding-box"></i>
+            {{else}}<i class="fa-solid fa-bell"></i>{{end}}
+          </span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:{{if .Letta}}500{{else}}700{{end}};color:var(--ec-ink-50)">{{.Messaggio}}</div>
+            <div style="margin-top:4px;color:var(--ec-ink-300);font-size:12px">{{fmtDate .CreataIl}} · <span class="ec-pill ec-pill--neutral" style="font-size:11px">{{.Tipo}}</span></div>
+          </div>
+          {{if not .Letta}}
+            <form method="POST" action="/notifiche/{{.ID}}/letta"
+                  hx-post="/notifiche/{{.ID}}/letta" hx-target="closest li" hx-swap="outerHTML"
+                  style="margin:0">
+              <button type="submit" class="ec-btn ec-btn--ghost" title="Segna come letta">
+                <i class="fa-solid fa-check"></i>
+              </button>
+            </form>
+          {{end}}
+        </li>
+      {{end}}
+    </ul>
+  {{else}}
+    <div style="padding:36px;text-align:center;color:var(--ec-ink-300)">
+      <i class="fa-solid fa-bell-slash" style="font-size:28px;display:block;margin-bottom:8px"></i>
+      Nessuna notifica in questa vista.
+    </div>
+  {{end}}
+</div>
+{{end}}

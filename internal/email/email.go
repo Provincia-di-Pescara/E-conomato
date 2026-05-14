@@ -15,6 +15,41 @@ import (
 	"github.com/Provincia-di-Pescara/e-conomato/internal/config"
 )
 
+// Send invia un messaggio HTML transazionale usando esclusivamente la
+// configurazione SMTP globale (cfg.SMTP*). È il punto d'aggancio per il worker
+// di notifiche: non gestisce credenziali utente AD come SendShareEmail.
+// Restituisce nil senza errore se la configurazione SMTP è incompleta, in modo
+// che il chiamante possa decidere di non riprovare.
+func Send(cfg *config.Config, to, subject, htmlBody string) error {
+	if cfg == nil {
+		return fmt.Errorf("email.Send: cfg nil")
+	}
+	if to == "" {
+		return fmt.Errorf("email.Send: destinatario vuoto")
+	}
+	smtpServer := cfg.SMTPServer
+	smtpPort := cfg.SMTPPort
+	smtpFrom := cfg.SMTPFrom
+	if smtpServer == "" || smtpPort == 0 || smtpFrom == "" {
+		log.Printf("email: SMTP non configurato, skip invio a %s", to)
+		return nil
+	}
+	smtpSecurity := strings.ToLower(strings.TrimSpace(cfg.SMTPSecurity))
+	if smtpSecurity == "" {
+		smtpSecurity = "auto"
+	}
+	if smtpSecurity != "auto" && smtpSecurity != "starttls" && smtpSecurity != "ssl" && smtpSecurity != "none" {
+		return fmt.Errorf("unsupported SMTP_SECURITY %q (allowed: auto,starttls,ssl,none)", smtpSecurity)
+	}
+	var auth smtp.Auth
+	if cfg.SMTPUser != "" || cfg.SMTPPassword != "" {
+		auth = smtp.PlainAuth("", cfg.SMTPUser, cfg.SMTPPassword, smtpServer)
+	}
+	msg := buildEmailMessage(smtpFrom, to, subject, htmlBody)
+	addr := fmt.Sprintf("%s:%d", smtpServer, smtpPort)
+	return sendMailWithMode(addr, smtpServer, smtpSecurity, auth, smtpFrom, []string{to}, msg)
+}
+
 // SendShareEmail sends an email with the download link to the specified recipient.
 // If optionalUserEmail and optionalUserPassword are provided, they take precedence
 // over the global SMTP configuration (useful when SMTPUserAuth is enabled).
