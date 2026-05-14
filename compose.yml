@@ -6,6 +6,11 @@
 #
 # L'immagine viene scaricata automaticamente da ghcr.io.
 # Per compilare dal sorgente: podman compose up -d --build
+#
+# Le variabili sono dichiarate esplicitamente nel blocco `environment:` per
+# compatibilità con Portainer e altri orchestratori che non gestiscono
+# `env_file` con file locali. Le `${VAR:-default}` leggono dall'`.env` di
+# Compose (o dalle variabili dello stack Portainer) e iniettano nel container.
 
 services:
   e-conomato:
@@ -18,7 +23,44 @@ services:
       - path: .env
         required: false
     environment:
+      # ── Server ────────────────────────────────────────────────────────────
       - APP_PORT=${APP_PORT:-8080}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - APP_VERSION=${APP_VERSION:-}
+      - APP_BASE_URL=${APP_BASE_URL:-}
+
+      # ── Sessioni / Sicurezza ──────────────────────────────────────────────
+      - SESSION_SECRET=${SESSION_SECRET:-please-change-me}
+      - SECURE_COOKIES=${SECURE_COOKIES:-true}
+      - LOGIN_SESSION_TTL_HOURS=${LOGIN_SESSION_TTL_HOURS:-24}
+
+      # ── LDAP / Active Directory ───────────────────────────────────────────
+      - LDAP_HOST=${LDAP_HOST:-mock}
+      - LDAP_TLS_SKIP_VERIFY=${LDAP_TLS_SKIP_VERIFY:-false}
+      - LDAP_STARTTLS=${LDAP_STARTTLS:-true}
+      - LDAP_BASE_DN=${LDAP_BASE_DN:-dc=example,dc=com}
+      - LDAP_USER_DN_TEMPLATE=${LDAP_USER_DN_TEMPLATE:-%s@example.com}
+      - LDAP_BIND_DN=${LDAP_BIND_DN:-}
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD:-}
+      - LDAP_REQUIRED_GROUP=${LDAP_REQUIRED_GROUP:-}
+      - LDAP_MAGAZZINIERE_GROUP=${LDAP_MAGAZZINIERE_GROUP:-}
+      - LDAP_FUNZIONARIO_GROUP=${LDAP_FUNZIONARIO_GROUP:-}
+
+      # ── Branding ──────────────────────────────────────────────────────────
+      - BRAND_NAME=${BRAND_NAME:-}
+      - BRAND_LOGO=${BRAND_LOGO:-}
+
+      # ── Persistenza ───────────────────────────────────────────────────────
+      - DB_PATH=${DB_PATH:-/data/magazzino.db}
+
+      # ── SMTP (opzionale) ──────────────────────────────────────────────────
+      - SMTP_SERVER=${SMTP_SERVER:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURITY=${SMTP_SECURITY:-auto}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - SMTP_USER_AUTH=${SMTP_USER_AUTH:-false}
     volumes:
       # Se DATA_DIR è definito (es. ./data) fa bind mount, altrimenti usa il volume named
       - ${DATA_DIR:-e_conomato_data}:/data:rw,Z
