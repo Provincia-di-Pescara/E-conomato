@@ -42,13 +42,13 @@
 - [x] **Consegna Finale:** Pulsanti per segnare l'ordine come "Pronto" e "Consegnato".
 
 ## 7. Notifiche ed Email
-- [ ] **Tabella notifiche in DB:** `CREATE TABLE notifiche(id, utente_username, tipo, messaggio, ordine_id NULL, letta BOOL, creata_il)` + indice su `(utente_username, letta)`.
-- [ ] **Emitter centralizzato:** funzione `db.EmitNotifica(utente, tipo, ordineID, msg)` chiamata dai transition handler `InviaOrdine`, `ApprovaOrdine`, `RifiutaOrdine`, `PreparaOrdineFIFO`, `SegnaOrdinePronte`, `ConsegnaOrdine`.
-- [ ] **Endpoint UI:** `GET /notifiche` (pagina full + tab Tutte / Non lette / Ordini / Scorte), `POST /notifiche/{id}/letta`, `POST /notifiche/leggi-tutte`.
-- [ ] **Badge topbar:** componente con `hx-trigger="every 60s"` che ricarica contatore non-lette.
-- [ ] **Template Email:** Modelli HTML per Ordine Ricevuto, Approvato, Pronto al Ritiro, Rifiutato.
-- [ ] **Worker Asincrono:** invio mail in goroutine (cablata sull'`internal/email` esistente).
-- [ ] **Integrazione Trigger:** ogni emitter produce sia riga DB sia job email se `SMTP_SERVER` configurato.
+- [x] **Tabella notifiche in DB:** `CREATE TABLE notifiche(id, utente_username, tipo, messaggio, ordine_id NULL, prodotto_id NULL, letta BOOL, creata_il)` + indice su `(utente_username, letta, creata_il DESC)`.
+- [x] **Emitter centralizzato:** `notify.Emitter.EmitOrdine` / `EmitScorta` invocati dai transition handler `InviaOrdine`, `ApprovaOrdine`, `RifiutaOrdine`, `PreparaOrdineFIFO`, `SegnaOrdinePronte`. `ConsegnaOrdine` non emette (chiusura ciclo).
+- [x] **Endpoint UI:** `GET /notifiche` (pagina full + tab Tutte / Non lette / Ordini / Scorte), `POST /notifiche/{id}/letta`, `POST /notifiche/leggi-tutte`, `GET /notifiche/badge` per il poll HTMX.
+- [x] **Badge topbar:** partial `_topbar-bell.html` con `hx-trigger="every 60s"` che ricarica il contatore non-lette su tutte le pagine con topbar.
+- [x] **Template Email:** `internal/email/orders.go` con `BuildOrdineEmail` (Inviato, Approvato, Rifiutato, In preparazione, Pronto) e `BuildScortaEmail`.
+- [x] **Worker Asincrono:** queue durevole `email_outbox` consumata da `internal/notify/worker.go` con backoff esponenziale (60s · 2^n, cap 1h) e abbandono dopo 5 tentativi.
+- [x] **Integrazione Trigger:** ogni `EmitOrdine` / `EmitScorta` scrive sempre la riga `notifiche` e accoda un job `email_outbox` solo se `SMTP_SERVER` configurato e l'utente ha un'email.
 
 ## 8. Reportistica (Area Magazzino)
 - [ ] **API Statistiche:** Creare endpoint che restituiscono dati aggregati in JSON (spesa per settore, consumi mensili).
@@ -64,7 +64,7 @@
 ## 10. UI Redesign — Residui dal bundle Claude Design
 *Il redesign generale (design system `ec-*`, app-shell sidebar+topbar, login split, dashboard utente/funzionario/magazziniere, anagrafica prodotti) è stato applicato. Restano da implementare le schermate del bundle non ancora cablate al backend.*
 
-- [ ] **Schermata Notifiche:** vedi sezione 7 sopra.
+- [x] **Schermata Notifiche:** pagina `/notifiche` ruolo-aware (`notifiche-utente`, `notifiche-funzionario`, `notifiche-magazzino`) con tab Tutte / Non lette / Ordini / Scorte, bottone "Segna tutte come lette" e mark-as-read riga per riga via HTMX.
 - [x] **Schermata Impostazioni:** endpoint `/impostazioni` con tab Generale/Operatività/Notifiche/Sistema, branding (nome ente + logo) e parametri operativi modificabili dal magazziniere.
 - [ ] **Modale Anteprima FIFO:** Endpoint che, dato un `ordine_id`, restituisce la simulazione dei prelievi per lotto (senza commit) e il costo totale per settore. Da renderizzare in `ec-modal--wide` aperto dalla card del magazziniere — vedi `magazzino.jsx → FifoModal`.
 - [ ] **Reportistica (Tab Magazziniere):** Tab `/report` con KPI (spesa anno, ordini evasi, tempo medio evasione, settori attivi), bar chart "Spesa mensile" e legenda "Spesa per settore" — richiede aggregazioni SQL su `movimenti_magazzino` per mese e per `settore_id`, più export CSV. CSS già pronto (`ec-charts`, `ec-bar`, `ec-legend`).
@@ -89,3 +89,85 @@
 - [x] **Prenotazione prodotto esaurito:** se `Disponibile == 0` il prodotto mostra un bottone "Prenota rifornimento" che apre una modale (`/prodotti/{id}/prenota`), aggiunge la riga al carrello con flag `prenotazione`, e il magazziniere la vede taggata nel FIFO (resta `in_attesa` finché non entra un lotto).
 - [x] **Icone Font Awesome per categorie e prodotti:** Font Awesome Free 6 self-hosted in `web/static/fa/`, colonne `icona` su `categorie` e `prodotti`, picker con whitelist nei form CRUD.
 - [ ] **Utenti multi-ufficio (sviluppo futuro):** introdurre tabella junction `utenti_settori(username, settore_id)`, migrare i record `utenti.settore_id` esistenti, selettore di settore attivo nella topbar e scoping degli ordini sul settore attivo della sessione.
+
+## 12. Modulo Cassa Economale
+*Estensione di E-conomato per la gestione del Fondo Economale (piccole spese in contanti / carta dipartimentale). L'Economo opera come Agente Contabile ai sensi degli artt. 93 e 233 del D.Lgs. 267/2000 (TUEL) e risponde alla Corte dei Conti. Vedi `PLANE.md` § 8 per analisi e requisiti normativi completi.*
+
+### 12.1 Database (Schema)
+- [ ] **Tabella `capitoli_spesa`:** `(id, anno, codice_peg, descrizione, importo_stanziato, attivo, creato_il)` con `UNIQUE(anno, codice_peg)`.
+- [ ] **Tabella `spese_economali`:** `(id, utente_username, settore_id, capitolo_id NULL, motivazione, importo_presunto, importo_effettivo NULL, tipo_pagamento, stato, fornitore NULL, data_documento NULL, estremi_documento NULL, note_funzionario, note_economo, funzionario_username, economo_username, data_creazione, data_autorizzazione, data_impegno, data_rendicontazione, data_chiusura)`. Stati: `in_approvazione`, `autorizzata`, `rifiutata_funz`, `impegnata`, `rifiutata_econ`, `rendicontata`, `chiusa`. `tipo_pagamento`: `contanti` | `carta`.
+- [ ] **Tabella `allegati_spesa`:** `(id, spesa_id, filename, mime_type, dimensione, blob_data, caricato_da, caricato_il)` — pezze d'appoggio salvate come BLOB.
+- [ ] **Tabella `movimenti_cassa`:** `(id, data, tipo, descrizione, importo, riferimento_spesa_id NULL, riferimento_reintegro_id NULL, creato_da)`. Tipi: `anticipazione`, `reintegro`, `uscita`, `restituzione_tesoreria`.
+- [ ] **Tabelle `reintegri` + `reintegro_spese`:** numerazione progressiva annuale dei reintegri (`numero`, `anno`, `data_richiesta`, `data_emissione_mandato NULL`, `importo_totale`, `stato`, `economo_username`) + join verso le spese chiuse incluse nel reintegro.
+- [ ] **Indici:** `(anno, codice_peg)`, `spese_economali(stato)`, `(settore_id)`, `(utente_username)`, `movimenti_cassa(data)`.
+- [ ] **Migrazione idempotente:** integrare in `migrate()` (`CREATE TABLE IF NOT EXISTS` + helper `ensureColumn`).
+
+### 12.2 Modelli Go
+- [ ] **Struct:** `CapitoloSpesa`, `SpesaEconomale`, `AllegatoSpesa`, `MovimentoCassa`, `Reintegro` in `internal/models/`.
+- [ ] **Viewmodel:** `CapitoloConSaldi` (stanziato/impegnato/speso/residuo), `RigaGiornaleCassa`, `RigaReintegro`, `SezioneContoGiudiziale`.
+
+### 12.3 LDAP & Ruolo Economo
+- [ ] **Env `LDAP_ECONOMO_GROUP`:** aggiungere in `.env.example` e `internal/config/config.go`.
+- [ ] **`resolveRole()`:** estendere in `internal/auth/ldap.go` con precedenza `admin > magazziniere > economo > funzionario > user`.
+- [ ] **Mock dev:** username con suffisso `.economo` instrada al ruolo economo.
+- [ ] **Aggiornare CLAUDE.md:** documentare il nuovo ruolo nella sezione *Roles* e la precedenza.
+
+### 12.4 Repo methods (`internal/database/sqlite.go`)
+- [ ] **CRUD capitoli:** `CreaCapitolo`, `AggiornaCapitolo`, `DisattivaCapitolo`, `GetCapitoliConSaldi`.
+- [ ] **Workflow spese:** `CreaSpesa`, `AutorizzaSpesa`, `RifiutaSpesaFunzionario`, `ImpegnaSpesa` (transazione + validazione capienza capitolo), `RifiutaSpesaEconomo`, `AllegaPezzaAppoggio`, `RendicontaSpesa` (richiede `fornitore` + `data_documento` + `estremi_documento` obbligatori), `ChiudiSpesa` (scrive `importo_effettivo`, libera residuo, inserisce riga `movimenti_cassa` di tipo `uscita`).
+- [ ] **Liste:** `GetSpeseSettore`, `GetSpeseUtente`, `GetSpeseDaImpegnare`, `GetSpeseDaChiudere`, `GetAllegato`.
+- [ ] **Movimenti cassa:** `RegistraAnticipazione`, `RegistraReintegro` (join con spese chiuse del periodo selezionato), `RegistraRestituzioneTesoreria`, `GetSaldoCassa`, `GetGiornaleCassa(da, a)`.
+- [ ] **Reportistica:** `BuildRichiestaReintegro(periodo)` → `[]RigaReintegro` raggruppate per capitolo; `BuildContoGiudiziale(anno)` → `SezioneContoGiudiziale`.
+
+### 12.5 Handler & Routing (`cmd/server/main.go`)
+- [ ] **Rotte utente/funzionario:** `GET /spese`, `GET /spese/nuova`, `POST /spese`, `GET /spese/{id}`.
+- [ ] **Transizioni:** `POST /spese/{id}/autorizza|rifiuta-funz|impegna|rifiuta-econ|rendiconta|chiudi`.
+- [ ] **Allegati:** `POST /spese/{id}/allegato`, `GET /spese/{id}/allegato/{aid}` (check accesso ruolo-aware).
+- [ ] **CRUD capitoli:** rotte sotto `/capitoli` (solo economo).
+- [ ] **Dashboard:** `GET /dashboard-economo`.
+- [ ] **Reportistica:** `GET /economo/giornale-cassa` (filtro periodo, output HTML/CSV/PDF); `GET /economo/reintegro/nuovo`, `POST /economo/reintegro`, `GET /economo/reintegro/{id}`, `GET /economo/reintegro/{id}/pdf|csv|allegati.zip`; `GET /economo/conto-giudiziale?anno=YYYY` (HTML/PDF/CSV).
+- [ ] **Cassa:** `POST /economo/anticipazione`, `POST /economo/restituzione-tesoreria`.
+- [ ] **Middleware:** `requireRole("economo")` su tutte le rotte privilegiate; check ownership/settore nei handler utente/funzionario.
+
+### 12.6 Notifiche
+- [ ] **`EventoSpesa` enum:** nuovo `internal/email/spese.go` con stati `inviata`, `autorizzata`, `rifiutata_funz`, `impegnata`, `rifiutata_econ`, `rendicontata`, `chiusa`.
+- [ ] **`BuildSpesaEmail`:** template email coerente con `BuildOrdineEmail` (renderEmailShell + meta righe).
+- [ ] **`EmitSpesa`** in `internal/notify`: scrive riga `notifiche` + accoda `email_outbox`, chiama `e.wake()`.
+- [ ] **Routing eventi:** nuova → funzionario settore; autorizzata → economi (broadcast); impegno/rifiuto/chiusura → utente richiedente; rendicontata → economi.
+
+### 12.7 Templates (`web/templates/`)
+- [ ] **`dashboard-economo.html`:** KPI (saldo cassa, capitoli con progress bar capienza, spese da impegnare, spese da chiudere, ultimi reintegri).
+- [ ] **`_sidebar-economo.html`** e **`notifiche-economo.html`**.
+- [ ] **Liste:** `spese-utente.html`, `spese-funzionario.html`, `spese-economo.html`.
+- [ ] **Dettaglio:** `spesa-detail.html` con sezioni role-aware.
+- [ ] **Form:** `spesa-form.html` (creazione), `spesa-rendiconta-form.html` (campi obbligatori fornitore / data documento / estremi).
+- [ ] **Capitoli:** `capitoli.html` e `capitolo-form.html`.
+- [ ] **Report:** `report-giornale-cassa.html`, `report-reintegro.html`, `report-conto-giudiziale.html` (Modello 21).
+- [ ] **Coerenza UI:** riusare il design system `ec-*` esistente; sidebar e topbar bell condivisi tramite partial come per il magazziniere.
+
+### 12.8 Upload allegati
+- [ ] **Multipart:** `r.ParseMultipartForm(10 << 20)` (limite 10 MB).
+- [ ] **Whitelist MIME:** `application/pdf`, `image/jpeg`, `image/png`.
+- [ ] **Salvataggio:** BLOB in `allegati_spesa` con `mime_type` e `dimensione`.
+- [ ] **Serving:** `Content-Disposition: inline; filename=...` con verifica accesso (richiedente, funzionario settore, economo, admin).
+
+### 12.9 Calcolo saldi (real-time)
+- [ ] **Per capitolo:** `residuo = importo_stanziato − impegnato − speso`, dove `impegnato = SUM(importo_presunto WHERE stato IN ('impegnata','rendicontata'))` e `speso = SUM(importo_effettivo WHERE stato='chiusa')`.
+- [ ] **Saldo cassa:** `SUM(entrate movimenti_cassa) − SUM(uscite movimenti_cassa)`.
+- [ ] **Nessuna materializzazione:** query on-demand, evitare campi cache per non avere disallineamenti.
+
+### 12.10 i18n
+- [ ] **Chiavi `economale.*`** in `internal/i18n/messages.go` per tutte le locale (it autoritativa). Coprire: stati, azioni, etichette form, intestazioni report.
+
+### 12.11 Reportistica giudiziale (Fase 4)
+- [ ] **CSV writer** `internal/report/csv.go`: BOM UTF-8 per Excel italiano, separatore `;`, formato numerico `1.234,56`, date `gg/mm/aaaa`.
+- [ ] **PDF writer** `internal/report/pdf.go`: libreria Go puro (`gofpdf` o `gopdf`), template Modello 21 per il Conto Giudiziale, intestazione Ente da tabella `impostazioni` (`brand_name`, `branding_logo`).
+- [ ] **ZIP allegati** `internal/report/zip.go`: streaming `archive/zip`, naming `pratica-{id}__{filename}`, un ZIP per Richiesta di Reintegro.
+- [ ] **Endpoint export:** corretti `Content-Type` e `Content-Disposition: attachment; filename=...`.
+- [ ] **Numerazione progressiva annuale** per pratiche e reintegri (resetta al cambio anno).
+
+### 12.12 Test smoke
+- [ ] **End-to-end mock LDAP:** utente crea → funzionario autorizza → economo impegna (su capitolo) → utente allega scontrino → utente rendiconta (con fornitore + data + estremi) → economo chiude (con `importo_effettivo`) → economo genera reintegro → export CSV/PDF/ZIP → economo chiude anno con Conto Giudiziale.
+- [ ] **Validazione capienza:** spesa che eccede il residuo capitolo → errore + rollback transazione.
+- [ ] **Accessi cross-ruolo:** verifica 403 su rotte economo da utente/funzionario/magazziniere.
+- [ ] **Coerenza saldo cassa:** somma movimenti `entrate − uscite` deve coincidere con saldo reale dopo ogni transizione.

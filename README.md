@@ -16,8 +16,10 @@
 ---
 
 ## 🎯 Cos'è E-conomato?
-E-conomato è un gestionale web sviluppato su misura per le pubbliche amministrazioni. È progettato per digitalizzare e tracciare le richieste di cancelleria e materiale di consumo interno. 
+E-conomato è un gestionale web sviluppato su misura per le pubbliche amministrazioni. È progettato per digitalizzare e tracciare le richieste di cancelleria e materiale di consumo interno.
 Consente agli uffici di effettuare ordini, ai funzionari di approvarli e al magazzino di gestire scorte ed evasioni con scarico automatico dei costi tramite logica FIFO.
+
+Il modulo **Cassa Economale** (in roadmap) estende la piattaforma alla gestione del Fondo Economale per le piccole spese urgenti in contanti o con carta dipartimentale, in conformità con il TUEL (D.Lgs. 267/2000) e con i requisiti di Resa del Conto verso la Corte dei Conti (Modello 21 D.P.R. 194/1996).
 
 ---
 
@@ -32,9 +34,10 @@ Il sistema è un monolita moderno, leggero e ultra-veloce:
 
 ## 👥 Ruoli e Permessi
 L'autenticazione è centralizzata tramite Active Directory (LDAP). I ruoli sono associati in base ai gruppi e ai settori di appartenenza:
-- **Utente Base**: Naviga il catalogo, inserisce richieste nel carrello e visualizza lo storico dei propri ordini.
-- **Funzionario**: Approva, riduce le quantità o rifiuta (motivandolo) le richieste del proprio settore di competenza. Le richieste personali dei funzionari sono invece auto-approvate.
+- **Utente Base**: Naviga il catalogo, inserisce richieste nel carrello e visualizza lo storico dei propri ordini. Con il modulo Cassa Economale può inoltre presentare richieste di anticipo di spesa e caricare le pezze d'appoggio.
+- **Funzionario**: Approva, riduce le quantità o rifiuta (motivandolo) le richieste del proprio settore di competenza. Le richieste personali dei funzionari sono invece auto-approvate. Autorizza anche le richieste di spesa economale del settore.
 - **Magazziniere**: Gestisce l'anagrafica, carica fatture/DDT (creando "lotti" di acquisto), evade le richieste, monitora le scorte minime, conclude il flusso di consegna e accede alla reportistica finanziaria (export CSV e grafici Chart.js).
+- **Economo** *(nuovo ruolo, in roadmap)*: Agente Contabile dell'Ente. Gestisce i Capitoli di Spesa (P.E.G.), valida e impegna le richieste di anticipo, chiude le pratiche con importo effettivo e produce i report ufficiali (Giornale di Cassa, Richiesta di Reintegro, Conto Giudiziale).
 
 ---
 
@@ -44,6 +47,13 @@ L'autenticazione è centralizzata tramite Active Directory (LDAP). I ruoli sono 
 3. **Evasione e Logica FIFO**: Il magazziniere processa l'ordine. Il sistema Go calcola automaticamente i costi scalando le giacenze dai lotti d'acquisto più vecchi (`ORDER BY data_acquisto ASC`), garantendo la tracciabilità finanziaria.
 4. **Pronto al Ritiro**: L'ordine viene confezionato e una notifica email avvisa l'utente (Stato: `pronto`).
 5. **Consegna**: Al momento del ritiro fisico, l'ordine viene chiuso (Stato: `ritirato`).
+
+### Iter della Spesa Economale *(modulo Cassa Economale — in roadmap)*
+1. **Richiesta**: L'utente compila motivazione e importo presunto (Stato: `in_approvazione`).
+2. **Autorizzazione**: Il funzionario del settore approva o rifiuta (Stato: `autorizzata` / `rifiutata_funz`).
+3. **Impegno e Avvallo**: L'Economo assegna il Capitolo di Spesa, verifica la capienza e autorizza l'anticipo (Stato: `impegnata`). L'importo presunto viene scalato come budget impegnato.
+4. **Rendicontazione**: L'utente carica lo scontrino e inserisce i dati fiscali obbligatori — fornitore, data documento, estremi (Stato: `rendicontata`).
+5. **Chiusura**: L'Economo verifica la pezza d'appoggio, registra l'importo effettivo e libera l'eventuale residuo sul capitolo (Stato: `chiusa`). Il movimento alimenta il Giornale di Cassa.
 
 ---
 
@@ -57,6 +67,7 @@ L'autenticazione è centralizzata tramite Active Directory (LDAP). I ruoli sono 
 - [ ] **Motore di Evasione FIFO**: Logica per il prelievo lotti ed eventuale evasione parziale.
 - [ ] **Notifiche Transazionali**: Email asincrone per i cambi di stato dell'ordine.
 - [ ] **Reportistica**: Dashboard direzionale, grafici e export CSV a disposizione del Magazziniere.
+- [ ] **Modulo Cassa Economale**: Gestione del Fondo Economale (richiesta/autorizzazione/impegno/rendicontazione), Capitoli di Spesa PEG con calcolo capienza in tempo reale, nuovo ruolo Economo via gruppo LDAP, allegati scontrini come BLOB in SQLite, reportistica giudiziale (Giornale di Cassa, Richiesta di Reintegro, Conto Giudiziale — Modello 21) con export CSV/PDF e bundle ZIP delle pezze d'appoggio.
 - [ ] **Deploy**: Configurazione Docker multi-stage e script di backup.
 
 ---

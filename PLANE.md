@@ -175,3 +175,120 @@ CREATE TABLE IF NOT EXISTS movimenti_magazzino (
     FOREIGN KEY(riga_ordine_id) REFERENCES righe_ordine(id),
     FOREIGN KEY(lotto_id) REFERENCES lotti_acquisto(id)
 );
+```
+
+---
+
+## 8. Estensione Piattaforma — Modulo "Cassa Economale"
+
+### 8.1 Obiettivo del Progetto
+
+Estensione dell'applicativo E-conomato con un nuovo modulo destinato alla gestione del **Fondo Economale**, ovvero delle piccole spese urgenti sostenute in contanti o con carta dipartimentale.
+
+L'obiettivo è dematerializzare e tracciare l'intero ciclo di vita della spesa economale — dalla richiesta alla rendicontazione — estendendo le funzionalità della piattaforma dall'attuale gestione fisica del magazzino alla gestione dei flussi finanziari di modesta entità, in piena conformità con i regolamenti di contabilità dell'Ente e con la normativa nazionale sugli Agenti Contabili.
+
+### 8.2 Inquadramento Normativo
+
+Dal punto di vista normativo, la gestione del Fondo Economale negli Enti Locali è materia particolarmente delicata. L'Economo non è un semplice dipendente che gestisce una "cassa": assume la veste di **Agente Contabile** ai sensi degli artt. **93 e 233 del D.Lgs. 18 agosto 2000 n. 267 (TUEL)** e, in quanto tale, **risponde personalmente alla Corte dei Conti** dell'integrità e della corretta gestione delle somme affidategli.
+
+Il suo rendiconto (la cosiddetta **"Resa del Conto"**) non è una semplice lista di spese, bensì un documento ufficiale che deve seguire schemi precisi (in particolare il **Modello 21 del D.P.R. 31 gennaio 1996 n. 194**), atti a consentire alla Ragioneria dell'Ente l'emissione dei mandati di pagamento a copertura delle anticipazioni erogate.
+
+Conseguentemente, l'applicativo deve:
+
+1. **Raccogliere** tutti i dati formalmente richiesti per la rendicontazione (anche oltre quelli operativi).
+2. **Generare** i report giudiziali nei formati attesi dai gestionali della Ragioneria.
+3. **Conservare** in forma immodificabile le pezze d'appoggio (scontrini, fatture di cortesia, ricevute fiscali).
+
+Ulteriori requisiti formali sugli originali cartacei (non automatizzabili dal software ma da prevedere in procedura):
+
+- **Scontrini parlanti**: devono riportare il Codice Fiscale o la Partita IVA dell'Ente.
+- **Timbro di annullo**: sull'originale cartaceo va apposto il timbro *"Pagato a valere sul fondo economale"* per evitare doppi rimborsi.
+
+### 8.3 Contesto e Vantaggi Attesi
+
+Attualmente, l'applicativo gestisce con successo il flusso logistico (richiesta e scarico di beni fisici). L'introduzione della Cassa Economale permetterà di:
+
+- **Visibilità in tempo reale sui Capitoli di Bilancio (P.E.G.)**: calcolo immediato delle quote stanziate, impegnate e spese.
+- **Tracciabilità e Trasparenza**: ogni spesa in contanti o con carta dipartimentale sarà legata al dipendente richiedente, al funzionario autorizzatore e all'economo.
+- **Dematerializzazione delle pezze d'appoggio**: archiviazione digitale di scontrini e fatture di cortesia, fondamentale per le verifiche dei Revisori dei Conti.
+- **Semplificazione procedurale**: un'unica interfaccia per i dipendenti, sia per la richiesta di cancelleria che per l'anticipo di cassa.
+- **Conformità immediata**: produzione automatica della modulistica giudiziale prescritta.
+
+### 8.4 Flusso Operativo (Workflow a 4 fasi)
+
+Il modulo introduce un workflow rigorosamente separato dall'algoritmo FIFO del magazzino fisico:
+
+1. **Richiesta (Utente)** — Il dipendente compila una richiesta a testo libero indicando la motivazione dell'acquisto e un "importo presunto". Stato iniziale: `in_approvazione`.
+2. **Autorizzazione (Funzionario)** — Il Responsabile del Settore valuta la congruità della richiesta per il proprio ufficio e la approva (`autorizzata`) o la rifiuta con motivazione (`rifiutata_funz`).
+3. **Impegno e Avvallo (Economo)** — L'Economo riceve la pratica, verifica la capienza del relativo Capitolo di Spesa, assegna il codice P.E.G. e autorizza l'anticipo dei contanti (o l'uso della carta dipartimentale). L'importo presunto viene provvisoriamente scalato come "budget impegnato". Stato: `impegnata` (o `rifiutata_econ`).
+4. **Rendicontazione e Chiusura (Utente ed Economo)** — A spesa effettuata, l'utente carica lo/gli scontrino/i nel sistema (stato `rendicontata`). L'Economo verifica la pezza d'appoggio, inserisce l'"importo effettivo" e i dati fiscali obbligatori, quindi chiude la pratica (stato `chiusa`), liberando l'eventuale budget residuo sul capitolo.
+
+### 8.5 Dati Obbligatori per la Rendicontazione
+
+Affinché il report sia valido davanti ai revisori dei conti, in fase di rendicontazione la pratica **deve** contenere, oltre all'`importo_effettivo` e all'allegato:
+
+- **Fornitore (Creditore)**: ragione sociale del soggetto che ha venduto il bene/servizio (es. "Ferramenta Rossi Srl").
+- **Data del documento di spesa**: data stampata sullo scontrino/fattura (che può differire dalla data in cui l'Economo chiude la pratica a sistema).
+- **Estremi del documento**: numero dello scontrino, della ricevuta fiscale o della fattura di cortesia.
+
+L'assenza anche di uno solo di questi tre elementi comporta il **rifiuto del report in sede di controllo**.
+
+### 8.6 Modello dei Ruoli e Sicurezza
+
+L'architettura si appoggia sull'integrazione nativa con Active Directory (LDAP):
+
+- **Utente Base**: può inserire richieste e allegare file solo per le proprie pratiche.
+- **Funzionario (Responsabile)**: ha visibilità sulle pratiche del proprio settore per l'approvazione formale.
+- **Economo (nuovo ruolo)**: accesso a una dashboard privilegiata e protetta. Ha poteri di movimentazione finanziaria sui capitoli, assegnazione P.E.G., validazione finale, gestione reintegri e produzione della Resa del Conto. Il ruolo viene assegnato automaticamente tramite appartenenza a uno specifico gruppo di sicurezza Active Directory.
+- **Amministratore**: implicitamente autorizzato a tutte le rotte del modulo.
+
+Precedenza dei ruoli in `resolveRole()`: `admin > magazziniere > economo > funzionario > user`.
+
+### 8.7 Architettura Tecnica
+
+Il modulo è sviluppato in continuità con lo stack tecnologico esistente, garantendo alte prestazioni e bassi consumi di risorse:
+
+- **Database (SQLite)** — Creazione di entità dedicate (`capitoli_spesa`, `spese_economali`, `allegati_spesa`, `movimenti_cassa`, `reintegri`, `reintegro_spese`) per non inquinare il catalogo prodotti. Il calcolo dei residui di budget avviene in tempo reale tramite query SQL aggregata per evitare disallineamenti del dato. Gli allegati sono salvati come BLOB nel database (coerentemente con le foto prodotti) per mantenere il file SQLite come unico target di backup.
+- **Backend (Go)** — Sviluppo delle logiche di validazione, controllo capienza fondi e gestione sicura dell'upload multipart per gli allegati. Le route dell'Economo sono isolate tramite il middleware `requireRole("economo")`.
+- **Frontend (HTMX)** — Interfaccia reattiva priva di framework JavaScript pesanti. La dashboard dell'Economo include indicatori visivi (progress bar) per il monitoraggio istantaneo della capienza dei Capitoli di Spesa, il saldo di cassa progressivo e gli stati delle pratiche.
+- **Storage Allegati** — Le pezze giustificative sono salvate in tabella `allegati_spesa` (BLOB), servite unicamente tramite endpoint protetto con verifica dei diritti d'accesso (richiedente, funzionario del settore, economo, admin), garantendo privacy e sicurezza dei documenti contabili.
+- **Reportistica** — Generazione lato server di **CSV** (BOM UTF-8, separatore `;`, formato italiano per numeri/date) per l'import nei gestionali della Ragioneria (Maggioli, Halley, Sicraweb e simili) e di **PDF** impaginati per la stampa ufficiale e l'archivio cartaceo. Le pratiche allegate a una Richiesta di Reintegro vengono distribuite anche in un singolo **archivio ZIP** generato in streaming.
+
+### 8.8 Reportistica Obbligatoria
+
+Il modulo produce tre tipologie di documenti ufficiali, ciascuno esportabile sia in **CSV** sia in **PDF**:
+
+**A. Giornale di Cassa (Registro Cronologico)**
+
+Serve all'Economo per dimostrare, in ogni momento, quanti soldi fisici ha nel cassetto o sulla carta dipartimentale.
+
+- *Formato*: tabella in ordine cronologico.
+- *Colonne*: `Data`, `N. Pratica`, `Tipologia` (Entrata/Uscita), `Descrizione`, `Importo Entrata`, `Importo Uscita`, `Saldo di Cassa Progressivo`.
+- *Entrate*: anticipazioni iniziali e reintegri versati dalla Ragioneria.
+- *Uscite*: spese chiuse e restituzione finale in Tesoreria.
+
+**B. Richiesta di Reintegro (Raggruppata per PEG)**
+
+Il Fondo Economale non è infinito: periodicamente (a fine mese o quando i contanti scarseggiano), l'Economo chiede alla Ragioneria di "ricaricare" la cassa, presentando il conto di ciò che ha speso.
+
+- *Formato*: tabella raggruppata e totalizzata per `capitoli_spesa`.
+- *Struttura*: per ciascun capitolo `Codice PEG / Descrizione`, elenco delle spese chiuse del periodo (`N. Pratica`, `Fornitore`, `Oggetto`, `Documento` con data ed estremi, `Importo`). Totale del singolo capitolo. Totale complessivo del reintegro richiesto.
+- *Output*: PDF firmabile + CSV per la creazione massiva dei mandati + ZIP contenente tutti gli allegati delle pratiche incluse (una funzione *"Scarica allegati del Reintegro N. 3"* utile sia all'Economo sia ai revisori).
+- *Utilità*: la Ragioneria deve emettere i mandati di pagamento esattamente su quei capitoli per ripristinare le somme inizialmente anticipate.
+
+**C. Conto Giudiziale (Resa del Conto Annuale)**
+
+A fine anno finanziario (31/12), il Fondo va chiuso e i contanti non spesi vanno restituiti alla Tesoreria dell'Ente.
+
+- *Formato*: riepilogo definitivo conforme al **Modello 21 D.P.R. 194/1996**.
+- *Struttura*: `Fondo Iniziale (Anticipazione)` + `Totale Reintegri ricevuti durante l'anno` − `Totale Spese sostenute` = `Saldo Finale da versare in Tesoreria`.
+- *Output*: PDF impaginato in formato Modello 21 (firma esterna a cura dell'Economo) + CSV di dettaglio.
+
+### 8.9 Fasi di Rilascio (Roadmap)
+
+Per minimizzare l'impatto sugli utenti e garantire un'adozione fluida, l'implementazione segue questo schema:
+
+- **Fase 1 (attuale)** — Consolidamento della gestione del magazzino fisico (ordini a catalogo).
+- **Fase 2 (Estensione silente)** — Rilascio dello schema di database e degli endpoint protetti per i test lato backend, senza esposizione di UI a utenti non autorizzati.
+- **Fase 3 (Go-Live Cassa)** — Attivazione della tab "Richiedi Spesa" lato utente e funzionario, dashboard Economo, formazione mirata all'Ufficio Economato e ai Funzionari per l'uso dei nuovi cruscotti.
+- **Fase 4 (Reportistica Giudiziale)** — Generazione dei tre report ufficiali (Giornale di Cassa, Richiesta di Reintegro, Conto Giudiziale) con export CSV/PDF/ZIP, in modo da rendere la piattaforma immediatamente conforme ai controlli della Corte dei Conti.
