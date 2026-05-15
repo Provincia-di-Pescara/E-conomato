@@ -95,40 +95,40 @@
 *Estensione di E-conomato per la gestione del Fondo Economale (piccole spese in contanti / carta dipartimentale). L'Economo opera come Agente Contabile ai sensi degli artt. 93 e 233 del D.Lgs. 267/2000 (TUEL) e risponde alla Corte dei Conti. Vedi `PLANE.md` § 8 per analisi e requisiti normativi completi.*
 
 ### 12.1 Database (Schema)
-- [ ] **Tabella `capitoli_spesa`:** `(id, anno, codice_peg, descrizione, importo_stanziato, attivo, creato_il)` con `UNIQUE(anno, codice_peg)`.
-- [ ] **Tabella `spese_economali`:** `(id, utente_username, settore_id, capitolo_id NULL, motivazione, importo_presunto, importo_effettivo NULL, tipo_pagamento, stato, fornitore NULL, data_documento NULL, estremi_documento NULL, note_funzionario, note_economo, funzionario_username, economo_username, data_creazione, data_autorizzazione, data_impegno, data_rendicontazione, data_chiusura)`. Stati: `in_approvazione`, `autorizzata`, `rifiutata_funz`, `impegnata`, `rifiutata_econ`, `rendicontata`, `chiusa`. `tipo_pagamento`: `contanti` | `carta`.
-- [ ] **Tabella `allegati_spesa`:** `(id, spesa_id, filename, mime_type, dimensione, blob_data, caricato_da, caricato_il)` — pezze d'appoggio salvate come BLOB.
-- [ ] **Tabella `movimenti_cassa`:** `(id, data, tipo, descrizione, importo, riferimento_spesa_id NULL, riferimento_reintegro_id NULL, creato_da)`. Tipi: `anticipazione`, `reintegro`, `uscita`, `restituzione_tesoreria`.
-- [ ] **Tabelle `reintegri` + `reintegro_spese`:** numerazione progressiva annuale dei reintegri (`numero`, `anno`, `data_richiesta`, `data_emissione_mandato NULL`, `importo_totale`, `stato`, `economo_username`) + join verso le spese chiuse incluse nel reintegro.
-- [ ] **Indici:** `(anno, codice_peg)`, `spese_economali(stato)`, `(settore_id)`, `(utente_username)`, `movimenti_cassa(data)`.
-- [ ] **Migrazione idempotente:** integrare in `migrate()` (`CREATE TABLE IF NOT EXISTS` + helper `ensureColumn`).
+- [x] **Tabella `capitoli_spesa`:** `(id, anno, codice_peg, descrizione, importo_stanziato, attivo, creato_il)` con `UNIQUE(anno, codice_peg)`.
+- [x] **Tabella `spese_economali`:** `(id, utente_username, settore_id, capitolo_id NULL, motivazione, importo_presunto, importo_effettivo NULL, tipo_pagamento, stato, fornitore NULL, data_documento NULL, estremi_documento NULL, note_funzionario, note_economo, funzionario_username, economo_username, data_creazione, data_autorizzazione, data_impegno, data_rendicontazione, data_chiusura)`. Stati: `in_approvazione`, `autorizzata`, `rifiutata_funz`, `impegnata`, `rifiutata_econ`, `rendicontata`, `chiusa`. `tipo_pagamento`: `contanti` | `carta`. CHECK constraints SQL su entrambi gli enum.
+- [x] **Tabella `allegati_spesa`:** `(id, spesa_id, filename, mime_type, dimensione, blob_data, caricato_da, caricato_il)` — pezze d'appoggio salvate come BLOB.
+- [x] **Tabella `movimenti_cassa`:** `(id, data, tipo, descrizione, importo, riferimento_spesa_id NULL, riferimento_reintegro_id NULL, creato_da)`. Tipi: `anticipazione`, `reintegro`, `uscita`, `restituzione_tesoreria`. CHECK su `tipo`.
+- [x] **Tabelle `reintegri` + `reintegro_spese`:** numerazione progressiva annuale dei reintegri (`numero`, `anno`, `data_richiesta`, `data_emissione_mandato NULL`, `importo_totale`, `stato`, `economo_username`) + join verso le spese chiuse incluse nel reintegro. CHECK su `stato` (`bozza`/`inviata`/`liquidata`).
+- [x] **Indici:** `idx_spese_economali_stato`, `idx_spese_economali_settore`, `idx_spese_economali_utente`, `idx_movimenti_cassa_data`, `idx_allegati_spesa_spesa`, `idx_reintegro_spese_spesa`. UNIQUE `(anno, codice_peg)` e `(anno, numero)` generano indici impliciti.
+- [x] **Migrazione idempotente:** integrata in `migrate()` con `CREATE TABLE IF NOT EXISTS` + `CREATE INDEX IF NOT EXISTS` separati.
 
 ### 12.2 Modelli Go
-- [ ] **Struct:** `CapitoloSpesa`, `SpesaEconomale`, `AllegatoSpesa`, `MovimentoCassa`, `Reintegro` in `internal/models/`.
-- [ ] **Viewmodel:** `CapitoloConSaldi` (stanziato/impegnato/speso/residuo), `RigaGiornaleCassa`, `RigaReintegro`, `SezioneContoGiudiziale`.
+- [x] **Struct:** `CapitoloSpesa`, `SpesaEconomale`, `AllegatoSpesa`, `MovimentoCassa`, `Reintegro`, `ReintegroSpesa` in `internal/models/models.go`. PascalCase + puntatori per nullable + campi joinati appesi (`UtenteEmail`, `SettoreNome`, `CapitoloPEG`, `CapitoloDescr`).
+- [x] **Viewmodel:** `CapitoloConSaldi` (stanziato/impegnato/speso/residuo), `RigaGiornaleCassa`, `RigaReintegro`, `SezioneContoGiudiziale`. Shell dichiarate ora; campi popolati dai repo nei prossimi slice.
 
 ### 12.3 LDAP & Ruolo Economo
-- [ ] **Env `LDAP_ECONOMO_GROUP`:** aggiungere in `.env.example` e `internal/config/config.go`.
-- [ ] **`resolveRole()`:** estendere in `internal/auth/ldap.go` con precedenza `admin > magazziniere > economo > funzionario > user`.
-- [ ] **Mock dev:** username con suffisso `.economo` instrada al ruolo economo.
-- [ ] **Aggiornare CLAUDE.md:** documentare il nuovo ruolo nella sezione *Roles* e la precedenza.
+- [x] **Env `LDAP_ECONOMO_GROUP`:** aggiunta in `.env.example`, `internal/config/config.go` e `compose.yml`.
+- [x] **`resolveRole()`:** firma estesa a `(isMag, isEco, isFun) string` in `internal/auth/ldap.go` con precedenza `magazziniere > economo > funzionario > user`. `admin` resta gestito da `requireRole`.
+- [x] **Mock dev:** suffisso `.economo` mappato al ruolo economo.
+- [x] **Aggiornare CLAUDE.md:** sezione *Roles* riscritta con precedenza corretta + env vars + nota sul ruolo economo live.
 
 ### 12.4 Repo methods (`internal/database/sqlite.go`)
-- [ ] **CRUD capitoli:** `CreaCapitolo`, `AggiornaCapitolo`, `DisattivaCapitolo`, `GetCapitoliConSaldi`.
-- [ ] **Workflow spese:** `CreaSpesa`, `AutorizzaSpesa`, `RifiutaSpesaFunzionario`, `ImpegnaSpesa` (transazione + validazione capienza capitolo), `RifiutaSpesaEconomo`, `AllegaPezzaAppoggio`, `RendicontaSpesa` (richiede `fornitore` + `data_documento` + `estremi_documento` obbligatori), `ChiudiSpesa` (scrive `importo_effettivo`, libera residuo, inserisce riga `movimenti_cassa` di tipo `uscita`).
-- [ ] **Liste:** `GetSpeseSettore`, `GetSpeseUtente`, `GetSpeseDaImpegnare`, `GetSpeseDaChiudere`, `GetAllegato`.
+- [x] **CRUD capitoli:** `CreaCapitolo`, `AggiornaCapitolo`, `DisattivaCapitolo`, `GetCapitoloByID`, `GetCapitoliConSaldi`, `GetCapitoliAttivi`.
+- [ ] **Workflow spese:** `CreaSpesa` ✓, `AutorizzaSpesa`, `RifiutaSpesaFunzionario`, `ImpegnaSpesa` (transazione + validazione capienza capitolo), `RifiutaSpesaEconomo`, `AllegaPezzaAppoggio`, `RendicontaSpesa` (richiede `fornitore` + `data_documento` + `estremi_documento` obbligatori), `ChiudiSpesa` (scrive `importo_effettivo`, libera residuo, inserisce riga `movimenti_cassa` di tipo `uscita`).
+- [ ] **Liste:** `GetSpeseSettore` ✓, `GetSpeseUtente` ✓, `GetSpeseAll` ✓, `GetSpeseConStato` ✓, `GetSpeseDaImpegnare`, `GetSpeseDaChiudere`, `GetAllegato`.
 - [ ] **Movimenti cassa:** `RegistraAnticipazione`, `RegistraReintegro` (join con spese chiuse del periodo selezionato), `RegistraRestituzioneTesoreria`, `GetSaldoCassa`, `GetGiornaleCassa(da, a)`.
 - [ ] **Reportistica:** `BuildRichiestaReintegro(periodo)` → `[]RigaReintegro` raggruppate per capitolo; `BuildContoGiudiziale(anno)` → `SezioneContoGiudiziale`.
 
 ### 12.5 Handler & Routing (`cmd/server/main.go`)
-- [ ] **Rotte utente/funzionario:** `GET /spese`, `GET /spese/nuova`, `POST /spese`, `GET /spese/{id}`.
+- [x] **Rotte utente/funzionario:** `GET /spese`, `GET /spese/nuova`, `POST /spese`, `GET /spese/{id}` (scoping ruolo-aware nei handler).
 - [ ] **Transizioni:** `POST /spese/{id}/autorizza|rifiuta-funz|impegna|rifiuta-econ|rendiconta|chiudi`.
 - [ ] **Allegati:** `POST /spese/{id}/allegato`, `GET /spese/{id}/allegato/{aid}` (check accesso ruolo-aware).
-- [ ] **CRUD capitoli:** rotte sotto `/capitoli` (solo economo).
-- [ ] **Dashboard:** `GET /dashboard-economo`.
+- [x] **CRUD capitoli:** `GET /capitoli`, `GET /capitoli/nuovo`, `POST /capitoli`, `GET /capitoli/{id}/edit`, `POST /capitoli/{id}`, `POST /capitoli/{id}/disattiva` (solo economo).
+- [x] **Dashboard:** `GET /dashboard-economo` con KPI capitoli attivi, spese in approvazione, totale stanziato + lista capitoli con saldi + ultime spese pending.
 - [ ] **Reportistica:** `GET /economo/giornale-cassa` (filtro periodo, output HTML/CSV/PDF); `GET /economo/reintegro/nuovo`, `POST /economo/reintegro`, `GET /economo/reintegro/{id}`, `GET /economo/reintegro/{id}/pdf|csv|allegati.zip`; `GET /economo/conto-giudiziale?anno=YYYY` (HTML/PDF/CSV).
 - [ ] **Cassa:** `POST /economo/anticipazione`, `POST /economo/restituzione-tesoreria`.
-- [ ] **Middleware:** `requireRole("economo")` su tutte le rotte privilegiate; check ownership/settore nei handler utente/funzionario.
+- [x] **Middleware:** `requireRole("economo")` sulle rotte capitoli + dashboard; `requireAuth` su `/spese*` con check ownership/settore nei handler. Anche post-login redirect mappa `economo` → `/dashboard-economo` in `dashboardURL()`.
 
 ### 12.6 Notifiche
 - [ ] **`EventoSpesa` enum:** nuovo `internal/email/spese.go` con stati `inviata`, `autorizzata`, `rifiutata_funz`, `impegnata`, `rifiutata_econ`, `rendicontata`, `chiusa`.
@@ -137,14 +137,14 @@
 - [ ] **Routing eventi:** nuova → funzionario settore; autorizzata → economi (broadcast); impegno/rifiuto/chiusura → utente richiedente; rendicontata → economi.
 
 ### 12.7 Templates (`web/templates/`)
-- [ ] **`dashboard-economo.html`:** KPI (saldo cassa, capitoli con progress bar capienza, spese da impegnare, spese da chiudere, ultimi reintegri).
-- [ ] **`_sidebar-economo.html`** e **`notifiche-economo.html`**.
-- [ ] **Liste:** `spese-utente.html`, `spese-funzionario.html`, `spese-economo.html`.
-- [ ] **Dettaglio:** `spesa-detail.html` con sezioni role-aware.
-- [ ] **Form:** `spesa-form.html` (creazione), `spesa-rendiconta-form.html` (campi obbligatori fornitore / data documento / estremi).
-- [ ] **Capitoli:** `capitoli.html` e `capitolo-form.html`.
+- [x] **`dashboard-economo.html`:** KPI capitoli attivi, spese in approvazione, totale stanziato anno corrente + tabella capitoli con saldi (impegnato/speso/residuo) + lista ultime spese pending. Mancano progress bar capienza, saldo cassa e ultimi reintegri (slice futuro: dipendono da `GetSaldoCassa` / reintegri).
+- [ ] **`_sidebar-economo.html`** ✓ (Dashboard, Capitoli, Spese cliccabili; Giornale cassa, Reintegri, Conto giudiziale come placeholder disabled). **`notifiche-economo.html`** mancante.
+- [ ] **Liste:** `spese-utente.html` ✓ (template unico ruolo-aware: utente vede proprie, funzionario vede settore, economo vede tutte). `spese-funzionario.html` e `spese-economo.html` non separate (decisione: un singolo template condizionale è sufficiente).
+- [x] **Dettaglio:** `spesa-detail.html` con sezioni role-aware (campi lifecycle mostrati solo se valorizzati).
+- [ ] **Form:** `spesa-form.html` ✓ (creazione: motivazione, importo presunto, tipo pagamento). `spesa-rendiconta-form.html` mancante (slice rendicontazione).
+- [x] **Capitoli:** `capitoli.html` e `capitolo-form.html` (anno, codice PEG, descrizione, importo stanziato, toggle attivo in edit).
 - [ ] **Report:** `report-giornale-cassa.html`, `report-reintegro.html`, `report-conto-giudiziale.html` (Modello 21).
-- [ ] **Coerenza UI:** riusare il design system `ec-*` esistente; sidebar e topbar bell condivisi tramite partial come per il magazziniere.
+- [x] **Coerenza UI:** design system `ec-*` riusato, sidebar partial `_sidebar-economo` parsato per i template economo, topbar bell e drawer mobile inclusi.
 
 ### 12.8 Upload allegati
 - [ ] **Multipart:** `r.ParseMultipartForm(10 << 20)` (limite 10 MB).
@@ -153,12 +153,12 @@
 - [ ] **Serving:** `Content-Disposition: inline; filename=...` con verifica accesso (richiedente, funzionario settore, economo, admin).
 
 ### 12.9 Calcolo saldi (real-time)
-- [ ] **Per capitolo:** `residuo = importo_stanziato − impegnato − speso`, dove `impegnato = SUM(importo_presunto WHERE stato IN ('impegnata','rendicontata'))` e `speso = SUM(importo_effettivo WHERE stato='chiusa')`.
-- [ ] **Saldo cassa:** `SUM(entrate movimenti_cassa) − SUM(uscite movimenti_cassa)`.
-- [ ] **Nessuna materializzazione:** query on-demand, evitare campi cache per non avere disallineamenti.
+- [x] **Per capitolo:** `residuo = importo_stanziato − impegnato − speso` calcolato on-demand in `GetCapitoliConSaldi` con subquery correlate (`impegnato = SUM(importo_presunto WHERE stato IN ('impegnata','rendicontata'))`, `speso = SUM(importo_effettivo WHERE stato='chiusa')`).
+- [ ] **Saldo cassa:** `SUM(entrate movimenti_cassa) − SUM(uscite movimenti_cassa)` (richiede `GetSaldoCassa`, slice futuro).
+- [x] **Nessuna materializzazione:** query on-demand confermata, nessun campo cache aggiunto allo schema.
 
 ### 12.10 i18n
-- [ ] **Chiavi `economale.*`** in `internal/i18n/messages.go` per tutte le locale (it autoritativa). Coprire: stati, azioni, etichette form, intestazioni report.
+- [ ] **Chiavi `economale.*`** aggiunte per `it` (autoritativa) e `en` (le altre locale fanno fallback su `en` tramite `i18n.T`). Coprono: menu sidebar, dashboard, capitoli (lista + form), spese (lista + form + dettaglio), stati spesa. Mancano: chiavi per intestazioni report giudiziale.
 
 ### 12.11 Reportistica giudiziale (Fase 4)
 - [ ] **CSV writer** `internal/report/csv.go`: BOM UTF-8 per Excel italiano, separatore `;`, formato numerico `1.234,56`, date `gg/mm/aaaa`.
@@ -168,7 +168,7 @@
 - [ ] **Numerazione progressiva annuale** per pratiche e reintegri (resetta al cambio anno).
 
 ### 12.12 Test smoke
-- [ ] **End-to-end mock LDAP:** utente crea → funzionario autorizza → economo impegna (su capitolo) → utente allega scontrino → utente rendiconta (con fornitore + data + estremi) → economo chiude (con `importo_effettivo`) → economo genera reintegro → export CSV/PDF/ZIP → economo chiude anno con Conto Giudiziale.
-- [ ] **Validazione capienza:** spesa che eccede il residuo capitolo → errore + rollback transazione.
-- [ ] **Accessi cross-ruolo:** verifica 403 su rotte economo da utente/funzionario/magazziniere.
+- [ ] **End-to-end mock LDAP:** utente crea → funzionario autorizza → economo impegna (su capitolo) → utente allega scontrino → utente rendiconta (con fornitore + data + estremi) → economo chiude (con `importo_effettivo`) → economo genera reintegro → export CSV/PDF/ZIP → economo chiude anno con Conto Giudiziale. *Bloccato finché transizioni/allegati/report non sono in piedi; happy-path foundation testato manualmente via curl: login economo → POST /capitoli → POST /spese (utente) → /spese visibile a economo.*
+- [ ] **Validazione capienza:** spesa che eccede il residuo capitolo → errore + rollback transazione. *Richiede `ImpegnaSpesa` (slice futuro).*
+- [x] **Accessi cross-ruolo:** verifica 403 su rotte economo da utente/funzionario/magazziniere (testato manualmente: `mock.utente` → `/dashboard-economo` = 403, `mario.economo` → `/dashboard/magazzino` = 403).
 - [ ] **Coerenza saldo cassa:** somma movimenti `entrate − uscite` deve coincidere con saldo reale dopo ogni transizione.

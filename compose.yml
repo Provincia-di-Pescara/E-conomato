@@ -45,6 +45,7 @@ services:
       - LDAP_REQUIRED_GROUP=${LDAP_REQUIRED_GROUP:-}
       - LDAP_MAGAZZINIERE_GROUP=${LDAP_MAGAZZINIERE_GROUP:-}
       - LDAP_FUNZIONARIO_GROUP=${LDAP_FUNZIONARIO_GROUP:-}
+      - LDAP_ECONOMO_GROUP=${LDAP_ECONOMO_GROUP:-}
 
       # ── Branding ──────────────────────────────────────────────────────────
       - BRAND_NAME=${BRAND_NAME:-}

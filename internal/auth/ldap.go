@@ -21,7 +21,7 @@ import (
 // Set LDAP_TLS_SKIP_VERIFY=true for self-signed / internal CA certificates.
 // Set LDAP_HOST=mock to bypass LDAP entirely (dev mode).
 //
-// Returns (isAuthenticated, role, error). Role is one of: "magazziniere", "funzionario", "user".
+// Returns (isAuthenticated, role, error). Role is one of: "magazziniere", "economo", "funzionario", "user".
 func Authenticate(username, password string, cfg *config.Config) (bool, string, error) {
 	username = strings.TrimSpace(username)
 	if username == "" || password == "" {
@@ -31,12 +31,13 @@ func Authenticate(username, password string, cfg *config.Config) (bool, string, 
 	// ── MOCK / DEV MODE ─────────────────────────────────────────────────────
 	// Per facilitare i test, in mock mode il ruolo viene dedotto da suffissi
 	// nello username: ".magazziniere" e ".magazzino" → magazziniere;
-	// ".funzionario" → funzionario; tutti gli altri → user.
+	// ".economo" → economo; ".funzionario" → funzionario; tutti gli altri → user.
 	if cfg.LDAPHost == "mock" {
 		u := strings.ToLower(username)
 		isMag := strings.HasSuffix(u, ".magazziniere") || strings.HasSuffix(u, ".magazzino")
+		isEco := strings.HasSuffix(u, ".economo")
 		isFun := strings.HasSuffix(u, ".funzionario")
-		return true, resolveRole(isMag, isFun), nil
+		return true, resolveRole(isMag, isEco, isFun), nil
 	}
 
 	// ── TLS CONFIG ──────────────────────────────────────────────────────────
@@ -85,9 +86,9 @@ func Authenticate(username, password string, cfg *config.Config) (bool, string, 
 	// ── GROUP MEMBERSHIP CHECK ───────────────────────────────────────────────
 	// If no LDAP groups are required for login or role derivation, return early.
 	noGroupsNeeded := cfg.LDAPRequiredGroup == "" &&
-		cfg.LDAPMagazziniereGroup == "" && cfg.LDAPFunzionarioGroup == ""
+		cfg.LDAPMagazziniereGroup == "" && cfg.LDAPEconomoGroup == "" && cfg.LDAPFunzionarioGroup == ""
 	if noGroupsNeeded {
-		role := resolveRole(false, false)
+		role := resolveRole(false, false, false)
 		return true, role, nil
 	}
 
@@ -126,16 +127,19 @@ func Authenticate(username, password string, cfg *config.Config) (bool, string, 
 	userFullDN := userEntry.DN
 
 	requiredGroup := cfg.LDAPRequiredGroup
-		magazziniereGroup := cfg.LDAPMagazziniereGroup
+	magazziniereGroup := cfg.LDAPMagazziniereGroup
+	economoGroup := cfg.LDAPEconomoGroup
 	funzionarioGroup := cfg.LDAPFunzionarioGroup
 
 	hasRequiredGroup := (requiredGroup == "")
 	isMagazziniere := false
+	isEconomo := false
 	isFunzionario := false
 
 	// 1. Controllo base sugli attributi memberOf (più veloce, per membership diretta o server non-AD)
 	requiredLower := strings.ToLower(requiredGroup)
 	magLower := strings.ToLower(magazziniereGroup)
+	ecoLower := strings.ToLower(economoGroup)
 	funLower := strings.ToLower(funzionarioGroup)
 
 	for _, memberOf := range userEntry.GetAttributeValues("memberOf") {
@@ -152,6 +156,11 @@ func Authenticate(username, password string, cfg *config.Config) (bool, string, 
 				isMagazziniere = true
 			}
 		}
+		if !isEconomo && ecoLower != "" {
+			if strings.Contains(memberLower, "cn="+ecoLower+",") || strings.EqualFold(memberOf, ecoLower) || strings.HasPrefix(memberLower, "cn="+ecoLower) {
+				isEconomo = true
+			}
+		}
 		if !isFunzionario && funLower != "" {
 			if strings.Contains(memberLower, "cn="+funLower+",") || strings.EqualFold(memberOf, funLower) || strings.HasPrefix(memberLower, "cn="+funLower) {
 				isFunzionario = true
@@ -162,6 +171,7 @@ func Authenticate(username, password string, cfg *config.Config) (bool, string, 
 	// 2. Controllo query nested (LDAP_MATCHING_RULE_IN_CHAIN) se non risolto con memberOf e siamo su AD (non mock)
 	needsNested := (!hasRequiredGroup && requiredGroup != "") ||
 		(!isMagazziniere && magazziniereGroup != "") ||
+		(!isEconomo && economoGroup != "") ||
 		(!isFunzionario && funzionarioGroup != "")
 	if needsNested {
 		logger.Debug("ldap: %s: checking nested group membership (IN_CHAIN mode)", username)
@@ -221,6 +231,12 @@ func Authenticate(username, password string, cfg *config.Config) (bool, string, 
 		}
 	}
 
+	if !isEconomo && economoGroup != "" {
+		if checkNestedMembership(economoGroup, userFullDN) {
+			isEconomo = true
+		}
+	}
+
 	if !isFunzionario && funzionarioGroup != "" {
 		if checkNestedMembership(funzionarioGroup, userFullDN) {
 			isFunzionario = true
@@ -231,16 +247,20 @@ func Authenticate(username, password string, cfg *config.Config) (bool, string, 
 		return false, "", fmt.Errorf("ldap: user %q authenticated but not in required group %q (direct or nested)", username, cfg.LDAPRequiredGroup)
 	}
 
-	role := resolveRole(isMagazziniere, isFunzionario)
+	role := resolveRole(isMagazziniere, isEconomo, isFunzionario)
 	return true, role, nil
 }
 
 // resolveRole maps LDAP group flags to a single role string.
-// Precedence: magazziniere > funzionario > user.
-func resolveRole(isMagazziniere, isFunzionario bool) string {
+// Precedence: magazziniere > economo > funzionario > user.
+// Note: 'admin' is NOT assigned here — admin bypass is enforced in the
+// requireRole middleware, not derived from LDAP.
+func resolveRole(isMagazziniere, isEconomo, isFunzionario bool) string {
 	switch {
 	case isMagazziniere:
 		return "magazziniere"
+	case isEconomo:
+		return "economo"
 	case isFunzionario:
 		return "funzionario"
 	default:

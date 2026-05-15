@@ -200,6 +200,119 @@ func migrate(conn *sql.DB) error {
 			creata_il           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY(notifica_id) REFERENCES notifiche(id)
 		);
+
+		-- ─── Cassa Economale (Fondo Economale) ──────────────────────────────────
+		-- Modulo separato dal magazzino. L'Economo opera come Agente Contabile
+		-- ai sensi degli artt. 93 e 233 del D.Lgs. 267/2000 (TUEL). Vedi PLANE.md §8.
+
+		-- Capitoli di spesa (PEG): budget annuale per voce contabile.
+		-- Il residuo è SEMPRE calcolato on-demand, mai materializzato.
+		CREATE TABLE IF NOT EXISTS capitoli_spesa (
+			id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+			anno               INTEGER NOT NULL,
+			codice_peg         TEXT NOT NULL,
+			descrizione        TEXT NOT NULL,
+			importo_stanziato  REAL NOT NULL DEFAULT 0,
+			attivo             INTEGER NOT NULL DEFAULT 1,
+			creato_il          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(anno, codice_peg)
+		);
+
+		-- Spese economali (pratiche).
+		-- stato: 'in_approvazione' | 'autorizzata' | 'rifiutata_funz'
+		--      | 'impegnata' | 'rifiutata_econ' | 'rendicontata' | 'chiusa'
+		-- tipo_pagamento: 'contanti' | 'carta'.
+		-- I campi fornitore/data_documento/estremi_documento sono NULL fino alla
+		-- rendicontazione; il vincolo "non NULL alla chiusura" è normativo
+		-- (Corte dei Conti) e va enforced lato repo, non a livello di schema.
+		CREATE TABLE IF NOT EXISTS spese_economali (
+			id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+			utente_username       TEXT NOT NULL,
+			settore_id            TEXT NOT NULL,
+			capitolo_id           INTEGER,
+			motivazione           TEXT NOT NULL,
+			importo_presunto      REAL NOT NULL,
+			importo_effettivo     REAL,
+			tipo_pagamento        TEXT NOT NULL CHECK(tipo_pagamento IN ('contanti','carta')),
+			stato                 TEXT NOT NULL CHECK(stato IN (
+			                          'in_approvazione','autorizzata','rifiutata_funz',
+			                          'impegnata','rifiutata_econ','rendicontata','chiusa'
+			                      )),
+			fornitore             TEXT,
+			data_documento        DATE,
+			estremi_documento     TEXT,
+			note_funzionario      TEXT NOT NULL DEFAULT '',
+			note_economo          TEXT NOT NULL DEFAULT '',
+			funzionario_username  TEXT,
+			economo_username      TEXT,
+			data_creazione        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			data_autorizzazione   DATETIME,
+			data_impegno          DATETIME,
+			data_rendicontazione  DATETIME,
+			data_chiusura         DATETIME,
+			FOREIGN KEY(utente_username)      REFERENCES utenti(username),
+			FOREIGN KEY(settore_id)           REFERENCES settori(id),
+			FOREIGN KEY(capitolo_id)          REFERENCES capitoli_spesa(id),
+			FOREIGN KEY(funzionario_username) REFERENCES utenti(username),
+			FOREIGN KEY(economo_username)     REFERENCES utenti(username)
+		);
+
+		-- Pezze d'appoggio: scontrini/ricevute/fatture allegate alla spesa.
+		-- Salvate come BLOB nel DB (coerente con prodotti.immagine_blob).
+		CREATE TABLE IF NOT EXISTS allegati_spesa (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			spesa_id     INTEGER NOT NULL,
+			filename     TEXT NOT NULL,
+			mime_type    TEXT NOT NULL,
+			dimensione   INTEGER NOT NULL,
+			blob_data    BLOB NOT NULL,
+			caricato_da  TEXT NOT NULL,
+			caricato_il  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY(spesa_id)    REFERENCES spese_economali(id),
+			FOREIGN KEY(caricato_da) REFERENCES utenti(username)
+		);
+
+		-- Richieste di Reintegro: numerazione progressiva annuale (UNIQUE(anno,numero)).
+		-- stato: 'bozza' | 'inviata' | 'liquidata'.
+		CREATE TABLE IF NOT EXISTS reintegri (
+			id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+			numero                  INTEGER NOT NULL,
+			anno                    INTEGER NOT NULL,
+			data_richiesta          DATE NOT NULL,
+			data_emissione_mandato  DATE,
+			importo_totale          REAL NOT NULL DEFAULT 0,
+			stato                   TEXT NOT NULL CHECK(stato IN ('bozza','inviata','liquidata')),
+			economo_username        TEXT NOT NULL,
+			UNIQUE(anno, numero),
+			FOREIGN KEY(economo_username) REFERENCES utenti(username)
+		);
+
+		-- Giornale di Cassa: registro cronologico dei movimenti del Fondo.
+		-- tipo: 'anticipazione' | 'reintegro' | 'uscita' | 'restituzione_tesoreria'.
+		CREATE TABLE IF NOT EXISTS movimenti_cassa (
+			id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+			data                     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			tipo                     TEXT NOT NULL CHECK(tipo IN (
+			                             'anticipazione','reintegro','uscita','restituzione_tesoreria'
+			                         )),
+			descrizione              TEXT NOT NULL,
+			importo                  REAL NOT NULL,
+			riferimento_spesa_id     INTEGER,
+			riferimento_reintegro_id INTEGER,
+			creato_da                TEXT NOT NULL,
+			FOREIGN KEY(riferimento_spesa_id)     REFERENCES spese_economali(id),
+			FOREIGN KEY(riferimento_reintegro_id) REFERENCES reintegri(id),
+			FOREIGN KEY(creato_da)                REFERENCES utenti(username)
+		);
+
+		-- Junction reintegro ↔ spese chiuse incluse.
+		CREATE TABLE IF NOT EXISTS reintegro_spese (
+			reintegro_id INTEGER NOT NULL,
+			spesa_id     INTEGER NOT NULL,
+			PRIMARY KEY(reintegro_id, spesa_id),
+			FOREIGN KEY(reintegro_id) REFERENCES reintegri(id),
+			FOREIGN KEY(spesa_id)     REFERENCES spese_economali(id)
+		);
 	`)
 	if err != nil {
 		return err
@@ -211,6 +324,24 @@ func migrate(conn *sql.DB) error {
 		return err
 	}
 	if _, err = conn.Exec(`CREATE INDEX IF NOT EXISTS idx_email_outbox_pending ON email_outbox(stato, prossimo_tentativo)`); err != nil {
+		return err
+	}
+	if _, err = conn.Exec(`CREATE INDEX IF NOT EXISTS idx_spese_economali_stato ON spese_economali(stato)`); err != nil {
+		return err
+	}
+	if _, err = conn.Exec(`CREATE INDEX IF NOT EXISTS idx_spese_economali_settore ON spese_economali(settore_id)`); err != nil {
+		return err
+	}
+	if _, err = conn.Exec(`CREATE INDEX IF NOT EXISTS idx_spese_economali_utente ON spese_economali(utente_username)`); err != nil {
+		return err
+	}
+	if _, err = conn.Exec(`CREATE INDEX IF NOT EXISTS idx_movimenti_cassa_data ON movimenti_cassa(data DESC)`); err != nil {
+		return err
+	}
+	if _, err = conn.Exec(`CREATE INDEX IF NOT EXISTS idx_allegati_spesa_spesa ON allegati_spesa(spesa_id)`); err != nil {
+		return err
+	}
+	if _, err = conn.Exec(`CREATE INDEX IF NOT EXISTS idx_reintegro_spese_spesa ON reintegro_spese(spesa_id)`); err != nil {
 		return err
 	}
 	// Migrazioni additive: colonne nuove su tabelle esistenti.
@@ -1920,4 +2051,328 @@ func nullableBlob(b []byte) interface{} {
 		return nil
 	}
 	return b
+}
+
+// nullableInt64 converte un puntatore int64 in un valore adatto a INSERT/UPDATE.
+func nullableInt64(p *int64) interface{} {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
+// nullableFloat64 converte un puntatore float64 in un valore adatto a INSERT/UPDATE.
+func nullableFloat64(p *float64) interface{} {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
+// nullableTime converte un puntatore time.Time in un valore adatto a INSERT/UPDATE.
+func nullableTime(p *time.Time) interface{} {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
+func nullableStrPtr(p *string) interface{} {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
+func ptrInt64(n sql.NullInt64) *int64 {
+	if !n.Valid {
+		return nil
+	}
+	v := n.Int64
+	return &v
+}
+
+func ptrFloat64(n sql.NullFloat64) *float64 {
+	if !n.Valid {
+		return nil
+	}
+	v := n.Float64
+	return &v
+}
+
+func ptrString(n sql.NullString) *string {
+	if !n.Valid {
+		return nil
+	}
+	v := n.String
+	return &v
+}
+
+func ptrTime(n sql.NullTime) *time.Time {
+	if !n.Valid {
+		return nil
+	}
+	v := n.Time
+	return &v
+}
+
+// ── Cassa Economale (Fondo Economale) ──────────────────────────────────────
+// Capitoli di spesa (PEG) e workflow Spese Economali.
+// I saldi (impegnato/speso/residuo) sono SEMPRE calcolati on-demand:
+// vedi PLANE.md §8.7 e CLAUDE.md "Capienza Capitolo".
+
+// CreaCapitolo inserisce un nuovo capitolo. UNIQUE(anno, codice_peg) gestita dal DB.
+func (db *DB) CreaCapitolo(c models.CapitoloSpesa) (int64, error) {
+	res, err := db.conn.Exec(`
+		INSERT INTO capitoli_spesa (anno, codice_peg, descrizione, importo_stanziato, attivo)
+		VALUES (?, ?, ?, ?, ?)`,
+		c.Anno, strings.TrimSpace(c.CodicePEG), strings.TrimSpace(c.Descrizione),
+		c.ImportoStanziato, boolToInt(c.Attivo),
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// AggiornaCapitolo modifica i campi editabili di un capitolo esistente.
+// Anno e codice_peg restano fissi (cambiarli equivarrebbe a creare un capitolo
+// nuovo, con conseguenze sui saldi storici).
+func (db *DB) AggiornaCapitolo(c models.CapitoloSpesa) error {
+	_, err := db.conn.Exec(`
+		UPDATE capitoli_spesa
+		SET descrizione = ?, importo_stanziato = ?, attivo = ?
+		WHERE id = ?`,
+		strings.TrimSpace(c.Descrizione), c.ImportoStanziato, boolToInt(c.Attivo), c.ID,
+	)
+	return err
+}
+
+// DisattivaCapitolo marca un capitolo come non più utilizzabile per nuove spese.
+// Le spese già impegnate restano intatte.
+func (db *DB) DisattivaCapitolo(id int64) error {
+	_, err := db.conn.Exec(`UPDATE capitoli_spesa SET attivo = 0 WHERE id = ?`, id)
+	return err
+}
+
+// GetCapitoloByID restituisce un capitolo singolo (errore se non trovato).
+func (db *DB) GetCapitoloByID(id int64) (models.CapitoloSpesa, error) {
+	var c models.CapitoloSpesa
+	var attivo int
+	err := db.conn.QueryRow(`
+		SELECT id, anno, codice_peg, descrizione, importo_stanziato, attivo, creato_il
+		FROM capitoli_spesa WHERE id = ?`, id,
+	).Scan(&c.ID, &c.Anno, &c.CodicePEG, &c.Descrizione, &c.ImportoStanziato, &attivo, &c.CreatoIl)
+	if err != nil {
+		return c, err
+	}
+	c.Attivo = (attivo != 0)
+	return c, nil
+}
+
+// GetCapitoliConSaldi restituisce tutti i capitoli dell'anno richiesto con
+// impegnato/speso/residuo calcolati on-demand. Niente materializzazione.
+//
+//	impegnato = SUM(importo_presunto WHERE stato IN ('impegnata','rendicontata'))
+//	speso     = SUM(importo_effettivo WHERE stato='chiusa')
+//	residuo   = importo_stanziato − impegnato − speso
+func (db *DB) GetCapitoliConSaldi(anno int) ([]models.CapitoloConSaldi, error) {
+	rows, err := db.conn.Query(`
+		SELECT c.id, c.anno, c.codice_peg, c.descrizione, c.importo_stanziato, c.attivo, c.creato_il,
+		       COALESCE((SELECT SUM(s.importo_presunto) FROM spese_economali s
+		                 WHERE s.capitolo_id = c.id AND s.stato IN ('impegnata','rendicontata')), 0) AS impegnato,
+		       COALESCE((SELECT SUM(s.importo_effettivo) FROM spese_economali s
+		                 WHERE s.capitolo_id = c.id AND s.stato = 'chiusa'), 0) AS speso
+		FROM capitoli_spesa c
+		WHERE c.anno = ?
+		ORDER BY c.codice_peg ASC`, anno)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.CapitoloConSaldi
+	for rows.Next() {
+		var r models.CapitoloConSaldi
+		var attivo int
+		if err := rows.Scan(&r.ID, &r.Anno, &r.CodicePEG, &r.Descrizione,
+			&r.ImportoStanziato, &attivo, &r.CreatoIl,
+			&r.Impegnato, &r.Speso); err != nil {
+			return nil, err
+		}
+		r.Attivo = (attivo != 0)
+		r.Residuo = r.ImportoStanziato - r.Impegnato - r.Speso
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// GetCapitoliAttivi è una scorciatoia per le UI di scelta (dropdown nei form spesa).
+func (db *DB) GetCapitoliAttivi(anno int) ([]models.CapitoloSpesa, error) {
+	rows, err := db.conn.Query(`
+		SELECT id, anno, codice_peg, descrizione, importo_stanziato, attivo, creato_il
+		FROM capitoli_spesa
+		WHERE anno = ? AND attivo = 1
+		ORDER BY codice_peg ASC`, anno)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.CapitoloSpesa
+	for rows.Next() {
+		var c models.CapitoloSpesa
+		var attivo int
+		if err := rows.Scan(&c.ID, &c.Anno, &c.CodicePEG, &c.Descrizione,
+			&c.ImportoStanziato, &attivo, &c.CreatoIl); err != nil {
+			return nil, err
+		}
+		c.Attivo = (attivo != 0)
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// CreaSpesa inserisce una nuova spesa in stato 'in_approvazione'.
+// Tutti i campi di workflow successivi restano NULL: vengono valorizzati dalle
+// transizioni `Autorizza/Impegna/Rendiconta/Chiudi` (slice futuri).
+func (db *DB) CreaSpesa(s models.SpesaEconomale) (int64, error) {
+	res, err := db.conn.Exec(`
+		INSERT INTO spese_economali
+		    (utente_username, settore_id, motivazione, importo_presunto,
+		     tipo_pagamento, stato, note_funzionario, note_economo)
+		VALUES (?, ?, ?, ?, ?, 'in_approvazione', '', '')`,
+		s.UtenteUsername, s.SettoreID,
+		strings.TrimSpace(s.Motivazione), s.ImportoPresunto,
+		s.TipoPagamento,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// scanSpesaRow legge una riga dal risultato di una SELECT su spese_economali
+// (con LEFT JOIN su utenti/settori/capitoli_spesa per i campi joinati).
+// L'ordine delle colonne è fissato dalla SELECT comune in spesaSelectSQL.
+func scanSpesaRow(rs interface {
+	Scan(dest ...interface{}) error
+}) (models.SpesaEconomale, error) {
+	var s models.SpesaEconomale
+	var (
+		capitoloID                     sql.NullInt64
+		importoEffettivo               sql.NullFloat64
+		fornitore, estremiDocumento    sql.NullString
+		funzionarioUsername, economoUs sql.NullString
+		dataDocumento                  sql.NullTime
+		dataAut, dataImp, dataRen, dataChi sql.NullTime
+		utenteEmail                    sql.NullString
+		settoreNome                    sql.NullString
+		capitoloPEG, capitoloDescr     sql.NullString
+	)
+	err := rs.Scan(
+		&s.ID, &s.UtenteUsername, &s.SettoreID, &capitoloID,
+		&s.Motivazione, &s.ImportoPresunto, &importoEffettivo,
+		&s.TipoPagamento, &s.Stato,
+		&fornitore, &dataDocumento, &estremiDocumento,
+		&s.NoteFunzionario, &s.NoteEconomo,
+		&funzionarioUsername, &economoUs,
+		&s.DataCreazione, &dataAut, &dataImp, &dataRen, &dataChi,
+		&utenteEmail, &settoreNome, &capitoloPEG, &capitoloDescr,
+	)
+	if err != nil {
+		return s, err
+	}
+	s.CapitoloID = ptrInt64(capitoloID)
+	s.ImportoEffettivo = ptrFloat64(importoEffettivo)
+	s.Fornitore = ptrString(fornitore)
+	s.DataDocumento = ptrTime(dataDocumento)
+	s.EstremiDocumento = ptrString(estremiDocumento)
+	s.FunzionarioUsername = ptrString(funzionarioUsername)
+	s.EconomoUsername = ptrString(economoUs)
+	s.DataAutorizzazione = ptrTime(dataAut)
+	s.DataImpegno = ptrTime(dataImp)
+	s.DataRendicontazione = ptrTime(dataRen)
+	s.DataChiusura = ptrTime(dataChi)
+	if utenteEmail.Valid {
+		s.UtenteEmail = utenteEmail.String
+	}
+	if settoreNome.Valid {
+		s.SettoreNome = settoreNome.String
+	}
+	if capitoloPEG.Valid {
+		s.CapitoloPEG = capitoloPEG.String
+	}
+	if capitoloDescr.Valid {
+		s.CapitoloDescr = capitoloDescr.String
+	}
+	return s, nil
+}
+
+const spesaSelectSQL = `
+	SELECT s.id, s.utente_username, s.settore_id, s.capitolo_id,
+	       s.motivazione, s.importo_presunto, s.importo_effettivo,
+	       s.tipo_pagamento, s.stato,
+	       s.fornitore, s.data_documento, s.estremi_documento,
+	       s.note_funzionario, s.note_economo,
+	       s.funzionario_username, s.economo_username,
+	       s.data_creazione, s.data_autorizzazione, s.data_impegno,
+	       s.data_rendicontazione, s.data_chiusura,
+	       u.email, st.nome, c.codice_peg, c.descrizione
+	FROM spese_economali s
+	LEFT JOIN utenti u         ON u.username = s.utente_username
+	LEFT JOIN settori st       ON st.id = s.settore_id
+	LEFT JOIN capitoli_spesa c ON c.id = s.capitolo_id`
+
+// GetSpesaByID restituisce una spesa singola con i campi joinati popolati.
+func (db *DB) GetSpesaByID(id int64) (models.SpesaEconomale, error) {
+	row := db.conn.QueryRow(spesaSelectSQL+` WHERE s.id = ?`, id)
+	return scanSpesaRow(row)
+}
+
+func (db *DB) querySpese(where string, args ...interface{}) ([]models.SpesaEconomale, error) {
+	q := spesaSelectSQL
+	if where != "" {
+		q += " WHERE " + where
+	}
+	q += " ORDER BY s.data_creazione DESC, s.id DESC"
+	rows, err := db.conn.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.SpesaEconomale
+	for rows.Next() {
+		s, err := scanSpesaRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// GetSpeseUtente restituisce le spese create da un utente specifico.
+func (db *DB) GetSpeseUtente(username string) ([]models.SpesaEconomale, error) {
+	return db.querySpese("s.utente_username = ?", username)
+}
+
+// GetSpeseSettore restituisce tutte le spese di un settore (vista funzionario).
+func (db *DB) GetSpeseSettore(settoreID string) ([]models.SpesaEconomale, error) {
+	return db.querySpese("s.settore_id = ?", settoreID)
+}
+
+// GetSpeseAll restituisce tutte le spese (vista economo/admin).
+func (db *DB) GetSpeseAll() ([]models.SpesaEconomale, error) {
+	return db.querySpese("")
+}
+
+// GetSpeseConStato restituisce le spese filtrate per stato (utility per KPI).
+func (db *DB) GetSpeseConStato(stato string) ([]models.SpesaEconomale, error) {
+	return db.querySpese("s.stato = ?", stato)
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

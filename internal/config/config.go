@@ -30,6 +30,8 @@ type Config struct {
 	LDAPMagazziniereGroup string
 	// LDAPFunzionarioGroup: AD group granting the 'funzionario' role.
 	LDAPFunzionarioGroup string
+	// LDAPEconomoGroup: AD group granting the 'economo' role (Cassa Economale).
+	LDAPEconomoGroup string
 
 	// SecureCookies: se true (default), imposta il flag Secure sui cookie di sessione,
 	// richiedendo HTTPS. Impostare a false solo se dietro reverse proxy che termina TLS.
@@ -82,6 +84,7 @@ func Load() *Config {
 		LDAPRequiredGroup:     getEnv("LDAP_REQUIRED_GROUP", ""),
 		LDAPMagazziniereGroup: getEnv("LDAP_MAGAZZINIERE_GROUP", ""),
 		LDAPFunzionarioGroup:  getEnv("LDAP_FUNZIONARIO_GROUP", ""),
+		LDAPEconomoGroup:      getEnv("LDAP_ECONOMO_GROUP", ""),
 
 		SecureCookies:        getEnvBool("SECURE_COOKIES", true),
 		LoginSessionTTLHours: getEnvInt("LOGIN_SESSION_TTL_HOURS", 24),

@@ -131,7 +131,10 @@ funcs := template.FuncMap{
 return t.Format("02 Jan 2006 15:04")
 },
 "initials": initials,
-"derefInt": derefInt,
+"derefInt":  derefInt,
+"derefStr":  derefStr,
+"derefTime": derefTime,
+"deref":     deref,
 "statoLabel": statoLabel,
 "statoTone":  statoTone,
 "add":        func(a, b int) int { return a + b },
@@ -160,13 +163,25 @@ magazzinoTemplates := map[string]bool{
 "notifiche-magazzino":   true,
 "report-magazzino":      true,
 }
+// Template del modulo Cassa Economale (sidebar dedicata).
+// I template multi-ruolo (spese-utente, spesa-form, spesa-detail) caricano
+// comunque la sidebar economo perché renderizzano condizionalmente nel template.
+economoTemplates := map[string]bool{
+"dashboard-economo": true,
+"capitoli":          true,
+"capitolo-form":     true,
+"spese-utente":      true,
+"spesa-form":        true,
+"spesa-detail":      true,
+}
 sidebarMagazzino := filepath.Join(baseDir, "_sidebar-magazzino.html")
+sidebarEconomo := filepath.Join(baseDir, "_sidebar-economo.html")
 prenotPartial := filepath.Join(baseDir, "_prenotazione-form.html")
 topbarBell := filepath.Join(baseDir, "_topbar-bell.html")
 drawerPartial := filepath.Join(baseDir, "_drawer.html")
 notifBody := filepath.Join(baseDir, "_notifiche-body.html")
 
-names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino", "prodotto-form", "lotto-form", "impostazioni", "fornitori", "fornitore-form", "acquisti", "acquisto-detail", "storico-ordini", "notifiche-utente", "notifiche-funzionario", "notifiche-magazzino", "report-magazzino"}
+names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino", "prodotto-form", "lotto-form", "impostazioni", "fornitori", "fornitore-form", "acquisti", "acquisto-detail", "storico-ordini", "notifiche-utente", "notifiche-funzionario", "notifiche-magazzino", "report-magazzino", "dashboard-economo", "capitoli", "capitolo-form", "spese-utente", "spesa-form", "spesa-detail"}
 // template senza topbar (e quindi senza bell)
 noTopbar := map[string]bool{"login": true, "dashboard": true}
 notifiche := map[string]bool{
@@ -179,6 +194,9 @@ for _, name := range names {
 files := []string{filepath.Join(baseDir, name+".html")}
 if magazzinoTemplates[name] {
 files = append(files, sidebarMagazzino)
+}
+if economoTemplates[name] {
+files = append(files, sidebarEconomo)
 }
 // dashboard-utente e dashboard-funzionario possono includere il form di prenotazione
 if name == "dashboard-utente" || name == "dashboard-funzionario" {
@@ -319,6 +337,27 @@ func percent(v, max float64) int {
 
 // derefInt dereferences a *int for template comparisons; nil → 0.
 func derefInt(p *int) int {
+if p == nil {
+return 0
+}
+return *p
+}
+
+func derefStr(p *string) string {
+if p == nil {
+return ""
+}
+return *p
+}
+
+func derefTime(p *time.Time) time.Time {
+if p == nil {
+return time.Time{}
+}
+return *p
+}
+
+func deref(p *float64) float64 {
 if p == nil {
 return 0
 }
@@ -511,6 +550,8 @@ case "funzionario":
 return "/dashboard/funzionario"
 case "magazziniere":
 return "/dashboard/magazzino"
+case "economo":
+return "/dashboard-economo"
 default:
 return "/dashboard"
 }
@@ -2571,6 +2612,20 @@ mux.HandleFunc("GET /notifiche/badge", app.requireAuth(app.handleNotificheBadge)
 mux.HandleFunc("POST /notifiche/{id}/letta", app.requireAuth(app.handleMarcaNotificaLetta))
 mux.HandleFunc("POST /notifiche/leggi-tutte", app.requireAuth(app.handleLeggiTutteNotifiche))
 
+// ── Cassa Economale (Economo) ─────────────────────────────────────────
+mux.HandleFunc("GET /dashboard-economo", app.requireRole("economo")(app.handleDashboardEconomo))
+mux.HandleFunc("GET /capitoli", app.requireRole("economo")(app.handleListCapitoli))
+mux.HandleFunc("GET /capitoli/nuovo", app.requireRole("economo")(app.handleNewCapitoloForm))
+mux.HandleFunc("POST /capitoli", app.requireRole("economo")(app.handleCreateCapitolo))
+mux.HandleFunc("GET /capitoli/{id}/edit", app.requireRole("economo")(app.handleEditCapitoloForm))
+mux.HandleFunc("POST /capitoli/{id}", app.requireRole("economo")(app.handleUpdateCapitolo))
+mux.HandleFunc("POST /capitoli/{id}/disattiva", app.requireRole("economo")(app.handleDisattivaCapitolo))
+// /spese* aperto a tutti gli autenticati: scoping ruolo-aware nel handler.
+mux.HandleFunc("GET /spese", app.requireAuth(app.handleListSpese))
+mux.HandleFunc("GET /spese/nuova", app.requireAuth(app.handleNewSpesaForm))
+mux.HandleFunc("POST /spese", app.requireAuth(app.handleCreateSpesa))
+mux.HandleFunc("GET /spese/{id}", app.requireAuth(app.handleSpesaDetail))
+
 if cfg.LDAPHost == "mock" {
 logger.Warn("RUNNING IN MOCK MODE - any credentials accepted")
 }
@@ -2587,4 +2642,334 @@ if err := http.ListenAndServe(addr, handler); err != nil {
 logger.Error("server: %v", err)
 os.Exit(1)
 }
+}
+
+// ── Cassa Economale handlers ────────────────────────────────────────────────
+
+// GET /dashboard-economo
+func (a *App) handleDashboardEconomo(w http.ResponseWriter, r *http.Request) {
+	anno := time.Now().Year()
+	capitoli, err := a.db.GetCapitoliConSaldi(anno)
+	if err != nil {
+		logger.Error("get capitoli con saldi: %v", err)
+		http.Error(w, "Errore DB", http.StatusInternalServerError)
+		return
+	}
+	speseInApprov, _ := a.db.GetSpeseConStato("in_approvazione")
+	totaleStanziato := 0.0
+	numAttivi := 0
+	for _, c := range capitoli {
+		if c.Attivo {
+			totaleStanziato += c.ImportoStanziato
+			numAttivi++
+		}
+	}
+	a.render(w, r, "dashboard-economo", a.viewData(r, map[string]any{
+		"Username":            a.getUsername(r),
+		"Role":                a.getRole(r),
+		"ActiveNav":           "economo-dashboard",
+		"SectionName":         "Dashboard Economo",
+		"Anno":                anno,
+		"NumCapitoliAttivi":   numAttivi,
+		"TotaleStanziato":     totaleStanziato,
+		"Capitoli":            capitoli,
+		"SpeseInApprovazione": speseInApprov,
+	}))
+}
+
+// GET /capitoli
+func (a *App) handleListCapitoli(w http.ResponseWriter, r *http.Request) {
+	anno := time.Now().Year()
+	if y := r.URL.Query().Get("anno"); y != "" {
+		if n, err := strconv.Atoi(y); err == nil && n >= 2000 && n <= 2100 {
+			anno = n
+		}
+	}
+	capitoli, err := a.db.GetCapitoliConSaldi(anno)
+	if err != nil {
+		logger.Error("get capitoli: %v", err)
+		http.Error(w, "Errore DB", http.StatusInternalServerError)
+		return
+	}
+	a.render(w, r, "capitoli", a.viewData(r, map[string]any{
+		"Username":  a.getUsername(r),
+		"Role":      a.getRole(r),
+		"ActiveNav": "capitoli",
+		"Anno":      anno,
+		"Capitoli":  capitoli,
+	}))
+}
+
+// GET /capitoli/nuovo
+func (a *App) handleNewCapitoloForm(w http.ResponseWriter, r *http.Request) {
+	a.render(w, r, "capitolo-form", a.viewData(r, map[string]any{
+		"Username":     a.getUsername(r),
+		"Role":         a.getRole(r),
+		"ActiveNav":    "capitoli",
+		"AnnoCorrente": time.Now().Year(),
+		"Capitolo":     models.CapitoloSpesa{Attivo: true},
+	}))
+}
+
+// POST /capitoli
+func (a *App) handleCreateCapitolo(w http.ResponseWriter, r *http.Request) {
+	c, err := parseCapitoloForm(r)
+	if err != nil {
+		a.renderCapitoloFormErr(w, r, c, err.Error())
+		return
+	}
+	if _, err := a.db.CreaCapitolo(c); err != nil {
+		logger.Error("crea capitolo: %v", err)
+		a.renderCapitoloFormErr(w, r, c, "Errore salvataggio: "+err.Error())
+		return
+	}
+	http.Redirect(w, r, "/capitoli", http.StatusSeeOther)
+}
+
+// GET /capitoli/{id}/edit
+func (a *App) handleEditCapitoloForm(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	c, err := a.db.GetCapitoloByID(id)
+	if err != nil {
+		http.Error(w, "capitolo non trovato", http.StatusNotFound)
+		return
+	}
+	a.render(w, r, "capitolo-form", a.viewData(r, map[string]any{
+		"Username":     a.getUsername(r),
+		"Role":         a.getRole(r),
+		"ActiveNav":    "capitoli",
+		"AnnoCorrente": time.Now().Year(),
+		"Capitolo":     c,
+	}))
+}
+
+// POST /capitoli/{id}
+func (a *App) handleUpdateCapitolo(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	c, err := parseCapitoloForm(r)
+	if err != nil {
+		c.ID = id
+		a.renderCapitoloFormErr(w, r, c, err.Error())
+		return
+	}
+	c.ID = id
+	if err := a.db.AggiornaCapitolo(c); err != nil {
+		logger.Error("aggiorna capitolo %d: %v", id, err)
+		a.renderCapitoloFormErr(w, r, c, "Errore salvataggio: "+err.Error())
+		return
+	}
+	http.Redirect(w, r, "/capitoli", http.StatusSeeOther)
+}
+
+// POST /capitoli/{id}/disattiva
+func (a *App) handleDisattivaCapitolo(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	if err := a.db.DisattivaCapitolo(id); err != nil {
+		logger.Error("disattiva capitolo %d: %v", id, err)
+		http.Error(w, "Errore DB", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/capitoli", http.StatusSeeOther)
+}
+
+func (a *App) renderCapitoloFormErr(w http.ResponseWriter, r *http.Request, c models.CapitoloSpesa, msg string) {
+	w.WriteHeader(http.StatusBadRequest)
+	a.render(w, r, "capitolo-form", a.viewData(r, map[string]any{
+		"Username":     a.getUsername(r),
+		"Role":         a.getRole(r),
+		"ActiveNav":    "capitoli",
+		"AnnoCorrente": time.Now().Year(),
+		"Capitolo":     c,
+		"Error":        msg,
+	}))
+}
+
+func parseCapitoloForm(r *http.Request) (models.CapitoloSpesa, error) {
+	if err := r.ParseForm(); err != nil {
+		return models.CapitoloSpesa{}, fmt.Errorf("bad request")
+	}
+	anno, err := strconv.Atoi(strings.TrimSpace(r.FormValue("anno")))
+	if err != nil || anno < 2000 || anno > 2100 {
+		return models.CapitoloSpesa{}, fmt.Errorf("anno non valido")
+	}
+	codice := strings.TrimSpace(r.FormValue("codice_peg"))
+	if codice == "" {
+		return models.CapitoloSpesa{}, fmt.Errorf("codice PEG obbligatorio")
+	}
+	descr := strings.TrimSpace(r.FormValue("descrizione"))
+	if descr == "" {
+		return models.CapitoloSpesa{}, fmt.Errorf("descrizione obbligatoria")
+	}
+	importoStr := strings.Replace(strings.TrimSpace(r.FormValue("importo_stanziato")), ",", ".", 1)
+	importo, err := strconv.ParseFloat(importoStr, 64)
+	if err != nil || importo < 0 {
+		return models.CapitoloSpesa{}, fmt.Errorf("importo non valido")
+	}
+	// Form di creazione: nessun campo "_has_attivo" → default true.
+	// Form di edit: presente "_has_attivo=1"; valore di "attivo" determina lo stato
+	// (assente = unchecked = false; presente = checked = true).
+	attivo := true
+	if r.FormValue("_has_attivo") != "" {
+		v := r.FormValue("attivo")
+		attivo = v == "1" || v == "on" || v == "true"
+	}
+	return models.CapitoloSpesa{
+		Anno:             anno,
+		CodicePEG:        codice,
+		Descrizione:      descr,
+		ImportoStanziato: importo,
+		Attivo:           attivo,
+	}, nil
+}
+
+// GET /spese
+func (a *App) handleListSpese(w http.ResponseWriter, r *http.Request) {
+	username := a.getUsername(r)
+	role := a.getRole(r)
+	var (
+		spese []models.SpesaEconomale
+		err   error
+	)
+	switch role {
+	case "economo", "admin":
+		spese, err = a.db.GetSpeseAll()
+	case "funzionario":
+		settoreID, errSet := a.db.GetSettoreIDByUsername(username)
+		if errSet != nil || settoreID == "" {
+			spese = nil
+		} else {
+			spese, err = a.db.GetSpeseSettore(settoreID)
+		}
+	default:
+		spese, err = a.db.GetSpeseUtente(username)
+	}
+	if err != nil {
+		logger.Error("list spese (%s): %v", role, err)
+		http.Error(w, "Errore DB", http.StatusInternalServerError)
+		return
+	}
+	a.render(w, r, "spese-utente", a.viewData(r, map[string]any{
+		"Username":  username,
+		"Role":      role,
+		"ActiveNav": "spese",
+		"Spese":     spese,
+	}))
+}
+
+// GET /spese/nuova
+func (a *App) handleNewSpesaForm(w http.ResponseWriter, r *http.Request) {
+	a.render(w, r, "spesa-form", a.viewData(r, map[string]any{
+		"Username":  a.getUsername(r),
+		"Role":      a.getRole(r),
+		"ActiveNav": "spese",
+		"Spesa":     models.SpesaEconomale{TipoPagamento: "contanti"},
+	}))
+}
+
+// POST /spese
+func (a *App) handleCreateSpesa(w http.ResponseWriter, r *http.Request) {
+	username := a.getUsername(r)
+	settoreID, _ := a.db.GetSettoreIDByUsername(username)
+	if settoreID == "" {
+		a.renderSpesaFormErr(w, r, models.SpesaEconomale{}, "Settore non assegnato all'utente. Contatta l'amministratore.")
+		return
+	}
+	s, err := parseSpesaForm(r)
+	if err != nil {
+		a.renderSpesaFormErr(w, r, s, err.Error())
+		return
+	}
+	s.UtenteUsername = username
+	s.SettoreID = settoreID
+	if _, err := a.db.CreaSpesa(s); err != nil {
+		logger.Error("crea spesa: %v", err)
+		a.renderSpesaFormErr(w, r, s, "Errore salvataggio: "+err.Error())
+		return
+	}
+	http.Redirect(w, r, "/spese", http.StatusSeeOther)
+}
+
+// GET /spese/{id}
+func (a *App) handleSpesaDetail(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	spesa, err := a.db.GetSpesaByID(id)
+	if err != nil {
+		http.Error(w, "spesa non trovata", http.StatusNotFound)
+		return
+	}
+	username := a.getUsername(r)
+	role := a.getRole(r)
+	// Access control: utente proprio, funzionario stesso settore, economo/admin tutto.
+	allowed := false
+	switch role {
+	case "economo", "admin":
+		allowed = true
+	case "funzionario":
+		settoreID, _ := a.db.GetSettoreIDByUsername(username)
+		allowed = (settoreID != "" && settoreID == spesa.SettoreID)
+	default:
+		allowed = (spesa.UtenteUsername == username)
+	}
+	if !allowed {
+		http.Error(w, "Accesso negato", http.StatusForbidden)
+		return
+	}
+	a.render(w, r, "spesa-detail", a.viewData(r, map[string]any{
+		"Username":  username,
+		"Role":      role,
+		"ActiveNav": "spese",
+		"Spesa":     spesa,
+	}))
+}
+
+func (a *App) renderSpesaFormErr(w http.ResponseWriter, r *http.Request, s models.SpesaEconomale, msg string) {
+	w.WriteHeader(http.StatusBadRequest)
+	a.render(w, r, "spesa-form", a.viewData(r, map[string]any{
+		"Username":  a.getUsername(r),
+		"Role":      a.getRole(r),
+		"ActiveNav": "spese",
+		"Spesa":     s,
+		"Error":     msg,
+	}))
+}
+
+func parseSpesaForm(r *http.Request) (models.SpesaEconomale, error) {
+	if err := r.ParseForm(); err != nil {
+		return models.SpesaEconomale{}, fmt.Errorf("bad request")
+	}
+	mot := strings.TrimSpace(r.FormValue("motivazione"))
+	if mot == "" {
+		return models.SpesaEconomale{}, fmt.Errorf("motivazione obbligatoria")
+	}
+	importoStr := strings.Replace(strings.TrimSpace(r.FormValue("importo_presunto")), ",", ".", 1)
+	importo, err := strconv.ParseFloat(importoStr, 64)
+	if err != nil || importo <= 0 {
+		return models.SpesaEconomale{}, fmt.Errorf("importo presunto non valido")
+	}
+	tp := strings.TrimSpace(r.FormValue("tipo_pagamento"))
+	if tp != "contanti" && tp != "carta" {
+		return models.SpesaEconomale{}, fmt.Errorf("tipo pagamento non valido")
+	}
+	return models.SpesaEconomale{
+		Motivazione:     mot,
+		ImportoPresunto: importo,
+		TipoPagamento:   tp,
+		Stato:           "in_approvazione",
+	}, nil
 }

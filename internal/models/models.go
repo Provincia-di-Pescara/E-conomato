@@ -227,3 +227,147 @@ type SpesaSettore struct {
 	SettoreNome string
 	Spesa       float64
 }
+
+// ─── Cassa Economale (Fondo Economale) ───────────────────────────────────
+// Modulo separato dal magazzino. L'Economo opera come Agente Contabile
+// ai sensi degli artt. 93 e 233 del D.Lgs. 267/2000 (TUEL). Vedi PLANE.md §8.
+
+// CapitoloSpesa è un capitolo PEG (Piano Esecutivo di Gestione) annuale.
+// Il residuo NON è memorizzato qui: si calcola on-demand come
+// importo_stanziato − impegnato − speso (vedi CapitoloConSaldi).
+type CapitoloSpesa struct {
+	ID               int64
+	Anno             int
+	CodicePEG        string
+	Descrizione      string
+	ImportoStanziato float64
+	Attivo           bool
+	CreatoIl         time.Time
+}
+
+// SpesaEconomale è una pratica di spesa del Fondo Economale.
+// Stati: 'in_approvazione' | 'autorizzata' | 'rifiutata_funz'
+//      | 'impegnata' | 'rifiutata_econ' | 'rendicontata' | 'chiusa'
+// TipoPagamento: 'contanti' | 'carta'.
+// Fornitore/DataDocumento/EstremiDocumento sono NULL fino alla rendicontazione
+// e diventano obbligatori per la chiusura (enforcement lato repo).
+type SpesaEconomale struct {
+	ID                  int64
+	UtenteUsername      string
+	SettoreID           string
+	CapitoloID          *int64
+	Motivazione         string
+	ImportoPresunto     float64
+	ImportoEffettivo    *float64
+	TipoPagamento       string
+	Stato               string
+	Fornitore           *string
+	DataDocumento       *time.Time
+	EstremiDocumento    *string
+	NoteFunzionario     string
+	NoteEconomo         string
+	FunzionarioUsername *string
+	EconomoUsername     *string
+	DataCreazione       time.Time
+	DataAutorizzazione  *time.Time
+	DataImpegno         *time.Time
+	DataRendicontazione *time.Time
+	DataChiusura        *time.Time
+	// Campi joinati (popolati da GetSpese*).
+	UtenteEmail   string
+	SettoreNome   string
+	CapitoloPEG   string
+	CapitoloDescr string
+}
+
+// AllegatoSpesa è una pezza d'appoggio (scontrino/ricevuta/fattura) allegata
+// a una spesa. Salvata come BLOB nel DB, coerente con prodotti.immagine_blob.
+type AllegatoSpesa struct {
+	ID         int64
+	SpesaID    int64
+	Filename   string
+	MimeType   string
+	Dimensione int64
+	BlobData   []byte
+	CaricatoDa string
+	CaricatoIl time.Time
+}
+
+// MovimentoCassa è una riga del Giornale di Cassa.
+// Tipi: 'anticipazione' | 'reintegro' | 'uscita' | 'restituzione_tesoreria'.
+type MovimentoCassa struct {
+	ID                     int64
+	Data                   time.Time
+	Tipo                   string
+	Descrizione            string
+	Importo                float64
+	RiferimentoSpesaID     *int64
+	RiferimentoReintegroID *int64
+	CreatoDa               string
+}
+
+// Reintegro è una richiesta di reintegro del Fondo, numerata progressivamente
+// per anno (UNIQUE(anno, numero)). Stati: 'bozza' | 'inviata' | 'liquidata'.
+type Reintegro struct {
+	ID                   int64
+	Numero               int
+	Anno                 int
+	DataRichiesta        time.Time
+	DataEmissioneMandato *time.Time
+	ImportoTotale        float64
+	Stato                string
+	EconomoUsername      string
+}
+
+// ReintegroSpesa è la junction tra reintegri e spese chiuse incluse nel reintegro.
+type ReintegroSpesa struct {
+	ReintegroID int64
+	SpesaID     int64
+}
+
+// ─── Viewmodels Cassa Economale ──────────────────────────────────────────
+
+// CapitoloConSaldi è la vista capitolo + saldi calcolati on-demand.
+// I tre saldi NON vengono persistiti: ricalcolati ad ogni query.
+type CapitoloConSaldi struct {
+	CapitoloSpesa
+	Impegnato float64
+	Speso     float64
+	Residuo   float64
+}
+
+// RigaGiornaleCassa è una riga del registro cronologico della cassa,
+// con saldo progressivo calcolato dal repo durante la SELECT.
+type RigaGiornaleCassa struct {
+	MovimentoCassa
+	NumeroPratica    string
+	NumeroReintegro  string
+	ImportoEntrata   float64
+	ImportoUscita    float64
+	SaldoProgressivo float64
+}
+
+// RigaReintegro è una riga del report "Richiesta di Reintegro" (raggruppata per PEG).
+type RigaReintegro struct {
+	CapitoloID       int64
+	CodicePEG        string
+	DescrizionePEG   string
+	SpesaID          int64
+	NumeroPratica    string
+	Fornitore        string
+	Oggetto          string
+	DataDocumento    time.Time
+	EstremiDocumento string
+	Importo          float64
+}
+
+// SezioneContoGiudiziale è il riepilogo annuale conforme a Modello 21
+// (D.P.R. 194/1996). Vedi PLANE.md §8.8 lettera C.
+type SezioneContoGiudiziale struct {
+	Anno                  int
+	FondoIniziale         float64
+	TotaleReintegri       float64
+	TotaleSpese           float64
+	SaldoFinale           float64
+	RestituitoInTesoreria float64
+}
