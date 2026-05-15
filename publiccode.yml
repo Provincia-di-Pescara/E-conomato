@@ -1,8 +1,8 @@
 publiccodeYmlVersion: 0.5.0
 name: E-conomato
 url: https://github.com/Provincia-di-Pescara/E-conomato
-softwareVersion: '0.5'
-releaseDate: 2026-05-14
+softwareVersion: '0.5.5'
+releaseDate: 2026-05-15
 logo: https://github.com/Provincia-di-Pescara/E-conomato/blob/main/web/static/img/logo.png
 platforms:
   - web
