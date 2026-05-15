@@ -973,6 +973,107 @@ func (db *DB) PreparaOrdineFIFO(ordineID int64) ([]models.ScortaSottoSoglia, err
 	return attraversate, nil
 }
 
+// SimulaOrdineFIFO esegue una simulazione non distruttiva dello scarico
+// FIFO per un ordine: legge le righe, scorre i lotti in ORDER BY data_acquisto
+// ASC e calcola quali prelievi avverrebbero, senza scrivere su
+// movimenti_magazzino o lotti_acquisto. Pensata per l'anteprima dal cruscotto
+// magazziniere prima di confermare la preparazione.
+func (db *DB) SimulaOrdineFIFO(ordineID int64) (*models.AnteprimaFIFO, error) {
+	rows, err := db.conn.Query(`
+		SELECT r.id, r.prodotto_id, p.nome,
+		       COALESCE(r.qta_approvata, r.qta_richiesta)
+		FROM righe_ordine r
+		JOIN prodotti p ON p.id = r.prodotto_id
+		WHERE r.ordine_id = ?
+		ORDER BY r.id
+	`, ordineID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	type rigaIn struct {
+		id           int64
+		prodottoID   int64
+		prodottoNome string
+		qtaDaEvadere int
+	}
+	var righe []rigaIn
+	for rows.Next() {
+		var r rigaIn
+		if err := rows.Scan(&r.id, &r.prodottoID, &r.prodottoNome, &r.qtaDaEvadere); err != nil {
+			return nil, err
+		}
+		righe = append(righe, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	out := &models.AnteprimaFIFO{OrdineID: ordineID, Righe: make([]models.RigaAnteprima, 0, len(righe))}
+	for _, r := range righe {
+		lotti, err := db.conn.Query(`
+			SELECT id, data_acquisto, quantita_rimanente, costo_unitario
+			FROM lotti_acquisto
+			WHERE prodotto_id = ? AND quantita_rimanente > 0
+			ORDER BY data_acquisto ASC
+		`, r.prodottoID)
+		if err != nil {
+			return nil, err
+		}
+		ra := models.RigaAnteprima{
+			RigaID:       r.id,
+			ProdottoID:   r.prodottoID,
+			ProdottoNome: r.prodottoNome,
+			QtaDaEvadere: r.qtaDaEvadere,
+		}
+		residua := r.qtaDaEvadere
+		for lotti.Next() {
+			var lID int64
+			var lData time.Time
+			var lRim int
+			var lCosto float64
+			if err := lotti.Scan(&lID, &lData, &lRim, &lCosto); err != nil {
+				lotti.Close()
+				return nil, err
+			}
+			if residua <= 0 {
+				continue
+			}
+			prelevato := lRim
+			if prelevato > residua {
+				prelevato = residua
+			}
+			costo := float64(prelevato) * lCosto
+			ra.Picks = append(ra.Picks, models.PickFIFO{
+				LottoID:       lID,
+				DataAcquisto:  lData,
+				QtaPrelevata:  prelevato,
+				CostoUnitario: lCosto,
+				CostoTotale:   costo,
+			})
+			ra.QtaSimulataEvasa += prelevato
+			ra.CostoRiga += costo
+			residua -= prelevato
+		}
+		lotti.Close()
+		if err := lotti.Err(); err != nil {
+			return nil, err
+		}
+		switch {
+		case ra.QtaSimulataEvasa == 0:
+			ra.Esito = "in_attesa"
+		case ra.QtaSimulataEvasa < ra.QtaDaEvadere:
+			ra.Esito = "evasa_parziale"
+		default:
+			ra.Esito = "evasa"
+		}
+		out.TotaleCosto += ra.CostoRiga
+		out.Righe = append(out.Righe, ra)
+	}
+	return out, nil
+}
+
 // SegnaOrdinePronte transita l'ordine a 'pronto'. Restituisce l'username per notifica email.
 func (db *DB) SegnaOrdinePronte(ordineID int64) (string, error) {
 	var username string

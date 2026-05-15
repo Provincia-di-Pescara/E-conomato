@@ -143,6 +143,13 @@
             <div class="ec-order__foot-spacer"></div>
 
             {{if eq .Ordine.Stato "approvato"}}
+            <button type="button" class="ec-btn ec-btn--ghost ec-btn--sm"
+                    hx-get="/ordini/{{.Ordine.ID}}/anteprima-fifo"
+                    hx-target="#modal-body" hx-swap="innerHTML"
+                    onclick="document.getElementById('modal').classList.add('is-open')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+              Anteprima FIFO
+            </button>
             <form method="POST" action="/ordini/{{.Ordine.ID}}/prepara" style="margin:0">
               <button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4V7Z"/></svg>
@@ -150,6 +157,15 @@
               </button>
             </form>
             {{else if eq .Ordine.Stato "in_preparazione"}}
+            <button type="button" class="ec-btn ec-btn--ghost ec-btn--sm"
+                    hx-get="/ordini/{{.Ordine.ID}}/anteprima-fifo"
+                    hx-target="#modal-body" hx-swap="innerHTML"
+                    onclick="document.getElementById('modal').classList.add('is-open')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+              Riepilogo FIFO
+            </button>
+            {{end}}
+            {{if eq .Ordine.Stato "in_preparazione"}}
             <form method="POST" action="/ordini/{{.Ordine.ID}}/pronto" style="margin:0">
               <button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4V7Z"/></svg>
@@ -213,6 +229,92 @@
   </div>
 </div>
 
+<div id="modal" class="ec-modal-bg" onclick="if(event.target===this)this.classList.remove('is-open')">
+  <div class="ec-modal ec-modal--wide" id="modal-body"></div>
+</div>
+
 <script src="/static/js/htmx.min.js"></script>
 </body>
 </html>
+
+{{define "fifo-preview-modal"}}
+<div class="ec-modal__head">
+  <div class="ec-modal__title">
+    <i class="fa-regular fa-eye" style="margin-right:6px"></i>
+    Anteprima FIFO — Ordine #{{.OrdineID}}
+  </div>
+  <div class="ec-modal__sub">
+    Simulazione dei prelievi per lotto. Nessuna scrittura su magazzino fino al click su "Prepara ora".
+    {{if .Utente}}<br><b>{{.Utente}}</b>{{if .Settore}} · settore {{.Settore}}{{end}} · stato <span class="ec-pill ec-pill--{{statoTone .Stato}}">{{statoLabel .Stato}}</span>{{end}}
+  </div>
+</div>
+<div class="ec-modal__body">
+  {{if .Anteprima.Righe}}
+  <div class="ec-stack" style="gap:14px">
+    {{range .Anteprima.Righe}}
+    <div style="border:1px solid var(--ec-line);border-radius:10px;padding:12px 14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <strong style="flex:1">{{.ProdottoNome}}</strong>
+        <span class="ec-pill ec-pill--{{if eq .Esito "evasa"}}teal{{else if eq .Esito "evasa_parziale"}}amber{{else}}neutral{{end}}">
+          {{if eq .Esito "evasa"}}Evasa{{else if eq .Esito "evasa_parziale"}}Parziale{{else}}In attesa{{end}}
+        </span>
+        <span class="mono" style="color:var(--ec-ink-500);font-size:12px">{{.QtaSimulataEvasa}} / {{.QtaDaEvadere}} pz</span>
+      </div>
+      {{if .Picks}}
+      <table class="ec-table" style="margin:0">
+        <thead>
+          <tr>
+            <th>Lotto</th>
+            <th>Acquisto</th>
+            <th style="text-align:right">Qta</th>
+            <th style="text-align:right">Costo unit.</th>
+            <th style="text-align:right">Costo riga</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Picks}}
+          <tr>
+            <td class="mono">#{{.LottoID}}</td>
+            <td class="mono" style="font-size:12px">{{fmtDate .DataAcquisto}}</td>
+            <td class="mono" style="text-align:right">{{.QtaPrelevata}}</td>
+            <td class="mono" style="text-align:right">€ {{printf "%.2f" .CostoUnitario}}</td>
+            <td class="mono" style="text-align:right;font-weight:600">€ {{printf "%.2f" .CostoTotale}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      <div style="text-align:right;margin-top:6px;font-size:12.5px;color:var(--ec-ink-700)">
+        Subtotale riga: <b class="mono">€ {{printf "%.2f" .CostoRiga}}</b>
+      </div>
+      {{else}}
+      <div style="font-size:13px;color:var(--ec-ink-500);font-style:italic">
+        Nessun lotto disponibile per questo prodotto. La riga resterà <b>in attesa</b> finché non entra un nuovo carico.
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+  <div style="margin-top:14px;padding:12px 14px;border-radius:10px;background:var(--ec-bg-soft);display:flex;align-items:center;gap:10px">
+    <span style="flex:1;font-weight:600">Totale costo simulato</span>
+    <span class="mono" style="font-size:18px;font-weight:700;color:var(--ec-navy-900)">€ {{printf "%.2f" .Anteprima.TotaleCosto}}</span>
+  </div>
+  {{else}}
+  <div class="ec-empty" style="margin:0">
+    <div class="ec-empty__title">Nessuna riga sull'ordine</div>
+  </div>
+  {{end}}
+</div>
+<div class="ec-modal__foot">
+  <button type="button" class="ec-btn ec-btn--ghost"
+          onclick="document.getElementById('modal').classList.remove('is-open')">Chiudi</button>
+  {{if eq .Stato "approvato"}}
+  <form method="POST" action="/ordini/{{.OrdineID}}/prepara" style="margin:0"
+        hx-confirm="Confermi la preparazione FIFO dell'ordine #{{.OrdineID}}? L'azione scarica i lotti definitivamente.">
+    <button type="submit" class="ec-btn ec-btn--primary">
+      <i class="fa-solid fa-check" style="margin-right:6px"></i>
+      Prepara ora
+    </button>
+  </form>
+  {{end}}
+</div>
+{{end}}

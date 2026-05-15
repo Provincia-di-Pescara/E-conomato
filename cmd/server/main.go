@@ -1076,6 +1076,30 @@ func (a *App) handlePreparaOrdine(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/dashboard/magazzino", http.StatusSeeOther)
 }
 
+// GET /ordini/{id}/anteprima-fifo — restituisce il partial della modale che
+// mostra la simulazione non distruttiva dei prelievi FIFO per l'ordine.
+func (a *App) handleAnteprimaFIFO(w http.ResponseWriter, r *http.Request) {
+	ordineID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", 400)
+		return
+	}
+	anteprima, err := a.db.SimulaOrdineFIFO(ordineID)
+	if err != nil {
+		logger.Error("simula FIFO ordine %d: %v", ordineID, err)
+		http.Error(w, "errore interno", 500)
+		return
+	}
+	utente, settore, stato, _ := a.db.GetOrdineMeta(ordineID)
+	a.renderPartial(w, r, "dashboard-magazzino", "fifo-preview-modal", a.viewData(r, map[string]any{
+		"Anteprima": anteprima,
+		"Utente":    utente,
+		"Settore":   settore,
+		"Stato":     stato,
+		"OrdineID":  ordineID,
+	}))
+}
+
 // POST /ordini/{id}/pronto
 func (a *App) handleSegnaPronte(w http.ResponseWriter, r *http.Request) {
 	ordineID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -2258,6 +2282,7 @@ mux.HandleFunc("POST /ordini/{id}/rifiuta", app.requireRole("funzionario")(app.h
 // Azioni magazziniere
 mux.HandleFunc("GET /storico-ordini", app.requireRole("magazziniere")(app.handleStoricoOrdini))
 mux.HandleFunc("GET /prodotti/{id}/storico", app.requireRole("magazziniere")(app.handleProdottoStorico))
+mux.HandleFunc("GET /ordini/{id}/anteprima-fifo", app.requireRole("magazziniere")(app.handleAnteprimaFIFO))
 mux.HandleFunc("POST /ordini/{id}/prepara", app.requireRole("magazziniere")(app.handlePreparaOrdine))
 mux.HandleFunc("POST /ordini/{id}/pronto", app.requireRole("magazziniere")(app.handleSegnaPronte))
 mux.HandleFunc("POST /ordini/{id}/consegna", app.requireRole("magazziniere")(app.handleConsegnaOrdine))

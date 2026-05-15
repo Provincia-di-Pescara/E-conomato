@@ -181,3 +181,49 @@ type ScortaSottoSoglia struct {
 	Rimanente     int
 	SogliaMinima  int
 }
+
+// PickFIFO rappresenta un singolo prelievo simulato da un lotto durante
+// l'anteprima FIFO di un ordine. Non viene mai persistito: serve solo a
+// mostrare al magazziniere quali lotti verrebbero scaricati e a quale costo.
+type PickFIFO struct {
+	LottoID       int64
+	DataAcquisto  time.Time
+	QtaPrelevata  int
+	CostoUnitario float64
+	CostoTotale   float64
+}
+
+// RigaAnteprima è la simulazione FIFO di una singola riga ordine.
+// Esito: "evasa" | "evasa_parziale" | "in_attesa".
+type RigaAnteprima struct {
+	RigaID           int64
+	ProdottoID       int64
+	ProdottoNome     string
+	QtaDaEvadere     int
+	QtaSimulataEvasa int
+	Esito            string
+	Picks            []PickFIFO
+	CostoRiga        float64
+}
+
+// AnteprimaFIFO è il risultato di SimulaOrdineFIFO: snapshot non distruttivo
+// dei prelievi che verrebbero eseguiti su un ordine se preparato adesso.
+type AnteprimaFIFO struct {
+	OrdineID    int64
+	Righe       []RigaAnteprima
+	TotaleCosto float64
+}
+
+// SpesaMese aggrega la spesa (somma costo_totale dei movimenti_magazzino)
+// per un singolo mese dell'anno. Mese in 1..12.
+type SpesaMese struct {
+	Mese  int
+	Spesa float64
+}
+
+// SpesaSettore aggrega la spesa per un settore in un dato periodo.
+type SpesaSettore struct {
+	SettoreID   string
+	SettoreNome string
+	Spesa       float64
+}
