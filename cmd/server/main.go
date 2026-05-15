@@ -116,6 +116,7 @@ magazzinoTemplates := map[string]bool{
 sidebarMagazzino := filepath.Join(baseDir, "_sidebar-magazzino.html")
 prenotPartial := filepath.Join(baseDir, "_prenotazione-form.html")
 topbarBell := filepath.Join(baseDir, "_topbar-bell.html")
+drawerPartial := filepath.Join(baseDir, "_drawer.html")
 notifBody := filepath.Join(baseDir, "_notifiche-body.html")
 
 names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino", "prodotto-form", "lotto-form", "impostazioni", "fornitori", "fornitore-form", "acquisti", "acquisto-detail", "storico-ordini", "notifiche-utente", "notifiche-funzionario", "notifiche-magazzino", "report-magazzino"}
@@ -138,6 +139,10 @@ files = append(files, prenotPartial)
 }
 if !noTopbar[name] {
 files = append(files, topbarBell)
+}
+// Tutti i template con app-shell (escluso login) caricano il drawer/burger mobile.
+if name != "login" {
+files = append(files, drawerPartial)
 }
 if notifiche[name] {
 files = append(files, notifBody)

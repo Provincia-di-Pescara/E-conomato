@@ -1,0 +1,7 @@
+{{define "drawer-burger"}}<button type="button" class="ec-burger ec-iconbtn" aria-label="Apri menu"
+   onclick="document.querySelector('.ec-side').classList.toggle('is-open');document.getElementById('drawer-bg').classList.toggle('is-open');">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>
+</button>{{end}}
+
+{{define "drawer-backdrop"}}<div id="drawer-bg" class="ec-drawer-bg"
+   onclick="this.classList.remove('is-open');document.querySelector('.ec-side').classList.remove('is-open');"></div>{{end}}

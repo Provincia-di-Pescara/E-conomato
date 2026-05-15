@@ -59,6 +59,7 @@
 
   <div class="ec-main">
     <header class="ec-topbar">
+      {{template "drawer-burger" .}}
       <div class="ec-topbar__title">
         {{if .BrandName}}{{.BrandName}}{{else}}Provincia di Pescara{{end}}
         <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
@@ -89,6 +90,8 @@
     </main>
   </div>
 </div>
+
+{{template "drawer-backdrop" .}}
 
 <script src="/static/js/htmx.min.js"></script>
 </body>
