@@ -382,16 +382,20 @@ func (db *DB) GetCatalogo(search string, categoriaID int64) ([]models.ProdottoCa
 // ── Prodotti ─────────────────────────────────────────────────────────────────
 
 // ProdottoRow extends Prodotto with the category name for list views (no BLOB).
+// HasImmagine is true when the row has a non-empty immagine_blob, computed in
+// SQL so the list query never has to ship the BLOB payload itself.
 type ProdottoRow struct {
 	models.Prodotto
 	CategoriaName   string
 	ScortaRimanente int
+	HasImmagine     bool
 }
 
 func (db *DB) GetAllProdotti() ([]ProdottoRow, error) {
 	rows, err := db.conn.Query(`
 		SELECT p.id, COALESCE(p.codice_articolo,''), p.nome, COALESCE(p.descrizione,''),
 		       COALESCE(p.categoria_id,0), p.scorta_minima, COALESCE(p.icona,''),
+		       (p.immagine_blob IS NOT NULL AND length(p.immagine_blob) > 0),
 		       COALESCE(c.nome,'—'),
 		       COALESCE((SELECT SUM(l.quantita_rimanente) FROM lotti_acquisto l WHERE l.prodotto_id=p.id),0)
 		FROM prodotti p
@@ -405,7 +409,8 @@ func (db *DB) GetAllProdotti() ([]ProdottoRow, error) {
 	for rows.Next() {
 		var r ProdottoRow
 		if err := rows.Scan(&r.ID, &r.CodiceArticolo, &r.Nome, &r.Descrizione,
-			&r.CategoriaID, &r.ScortaMinima, &r.Icona, &r.CategoriaName, &r.ScortaRimanente); err != nil {
+			&r.CategoriaID, &r.ScortaMinima, &r.Icona, &r.HasImmagine,
+			&r.CategoriaName, &r.ScortaRimanente); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

@@ -93,7 +93,18 @@
       "Bash(curl -s -i -c /tmp/cookies2.txt -X POST http://192.168.1.80:20200/login -d \"username=mock.utente&password=x\" -H \"Content-Type: application/x-www-form-urlencoded\" -H \"X-Forwarded-Proto: http\" --max-time 10)",
       "Bash(curl -s -i -b /tmp/cookies2.txt -H \"X-Forwarded-Proto: http\" http://192.168.1.80:20200/dashboard --max-time 10)",
       "Bash(curl -s http://192.168.1.80:20200/version)",
-      "Bash(curl -s -I http://192.168.1.80:20200/ --max-time 5)"
+      "Bash(curl -s -I http://192.168.1.80:20200/ --max-time 5)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\mirko.daddiego\\\\Documents\\\\magazzino\" -Recurse -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -First 30)",
+      "Bash(Format-Table FullName)",
+      "Bash(podman compose *)",
+      "Bash(curl -s -c /tmp/c.txt -X POST http://localhost:8080/login -d \"username=mock.utente&password=x\" -H \"Content-Type: application/x-www-form-urlencoded\" -o /dev/null -w \"%{http_code}\\\\n%{redirect_url}\\\\n\")",
+      "Bash(curl -s -b /tmp/c.txt -L http://localhost:8080/dashboard -A \"Mozilla/5.0 \\(iPhone\\)\" -H \"Accept: text/html\" -o /tmp/page.html -w \"%{http_code}\\\\n\")",
+      "Bash(curl -s http://localhost:8080/static/css/style.css)",
+      "Bash(curl -s -b /tmp/c.txt http://localhost:8080/dashboard -A \"Mozilla/5.0 \\(iPhone\\)\")",
+      "PowerShell(docker version *)",
+      "PowerShell(docker run --rm -v \"${PWD}:/build\" -w /build golang:1.26-alpine sh -c \"apk add --no-cache gcc musl-dev && CGO_ENABLED=1 go get github.com/HugoSmits86/nativewebp golang.org/x/image && CGO_ENABLED=1 go mod tidy\")",
+      "PowerShell(docker run --rm -v \"${PWD}:/build\" -w /build golang:1.26-alpine sh -c \"apk add --no-cache gcc musl-dev > /dev/null && CGO_ENABLED=1 go build ./...\")"
     ]
   }
 }

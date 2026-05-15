@@ -1,11 +1,16 @@
 package main
 
 import (
+"bytes"
 "context"
 "crypto/sha256"
 "encoding/json"
 "fmt"
 "html/template"
+"image"
+_ "image/gif"
+_ "image/jpeg"
+_ "image/png"
 "io"
 "net/http"
 "os"
@@ -16,8 +21,12 @@ import (
 "strings"
 "time"
 
+"github.com/HugoSmits86/nativewebp"
 "github.com/gorilla/sessions"
 "github.com/joho/godotenv"
+"golang.org/x/image/draw"
+_ "golang.org/x/image/webp"
+
 "github.com/Provincia-di-Pescara/e-conomato/internal/auth"
 "github.com/Provincia-di-Pescara/e-conomato/internal/config"
 "github.com/Provincia-di-Pescara/e-conomato/internal/database"
@@ -26,6 +35,44 @@ import (
 "github.com/Provincia-di-Pescara/e-conomato/internal/models"
 "github.com/Provincia-di-Pescara/e-conomato/internal/notify"
 )
+
+// normalizeProductImage decodes raw image bytes (jpeg/png/gif/webp), resizes
+// so the longest side is at most maxDim pixels, and re-encodes as WebP.
+// Returns nil bytes when raw is empty (caller treats as "no image change").
+func normalizeProductImage(raw []byte, maxDim int) ([]byte, error) {
+if len(raw) == 0 {
+return nil, nil
+}
+src, _, err := image.Decode(bytes.NewReader(raw))
+if err != nil {
+return nil, fmt.Errorf("formato immagine non supportato: %w", err)
+}
+b := src.Bounds()
+w, h := b.Dx(), b.Dy()
+nw, nh := w, h
+if w > maxDim || h > maxDim {
+if w >= h {
+nw = maxDim
+nh = h * maxDim / w
+} else {
+nh = maxDim
+nw = w * maxDim / h
+}
+}
+var out image.Image
+if nw != w || nh != h {
+rgba := image.NewRGBA(image.Rect(0, 0, nw, nh))
+draw.CatmullRom.Scale(rgba, rgba.Bounds(), src, b, draw.Over, nil)
+out = rgba
+} else {
+out = src
+}
+var buf bytes.Buffer
+if err := nativewebp.Encode(&buf, out, nil); err != nil {
+return nil, fmt.Errorf("encoding webp fallito: %w", err)
+}
+return buf.Bytes(), nil
+}
 
 // AppVersion is injected at build time via -ldflags "-X main.AppVersion=<ver>"
 var AppVersion = "unknown"
@@ -2019,9 +2066,20 @@ var imgBytes []byte
 if r.MultipartForm != nil {
 if fhs := r.MultipartForm.File["immagine"]; len(fhs) > 0 {
 f, err := fhs[0].Open()
-if err == nil {
+if err != nil {
+return models.Prodotto{}, fmt.Errorf("apertura immagine fallita: %w", err)
+}
 defer f.Close()
-imgBytes, _ = io.ReadAll(f)
+raw, err := io.ReadAll(f)
+if err != nil {
+return models.Prodotto{}, fmt.Errorf("lettura immagine fallita: %w", err)
+}
+if len(raw) > 0 {
+norm, err := normalizeProductImage(raw, 1024)
+if err != nil {
+return models.Prodotto{}, err
+}
+imgBytes = norm
 }
 }
 }
