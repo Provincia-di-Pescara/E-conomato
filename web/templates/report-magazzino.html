@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>E-conomato — Report</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/fa/css/all.min.css" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+<div class="ec-app">
+
+  {{template "sidebar-magazzino" .}}
+
+  <div class="ec-main">
+
+    <header class="ec-topbar">
+      <div class="ec-topbar__title">
+        {{if .BrandName}}{{.BrandName}}{{else}}E-conomato{{end}}
+        <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
+        <b>Report</b>
+      </div>
+      <div class="ec-topbar__right">
+        {{template "topbar-bell" .}}
+      </div>
+    </header>
+
+    <main class="ec-content">
+
+      <header class="ec-secthead">
+        <div>
+          <div class="ec-secthead__kicker">Area magazzino</div>
+          <h1 class="ec-secthead__title">Reportistica anno {{.Anno}}</h1>
+          <p class="ec-secthead__sub">Spesa per mese e per settore, evasione ordini e tempi medi. I valori sono calcolati sui movimenti di magazzino congelati al momento dello scarico.</p>
+        </div>
+        <div class="ec-secthead__right" style="display:flex;gap:8px;align-items:center">
+          <a href="/report?anno={{.AnnoPrec}}" class="ec-iconbtn" title="Anno precedente">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+          </a>
+          <span class="ec-pill ec-pill--navy mono" style="font-size:13px;font-weight:600">{{.Anno}}</span>
+          <a href="/report?anno={{.AnnoSucc}}" class="ec-iconbtn" title="Anno successivo">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+          </a>
+          <a href="/report.csv?anno={{.Anno}}" class="ec-btn ec-btn--secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg>
+            Esporta CSV
+          </a>
+        </div>
+      </header>
+
+      <div class="ec-stats">
+        <div class="ec-stat">
+          <div class="ec-stat__label">Spesa anno</div>
+          <div class="ec-stat__value">{{fmtEUR .SpesaAnno}}</div>
+          <div class="ec-stat__delta">somma costi FIFO dei movimenti</div>
+        </div>
+        <div class="ec-stat ec-stat--teal">
+          <div class="ec-stat__label">Ordini evasi</div>
+          <div class="ec-stat__value">{{.OrdiniEvasi}}</div>
+          <div class="ec-stat__delta">ordini con stato "ritirato"</div>
+        </div>
+        <div class="ec-stat ec-stat--gold">
+          <div class="ec-stat__label">Tempo medio</div>
+          <div class="ec-stat__value">{{printf "%.1f" .TempoMedio}}</div>
+          <div class="ec-stat__delta">giorni da creazione a scarico</div>
+        </div>
+        <div class="ec-stat">
+          <div class="ec-stat__label">Settori attivi</div>
+          <div class="ec-stat__value">{{.SettoriAttivi}}</div>
+          <div class="ec-stat__delta">con almeno un movimento</div>
+        </div>
+      </div>
+
+      <section class="ec-charts">
+        <div class="ec-chart">
+          <header class="ec-chart__head">
+            <div>
+              <div class="ec-chart__title">Spesa mensile</div>
+              <div class="ec-chart__sub">anno {{.Anno}}</div>
+            </div>
+            <div class="ec-chart__sub mono">Max {{fmtEUR .MensileMax}}</div>
+          </header>
+          <div class="ec-bars">
+            {{range .Mensile}}
+            <div class="ec-bar">
+              <div class="ec-bar__col" style="height:{{percent .Spesa $.MensileMax}}%">
+                {{if gt .Spesa 0.0}}<span class="ec-bar__val">{{fmtEUR .Spesa}}</span>{{end}}
+              </div>
+              <div class="ec-bar__label">{{monthLabel .Mese}}</div>
+            </div>
+            {{end}}
+          </div>
+        </div>
+
+        <div class="ec-chart">
+          <header class="ec-chart__head">
+            <div>
+              <div class="ec-chart__title">Spesa per settore</div>
+              <div class="ec-chart__sub">distribuzione anno {{.Anno}}</div>
+            </div>
+            <div class="ec-chart__sub mono">Totale {{fmtEUR .TotSettore}}</div>
+          </header>
+          {{if .PerSettore}}
+          <div class="ec-legend">
+            {{range $i, $s := .PerSettore}}
+            <div class="ec-legend__row">
+              <span class="ec-legend__swatch" style="background:hsl({{mul $i 53}}, 60%, 50%)"></span>
+              <span>{{.SettoreNome}}</span>
+              <span class="ec-legend__bar">
+                <div style="width:{{percent .Spesa $.TotSettore}}%;background:hsl({{mul $i 53}}, 60%, 50%)"></div>
+              </span>
+              <span class="ec-legend__val">{{fmtEUR .Spesa}}</span>
+            </div>
+            {{end}}
+          </div>
+          {{else}}
+          <div class="ec-empty" style="margin:0">
+            <div class="ec-empty__title">Nessun movimento nell'anno {{.Anno}}</div>
+            <div class="ec-empty__hint">Quando il magazzino evade ordini, vedrai qui la distribuzione di spesa per settore.</div>
+          </div>
+          {{end}}
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<script src="/static/js/htmx.min.js"></script>
+</body>
+</html>

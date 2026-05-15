@@ -3,6 +3,9 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"io"
+	"strconv"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -1694,6 +1697,208 @@ func (db *DB) MarkEmailFailed(id int64, attempts int, errMsg string, nextAttempt
 		WHERE id = ?
 	`, stato, attempts, errMsg, nextAttempt, id)
 	return err
+}
+
+// ── Reportistica magazziniere ────────────────────────────────────────────────
+
+// GetSpesaAnno restituisce la spesa totale (somma costo_totale dei
+// movimenti_magazzino) per l'anno indicato.
+func (db *DB) GetSpesaAnno(anno int) (float64, error) {
+	var v float64
+	err := db.conn.QueryRow(`
+		SELECT COALESCE(SUM(costo_totale), 0)
+		FROM movimenti_magazzino
+		WHERE strftime('%Y', data_movimento) = ?
+	`, strconv.Itoa(anno)).Scan(&v)
+	return v, err
+}
+
+// GetOrdiniEvasiAnno conta gli ordini chiusi (stato='ritirato') creati
+// nell'anno indicato.
+func (db *DB) GetOrdiniEvasiAnno(anno int) (int, error) {
+	var n int
+	err := db.conn.QueryRow(`
+		SELECT COUNT(*) FROM ordini
+		WHERE stato = 'ritirato' AND strftime('%Y', data_creazione) = ?
+	`, strconv.Itoa(anno)).Scan(&n)
+	return n, err
+}
+
+// GetTempoMedioEvasioneAnno calcola il tempo medio (in giorni) intercorso
+// tra la creazione dell'ordine e lo scarico dei suoi movimenti, per gli
+// ordini conclusi nello stato 'ritirato' dell'anno indicato.
+func (db *DB) GetTempoMedioEvasioneAnno(anno int) (float64, error) {
+	var v sql.NullFloat64
+	err := db.conn.QueryRow(`
+		SELECT AVG(julianday(m.data_movimento) - julianday(o.data_creazione))
+		FROM movimenti_magazzino m
+		JOIN righe_ordine r ON r.id = m.riga_ordine_id
+		JOIN ordini o ON o.id = r.ordine_id
+		WHERE o.stato = 'ritirato'
+		  AND strftime('%Y', o.data_creazione) = ?
+	`, strconv.Itoa(anno)).Scan(&v)
+	if err != nil {
+		return 0, err
+	}
+	if !v.Valid {
+		return 0, nil
+	}
+	return v.Float64, nil
+}
+
+// GetSettoriAttiviAnno conta i settori distinti che hanno avuto almeno un
+// movimento di magazzino nell'anno indicato.
+func (db *DB) GetSettoriAttiviAnno(anno int) (int, error) {
+	var n int
+	err := db.conn.QueryRow(`
+		SELECT COUNT(DISTINCT o.settore_id)
+		FROM movimenti_magazzino m
+		JOIN righe_ordine r ON r.id = m.riga_ordine_id
+		JOIN ordini o ON o.id = r.ordine_id
+		WHERE strftime('%Y', m.data_movimento) = ?
+	`, strconv.Itoa(anno)).Scan(&n)
+	return n, err
+}
+
+// GetSpesaMensile aggrega la spesa per mese (1..12) nell'anno indicato.
+// Restituisce sempre 12 entries (i mesi senza movimenti hanno Spesa=0).
+func (db *DB) GetSpesaMensile(anno int) ([]models.SpesaMese, error) {
+	rows, err := db.conn.Query(`
+		SELECT CAST(strftime('%m', data_movimento) AS INTEGER) AS mese,
+		       COALESCE(SUM(costo_totale), 0) AS spesa
+		FROM movimenti_magazzino
+		WHERE strftime('%Y', data_movimento) = ?
+		GROUP BY mese
+	`, strconv.Itoa(anno))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	byMese := map[int]float64{}
+	for rows.Next() {
+		var m int
+		var s float64
+		if err := rows.Scan(&m, &s); err != nil {
+			return nil, err
+		}
+		byMese[m] = s
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	out := make([]models.SpesaMese, 12)
+	for i := 1; i <= 12; i++ {
+		out[i-1] = models.SpesaMese{Mese: i, Spesa: byMese[i]}
+	}
+	return out, nil
+}
+
+// GetSpesaPerSettore aggrega la spesa per settore nell'anno indicato,
+// ordinata in modo decrescente per importo.
+func (db *DB) GetSpesaPerSettore(anno int) ([]models.SpesaSettore, error) {
+	rows, err := db.conn.Query(`
+		SELECT o.settore_id,
+		       COALESCE(s.nome, o.settore_id) AS settore_nome,
+		       SUM(m.costo_totale) AS spesa
+		FROM movimenti_magazzino m
+		JOIN righe_ordine r ON r.id = m.riga_ordine_id
+		JOIN ordini o ON o.id = r.ordine_id
+		LEFT JOIN settori s ON s.id = o.settore_id
+		WHERE strftime('%Y', m.data_movimento) = ?
+		GROUP BY o.settore_id, s.nome
+		ORDER BY spesa DESC
+	`, strconv.Itoa(anno))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.SpesaSettore
+	for rows.Next() {
+		var s models.SpesaSettore
+		if err := rows.Scan(&s.SettoreID, &s.SettoreNome, &s.Spesa); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// StreamMovimentiCSV scrive su w il CSV dei movimenti dell'anno indicato.
+// Formato compatibile con Excel italiano: BOM UTF-8, separatore ';', decimali
+// con virgola, date 'gg/mm/aaaa'. Stream riga per riga senza caricare tutto
+// in memoria.
+func (db *DB) StreamMovimentiCSV(w io.Writer, anno int) error {
+	// BOM UTF-8 (necessario perché Excel italiano riconosca la codifica).
+	if _, err := w.Write([]byte{0xEF, 0xBB, 0xBF}); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, "id;data;ordine_id;settore;prodotto_codice;prodotto;quantita;costo_totale;lotto_id\r\n"); err != nil {
+		return err
+	}
+	rows, err := db.conn.Query(`
+		SELECT m.id, m.data_movimento, o.id, COALESCE(s.nome, o.settore_id),
+		       COALESCE(p.codice_articolo, ''), p.nome,
+		       m.quantita_prelevata, m.costo_totale, m.lotto_id
+		FROM movimenti_magazzino m
+		LEFT JOIN righe_ordine r ON r.id = m.riga_ordine_id
+		LEFT JOIN ordini o ON o.id = r.ordine_id
+		LEFT JOIN settori s ON s.id = o.settore_id
+		LEFT JOIN prodotti p ON p.id = r.prodotto_id
+		WHERE strftime('%Y', m.data_movimento) = ?
+		ORDER BY m.data_movimento, m.id
+	`, strconv.Itoa(anno))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			id        int64
+			dataMov   time.Time
+			ordineID  sql.NullInt64
+			settore   sql.NullString
+			prodCod   string
+			prodNome  string
+			qta       int
+			costo     float64
+			lottoID   int64
+		)
+		if err := rows.Scan(&id, &dataMov, &ordineID, &settore, &prodCod, &prodNome, &qta, &costo, &lottoID); err != nil {
+			return err
+		}
+		ord := ""
+		if ordineID.Valid {
+			ord = strconv.FormatInt(ordineID.Int64, 10)
+		}
+		set := ""
+		if settore.Valid {
+			set = settore.String
+		}
+		costoStr := strings.Replace(strconv.FormatFloat(costo, 'f', 2, 64), ".", ",", 1)
+		if _, err := fmt.Fprintf(w, "%d;%s;%s;%s;%s;%s;%d;%s;%d\r\n",
+			id,
+			dataMov.Format("02/01/2006"),
+			ord,
+			csvEscape(set),
+			csvEscape(prodCod),
+			csvEscape(prodNome),
+			qta,
+			costoStr,
+			lottoID,
+		); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+// csvEscape mette il campo tra virgolette se contiene caratteri speciali
+// (";", virgolette, newline) e raddoppia le virgolette interne.
+func csvEscape(s string) string {
+	if !strings.ContainsAny(s, ";\"\r\n") {
+		return s
+	}
+	return "\"" + strings.ReplaceAll(s, "\"", "\"\"") + "\""
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

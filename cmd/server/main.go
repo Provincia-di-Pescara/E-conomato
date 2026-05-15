@@ -91,6 +91,10 @@ return t.Format("02 Jan 2006 15:04")
 "sub":        func(a, b int) int { return a - b },
 "mul":        func(a, b int) int { return a * b },
 "mulFloat":   func(c float64, q int) float64 { return c * float64(q) },
+"fmtEUR":     fmtEUR,
+"monthLabel": monthLabel,
+"percent":    percent,
+"avatarHue":  avatarHue,
 }
 
 // I template magazziniere riusano la sidebar tramite il partial _sidebar-magazzino.
@@ -107,13 +111,14 @@ magazzinoTemplates := map[string]bool{
 "acquisto-detail":       true,
 "storico-ordini":        true,
 "notifiche-magazzino":   true,
+"report-magazzino":      true,
 }
 sidebarMagazzino := filepath.Join(baseDir, "_sidebar-magazzino.html")
 prenotPartial := filepath.Join(baseDir, "_prenotazione-form.html")
 topbarBell := filepath.Join(baseDir, "_topbar-bell.html")
 notifBody := filepath.Join(baseDir, "_notifiche-body.html")
 
-names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino", "prodotto-form", "lotto-form", "impostazioni", "fornitori", "fornitore-form", "acquisti", "acquisto-detail", "storico-ordini", "notifiche-utente", "notifiche-funzionario", "notifiche-magazzino"}
+names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino", "prodotto-form", "lotto-form", "impostazioni", "fornitori", "fornitore-form", "acquisti", "acquisto-detail", "storico-ordini", "notifiche-utente", "notifiche-funzionario", "notifiche-magazzino", "report-magazzino"}
 // template senza topbar (e quindi senza bell)
 noTopbar := map[string]bool{"login": true, "dashboard": true}
 notifiche := map[string]bool{
@@ -193,6 +198,71 @@ out = out[:2]
 }
 }
 return string(out)
+}
+
+// avatarHue produce un valore Hue (0-359) deterministico dall'username,
+// usato come `style="background: hsl(N, ...)"` sugli `ec-avatar` perché ogni
+// utente abbia una tinta riconoscibile e stabile tra le pagine. FNV-1a.
+func avatarHue(username string) int {
+	var h uint32 = 2166136261
+	for _, c := range username {
+		h ^= uint32(c)
+		h *= 16777619
+	}
+	return int(h % 360)
+}
+
+// fmtEUR formatta un importo in EUR con separatore migliaia '.' e decimali ','.
+func fmtEUR(v float64) string {
+	neg := v < 0
+	if neg {
+		v = -v
+	}
+	s := strconv.FormatFloat(v, 'f', 2, 64)
+	parts := strings.SplitN(s, ".", 2)
+	intPart := parts[0]
+	dec := "00"
+	if len(parts) == 2 {
+		dec = parts[1]
+	}
+	// inserisci punti di migliaia da destra
+	n := len(intPart)
+	var b strings.Builder
+	for i, ch := range intPart {
+		if i > 0 && (n-i)%3 == 0 {
+			b.WriteByte('.')
+		}
+		b.WriteRune(ch)
+	}
+	sign := ""
+	if neg {
+		sign = "-"
+	}
+	return sign + b.String() + "," + dec + " €"
+}
+
+// monthLabel restituisce l'etichetta abbreviata italiana del mese (1..12).
+func monthLabel(m int) string {
+	labels := [...]string{"Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"}
+	if m < 1 || m > 12 {
+		return "?"
+	}
+	return labels[m-1]
+}
+
+// percent ritorna v/max*100 arrotondato (clamp 0..100). Se max <= 0 → 0.
+func percent(v, max float64) int {
+	if max <= 0 {
+		return 0
+	}
+	p := v / max * 100
+	if p < 0 {
+		return 0
+	}
+	if p > 100 {
+		return 100
+	}
+	return int(p + 0.5)
 }
 
 // derefInt dereferences a *int for template comparisons; nil → 0.
@@ -1074,6 +1144,89 @@ func (a *App) handlePreparaOrdine(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.Redirect(w, r, "/dashboard/magazzino", http.StatusSeeOther)
+}
+
+// GET /report — pagina di reportistica per il magazziniere con KPI, bar
+// chart spesa mensile e legenda spesa per settore. Accetta ?anno=YYYY
+// (default: anno corrente).
+func (a *App) handleReportMagazzino(w http.ResponseWriter, r *http.Request) {
+	anno := time.Now().Year()
+	if q := strings.TrimSpace(r.URL.Query().Get("anno")); q != "" {
+		if v, err := strconv.Atoi(q); err == nil && v > 2000 && v < 2100 {
+			anno = v
+		}
+	}
+	spesaAnno, err := a.db.GetSpesaAnno(anno)
+	if err != nil {
+		logger.Error("report spesa anno: %v", err)
+		http.Error(w, "errore interno", 500)
+		return
+	}
+	ordiniEvasi, _ := a.db.GetOrdiniEvasiAnno(anno)
+	tempoMedio, _ := a.db.GetTempoMedioEvasioneAnno(anno)
+	settoriAttivi, _ := a.db.GetSettoriAttiviAnno(anno)
+	mensile, err := a.db.GetSpesaMensile(anno)
+	if err != nil {
+		logger.Error("report spesa mensile: %v", err)
+		http.Error(w, "errore interno", 500)
+		return
+	}
+	perSettore, err := a.db.GetSpesaPerSettore(anno)
+	if err != nil {
+		logger.Error("report spesa per settore: %v", err)
+		http.Error(w, "errore interno", 500)
+		return
+	}
+	var maxMese float64
+	for _, m := range mensile {
+		if m.Spesa > maxMese {
+			maxMese = m.Spesa
+		}
+	}
+	var totSettore float64
+	for _, s := range perSettore {
+		totSettore += s.Spesa
+	}
+	scorte, _ := a.db.GetProdottiSottoSoglia()
+	ordini, _ := a.db.GetOrdiniAttivi()
+	a.render(w, r, "report-magazzino", a.viewData(r, map[string]any{
+		"Username":      a.getUsername(r),
+		"Role":          a.getRole(r),
+		"Anno":          anno,
+		"AnnoPrec":      anno - 1,
+		"AnnoSucc":      anno + 1,
+		"SpesaAnno":     spesaAnno,
+		"OrdiniEvasi":   ordiniEvasi,
+		"TempoMedio":    tempoMedio,
+		"SettoriAttivi": settoriAttivi,
+		"Mensile":       mensile,
+		"MensileMax":    maxMese,
+		"PerSettore":    perSettore,
+		"TotSettore":    totSettore,
+		"Scorte":        scorte,
+		"Ordini":        ordini,
+		"ActiveNav":     "report",
+		"SectionName":   "Report",
+	}))
+}
+
+// GET /report.csv — esporta l'elenco dei movimenti dell'anno indicato in
+// formato CSV compatibile con Excel italiano (BOM UTF-8, ';' separator,
+// decimali con virgola).
+func (a *App) handleReportCSV(w http.ResponseWriter, r *http.Request) {
+	anno := time.Now().Year()
+	if q := strings.TrimSpace(r.URL.Query().Get("anno")); q != "" {
+		if v, err := strconv.Atoi(q); err == nil && v > 2000 && v < 2100 {
+			anno = v
+		}
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=movimenti-%d.csv", anno))
+	if err := a.db.StreamMovimentiCSV(w, anno); err != nil {
+		logger.Error("export csv movimenti %d: %v", anno, err)
+		// Headers già scritti: chiudere silenziosamente.
+		return
+	}
 }
 
 // GET /ordini/{id}/anteprima-fifo — restituisce il partial della modale che
@@ -2317,6 +2470,10 @@ mux.HandleFunc("GET /lotti/new", app.requireRole("magazziniere")(app.handleNewLo
 mux.HandleFunc("POST /lotti", app.requireRole("magazziniere")(app.handleCreateAcquisto))
 mux.HandleFunc("GET /acquisti", app.requireRole("magazziniere")(app.handleListAcquisti))
 mux.HandleFunc("GET /acquisti/{id}", app.requireRole("magazziniere")(app.handleAcquistoDetail))
+
+// Reportistica magazziniere
+mux.HandleFunc("GET /report", app.requireRole("magazziniere")(app.handleReportMagazzino))
+mux.HandleFunc("GET /report.csv", app.requireRole("magazziniere")(app.handleReportCSV))
 
 // Impostazioni (magazziniere)
 mux.HandleFunc("GET /impostazioni", app.requireRole("magazziniere")(app.handleImpostazioniPage))
