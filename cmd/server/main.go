@@ -658,6 +658,24 @@ func (a *App) handleDashboardUtente(w http.ResponseWriter, r *http.Request) {
 	}))
 }
 
+// GET /carrello/badge — restituisce solo lo span del badge del carrello,
+// utile come fallback HTMX (es. pagine senza il fragment principale del
+// carrello) o per refresh manuale del contatore.
+func (a *App) handleCartBadge(w http.ResponseWriter, r *http.Request) {
+	username := a.getUsername(r)
+	bozza, _ := a.db.GetBozzaConRighe(username)
+	righeCount := 0
+	if bozza != nil {
+		righeCount = len(bozza.Righe)
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if righeCount == 0 {
+		fmt.Fprint(w, `<span id="cart-badge" class="ec-cart__count" style="display:none"></span>`)
+		return
+	}
+	fmt.Fprintf(w, `<span id="cart-badge" class="ec-cart__count">%d prodotti</span>`, righeCount)
+}
+
 // renderCarrello writes an HTMX-swappable cart fragment that fits the
 // ec-cart design system. The host template owns the <aside class="ec-cart">
 // wrapper and the static head; this fragment replaces the inner body+foot
@@ -2424,6 +2442,7 @@ mux.HandleFunc("/dashboard/magazzino", app.requireRole("magazziniere")(app.handl
 mux.HandleFunc("/dashboard/scorte", app.requireRole("magazziniere")(app.handleDashboardScorte))
 
 // Bozza / carrello
+mux.HandleFunc("GET /carrello/badge", app.requireRole("user", "funzionario")(app.handleCartBadge))
 mux.HandleFunc("POST /bozza/righe/{prodotto_id}", app.requireRole("user", "funzionario")(app.handleUpsertRigaBozza))
 mux.HandleFunc("DELETE /bozza/righe/{prodotto_id}", app.requireRole("user", "funzionario")(app.handleDeleteRigaBozza))
 mux.HandleFunc("POST /ordini/{id}/invia", app.requireRole("user", "funzionario")(app.handleInviaOrdine))
