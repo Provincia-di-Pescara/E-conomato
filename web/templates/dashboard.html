@@ -44,7 +44,7 @@
     </a>
 
     <div class="ec-side__foot">
-      <span class="ec-avatar" style="width:36px;height:36px;font-size:13px">{{initials .Username}}</span>
+      <span class="ec-avatar" style="width:36px;height:36px;font-size:13px;background:linear-gradient(135deg, hsl({{avatarHue .Username}}, 65%, 55%), hsl({{avatarHue .Username}}, 70%, 35%))">{{initials .Username}}</span>
       <div style="min-width:0;flex:1">
         <div class="ec-side__foot-name">{{.Username}}</div>
         <div class="ec-side__foot-sub">{{.Role}}</div>
