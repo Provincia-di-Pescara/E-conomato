@@ -889,13 +889,15 @@ img { display: block; max-width: 100%; }
    Modal
 ============================================================ */
 .ec-modal-bg {
+  display: none;
   position: fixed; inset: 0;
   background: rgba(0,16,51,0.45);
-  display: flex; align-items: center; justify-content: center;
+  align-items: center; justify-content: center;
   z-index: 100;
   padding: 24px;
   backdrop-filter: blur(2px);
 }
+.ec-modal-bg.is-open { display: flex; }
 .ec-modal {
   background: var(--ec-surface);
   border-radius: var(--r-xl);

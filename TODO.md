@@ -51,9 +51,10 @@
 - [x] **Integrazione Trigger:** ogni `EmitOrdine` / `EmitScorta` scrive sempre la riga `notifiche` e accoda un job `email_outbox` solo se `SMTP_SERVER` configurato e l'utente ha un'email.
 
 ## 8. Reportistica (Area Magazzino)
-- [ ] **API Statistiche:** Creare endpoint che restituiscono dati aggregati in JSON (spesa per settore, consumi mensili).
-- [ ] **Integrazione Chart.js:** Implementare grafici a torta e a barre nella dashboard direzionale (Magazzino).
-- [ ] **Esportazione CSV:** Generazione dinamica di file CSV con lo storico di tutti i movimenti valorizzati.
+*Implementata come tab `/report` magazziniere (vedi §10). Gli aggregati sono renderizzati lato server in HTML; i grafici sono realizzati con il design system `ec-bar` / `ec-legend` invece di Chart.js, sufficiente per i volumi attesi e privo di dipendenze JS aggiuntive.*
+- [x] **API Statistiche:** `GetSpesaAnno`, `GetOrdiniEvasiAnno`, `GetTempoMedioEvasioneAnno`, `GetSettoriAttiviAnno`, `GetSpesaMensile`, `GetSpesaPerSettore` in `internal/database/sqlite.go`, consumate dall'handler `handleReportMagazzino`.
+- [x] **Grafici dashboard direzionale:** bar chart "Spesa mensile" e legenda "Spesa per settore" in `report-magazzino.html`, riusando le classi `ec-charts` / `ec-bar` / `ec-legend` già presenti nel design system.
+- [x] **Esportazione CSV:** endpoint `GET /report.csv?anno=YYYY`, streaming `StreamMovimentiCSV` con BOM UTF-8, separatore `;`, decimali con virgola e date `gg/mm/aaaa` (Excel italiano).
 
 ## 9. Deploy e Manutenzione
 - [x] **Dockerfile:** Configurare la build multi-stage (builder + runner alpine).
@@ -66,12 +67,12 @@
 
 - [x] **Schermata Notifiche:** pagina `/notifiche` ruolo-aware (`notifiche-utente`, `notifiche-funzionario`, `notifiche-magazzino`) con tab Tutte / Non lette / Ordini / Scorte, bottone "Segna tutte come lette" e mark-as-read riga per riga via HTMX.
 - [x] **Schermata Impostazioni:** endpoint `/impostazioni` con tab Generale/Operatività/Notifiche/Sistema, branding (nome ente + logo) e parametri operativi modificabili dal magazziniere.
-- [ ] **Modale Anteprima FIFO:** Endpoint che, dato un `ordine_id`, restituisce la simulazione dei prelievi per lotto (senza commit) e il costo totale per settore. Da renderizzare in `ec-modal--wide` aperto dalla card del magazziniere — vedi `magazzino.jsx → FifoModal`.
-- [ ] **Reportistica (Tab Magazziniere):** Tab `/report` con KPI (spesa anno, ordini evasi, tempo medio evasione, settori attivi), bar chart "Spesa mensile" e legenda "Spesa per settore" — richiede aggregazioni SQL su `movimenti_magazzino` per mese e per `settore_id`, più export CSV. CSS già pronto (`ec-charts`, `ec-bar`, `ec-legend`).
-- [ ] **Header carrello — count live:** Il badge `ec-cart__count` nell'header del carrello è statico (riflette solo il render iniziale). Spostarlo dentro il fragment `#carrello-content` emesso da `renderCarrello` oppure usare un secondo target HTMX (`hx-swap-oob`) per aggiornarlo a ogni mutazione.
+- [x] **Modale Anteprima FIFO:** endpoint `GET /ordini/{id}/anteprima-fifo` con `SimulaOrdineFIFO` (non distruttivo, niente scritture su `movimenti_magazzino` o `lotti_acquisto`); partial `fifo-preview-modal` in `dashboard-magazzino.html` aperto dalla card dell'ordine, con tabella prelievi per lotto, costo per riga, totale finale e pulsante "Prepara ora" per confermare il commit reale.
+- [x] **Reportistica (Tab Magazziniere):** vedi §8 — pagina `/report` con KPI cards, bar chart mensile, legenda spesa per settore e link `/report.csv?anno=YYYY`.
+- [x] **Header carrello — count live:** `renderCarrello` emette uno span OOB (`hx-swap-oob="true"`) su `#cart-badge` ad ogni mutazione (`POST/DELETE /bozza/righe/*`) e l'endpoint `GET /carrello/badge` resta disponibile come fallback per pagine senza il fragment del carrello.
 - [x] **Filtri categoria — collegamento backend:** `handleDashboardUtente` ora legge `?cat=<id>` e lo passa a `GetCatalogo`; lo stesso per la variante funzionario.
-- [ ] **Avatar — colore deterministico per utente:** L'avatar `ec-avatar` usa un gradiente fisso. Generare hue stabile dall'hash dello username per distinguere visivamente gli utenti.
-- [ ] **Vista mobile:** La sidebar collassa solo sotto 860px nascondendola. Aggiungere drawer/burger toggle per mobile.
+- [x] **Avatar — colore deterministico per utente:** template func `avatarHue(username)` (FNV-1a → 0..359) applicata come gradiente inline `hsl(h, 65%, 55%) → hsl(h, 70%, 35%)` su tutti gli `.ec-avatar` di sidebar e header notifiche.
+- [x] **Vista mobile:** sotto 860px la sidebar diventa un drawer scorrevole (`translateX(-100%) → 0`) attivato da un burger in topbar; partial `_drawer.html` con define `drawer-burger` e `drawer-backdrop` inclusi in tutti i template con app-shell tranne `login`.
 
 ## 11. Quality-of-life — dopo test utente
 *Bug e gap di feature emersi durante i test sul campo. La sezione raccoglie sia le fix che sono già state implementate, sia quelle ancora aperte.*
