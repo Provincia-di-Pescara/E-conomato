@@ -12,11 +12,11 @@
   <link rel="stylesheet" href="/static/css/style.css" />
 </head>
 <body>
-<div class="ec-app{{if not (eq .Role "economo")}} ec-app--solo{{end}}">
-  {{if eq .Role "economo"}}{{template "sidebar-economo" .}}{{end}}
+<div class="ec-app{{if and (ne .Role "economo") (ne .Role "magazziniere+economo")}} ec-app--solo{{end}}">
+  {{if or (eq .Role "economo") (eq .Role "magazziniere+economo")}}{{template "sidebar-economo" .}}{{end}}
   <div class="ec-main">
     <header class="ec-topbar">
-      {{if eq .Role "economo"}}{{template "drawer-burger" .}}{{end}}
+      {{if or (eq .Role "economo") (eq .Role "magazziniere+economo")}}{{template "drawer-burger" .}}{{end}}
       <div class="ec-topbar__title">
         {{if .BrandName}}{{.BrandName}}{{else}}E-conomato{{end}}
         <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
@@ -62,6 +62,6 @@
   </div>
 </div>
 <script src="/static/js/htmx.min.js"></script>
-{{if eq .Role "economo"}}{{template "drawer-backdrop" .}}{{end}}
+{{if or (eq .Role "economo") (eq .Role "magazziniere+economo")}}{{template "drawer-backdrop" .}}{{end}}
 </body>
 </html>

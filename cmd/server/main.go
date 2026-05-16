@@ -2981,7 +2981,7 @@ func (a *App) handleListSpese(w http.ResponseWriter, r *http.Request) {
 		err   error
 	)
 	switch role {
-	case "economo", "admin":
+	case "economo", "admin", "magazziniere+economo":
 		spese, err = a.db.GetSpeseAll()
 	case "funzionario":
 		settoreID, errSet := a.db.GetSettoreIDByUsername(username)
