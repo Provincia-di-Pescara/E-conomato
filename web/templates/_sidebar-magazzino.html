@@ -1,4 +1,5 @@
 {{define "sidebar-magazzino"}}
+{{if eq .Role "magazziniere+economo"}}{{template "sidebar-magazzino-economo" .}}{{else}}
 <nav class="ec-side">
   <div class="ec-side__brand">
     <span class="ec-brandmark" aria-label="E-conomato">
@@ -78,4 +79,4 @@
     </form>
   </div>
 </nav>
-{{end}}
+{{end}}{{end}}

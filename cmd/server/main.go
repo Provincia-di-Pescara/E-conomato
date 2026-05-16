@@ -201,10 +201,12 @@ if combinedTemplates[name] {
 files = append(files, sidebarMagazzino, sidebarEconomo, sidebarCombinata)
 } else {
 if magazzinoTemplates[name] {
-files = append(files, sidebarMagazzino)
+// Include anche la sidebar combinata: sidebar-magazzino vi delega per ruoli compositi.
+files = append(files, sidebarMagazzino, sidebarCombinata)
 }
 if economoTemplates[name] {
-files = append(files, sidebarEconomo)
+// Include anche la sidebar combinata: sidebar-economo vi delega per ruoli compositi.
+files = append(files, sidebarEconomo, sidebarCombinata)
 }
 }
 // dashboard-utente e dashboard-funzionario possono includere il form di prenotazione
@@ -506,6 +508,21 @@ func (a *App) viewData(r *http.Request, data map[string]any) map[string]any {
 		if u := a.getUsername(r); u != "" {
 			if n, err := a.db.CountNotificheNonLette(u); err == nil {
 				data["NotifNonLette"] = n
+			}
+		}
+	}
+	// Badge sidebar magazzino: inietta Ordini e Scorte se non già presenti,
+	// necessari per i contatori nel menu laterale su qualsiasi pagina.
+	role := a.getRole(r)
+	if hasRole(role, "magazziniere") {
+		if _, ok := data["Ordini"]; !ok {
+			if ordini, err := a.db.GetOrdiniAttivi(); err == nil {
+				data["Ordini"] = ordini
+			}
+		}
+		if _, ok := data["Scorte"]; !ok {
+			if scorte, err := a.db.GetProdottiSottoSoglia(); err == nil {
+				data["Scorte"] = scorte
 			}
 		}
 	}
