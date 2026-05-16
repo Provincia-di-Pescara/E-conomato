@@ -56,9 +56,110 @@
         </dl>
       </div>
 
-      <p style="margin-top:18px;font-size:13px;color:var(--ec-ink-500)">
-        Le azioni di workflow (autorizza, impegna, rendiconta, chiudi) saranno disponibili nella prossima release.
-      </p>
+      {{/* ── Azioni workflow ── */}}
+
+      {{if and (eq .Spesa.Stato "in_approvazione") .IsFunzionario}}
+      <div class="ec-card" style="padding:20px;max-width:760px;margin-top:16px">
+        <h3 style="font-size:15px;font-weight:600;margin:0 0 16px;color:var(--ec-navy-900)">Azioni disponibili</h3>
+        <form method="POST" action="/spese/{{.Spesa.ID}}/autorizza" style="display:inline">
+          <button type="submit" class="ec-btn ec-btn--primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><polyline points="20 6 9 17 4 12"/></svg>
+            Autorizza
+          </button>
+        </form>
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--ec-line)">
+          <p style="font-size:13px;color:var(--ec-ink-600);margin:0 0 8px;font-weight:500">Rifiuta richiesta</p>
+          <form method="POST" action="/spese/{{.Spesa.ID}}/rifiuta-funz">
+            <div style="margin-bottom:10px">
+              <label style="font-size:13px;color:var(--ec-ink-700);display:block;margin-bottom:4px">Motivazione del rifiuto <span style="color:var(--ec-red-600)">*</span></label>
+              <textarea name="note" required rows="3" placeholder="Indica il motivo del rifiuto..." style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--ec-line);border-radius:6px;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+            </div>
+            <button type="submit" class="ec-btn" style="background:var(--ec-red-600,#dc2626);color:#fff;border-color:var(--ec-red-600,#dc2626)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              Rifiuta
+            </button>
+          </form>
+        </div>
+      </div>
+      {{end}}
+
+      {{if and (eq .Spesa.Stato "autorizzata") .IsEconomo}}
+      <div class="ec-card" style="padding:20px;max-width:760px;margin-top:16px">
+        <h3 style="font-size:15px;font-weight:600;margin:0 0 16px;color:var(--ec-navy-900)">Azioni disponibili</h3>
+        <form method="POST" action="/spese/{{.Spesa.ID}}/impegna">
+          <div style="margin-bottom:12px">
+            <label style="font-size:13px;color:var(--ec-ink-700);display:block;margin-bottom:4px">Capitolo PEG <span style="color:var(--ec-red-600)">*</span></label>
+            <select name="capitolo_id" required style="width:100%;padding:8px 10px;border:1px solid var(--ec-line);border-radius:6px;font-size:13px;font-family:inherit;background:#fff">
+              <option value="">— seleziona capitolo —</option>
+              {{range .Capitoli}}{{if .Attivo}}
+              <option value="{{.ID}}">{{.CodicePEG}} — {{.Descrizione}} (residuo: € {{printf "%.2f" .Residuo}})</option>
+              {{end}}{{end}}
+            </select>
+          </div>
+          <button type="submit" class="ec-btn ec-btn--primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+            Impegna
+          </button>
+        </form>
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--ec-line)">
+          <p style="font-size:13px;color:var(--ec-ink-600);margin:0 0 8px;font-weight:500">Rifiuta richiesta</p>
+          <form method="POST" action="/spese/{{.Spesa.ID}}/rifiuta-econ">
+            <div style="margin-bottom:10px">
+              <label style="font-size:13px;color:var(--ec-ink-700);display:block;margin-bottom:4px">Motivazione del rifiuto <span style="color:var(--ec-red-600)">*</span></label>
+              <textarea name="note" required rows="3" placeholder="Indica il motivo del rifiuto..." style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--ec-line);border-radius:6px;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+            </div>
+            <button type="submit" class="ec-btn" style="background:var(--ec-red-600,#dc2626);color:#fff;border-color:var(--ec-red-600,#dc2626)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              Rifiuta
+            </button>
+          </form>
+        </div>
+      </div>
+      {{end}}
+
+      {{if and (eq .Spesa.Stato "impegnata") (or .IsOwner .IsFunzionario .IsEconomo)}}
+      <div class="ec-card" style="padding:20px;max-width:760px;margin-top:16px">
+        <h3 style="font-size:15px;font-weight:600;margin:0 0 4px;color:var(--ec-navy-900)">Rendiconta spesa</h3>
+        <p style="font-size:13px;color:var(--ec-ink-500);margin:0 0 16px">Inserisci i dati del documento fiscale ricevuto dal fornitore.</p>
+        <form method="POST" action="/spese/{{.Spesa.ID}}/rendiconta">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <label style="font-size:13px;color:var(--ec-ink-700);display:block;margin-bottom:4px">Fornitore <span style="color:var(--ec-red-600)">*</span></label>
+              <input type="text" name="fornitore" required placeholder="Ragione sociale o nome" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--ec-line);border-radius:6px;font-size:13px;font-family:inherit" />
+            </div>
+            <div>
+              <label style="font-size:13px;color:var(--ec-ink-700);display:block;margin-bottom:4px">Data documento <span style="color:var(--ec-red-600)">*</span></label>
+              <input type="date" name="data_documento" required style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--ec-line);border-radius:6px;font-size:13px;font-family:inherit" />
+            </div>
+            <div>
+              <label style="font-size:13px;color:var(--ec-ink-700);display:block;margin-bottom:4px">Estremi documento <span style="color:var(--ec-red-600)">*</span></label>
+              <input type="text" name="estremi_documento" required placeholder="es. Fattura n. 123/2025" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--ec-line);border-radius:6px;font-size:13px;font-family:inherit" />
+            </div>
+            <div>
+              <label style="font-size:13px;color:var(--ec-ink-700);display:block;margin-bottom:4px">Importo effettivo (€) <span style="color:var(--ec-red-600)">*</span></label>
+              <input type="number" name="importo_effettivo" required min="0.01" step="0.01" placeholder="0.00" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--ec-line);border-radius:6px;font-size:13px;font-family:inherit" />
+            </div>
+          </div>
+          <button type="submit" class="ec-btn ec-btn--primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Rendiconta
+          </button>
+        </form>
+      </div>
+      {{end}}
+
+      {{if and (eq .Spesa.Stato "rendicontata") .IsEconomo}}
+      <div class="ec-card" style="padding:20px;max-width:760px;margin-top:16px">
+        <h3 style="font-size:15px;font-weight:600;margin:0 0 4px;color:var(--ec-navy-900)">Chiudi spesa</h3>
+        <p style="font-size:13px;color:var(--ec-ink-500);margin:0 0 16px">La spesa verrà chiusa e verrà registrata un'uscita nel giornale di cassa.</p>
+        <form method="POST" action="/spese/{{.Spesa.ID}}/chiudi">
+          <button type="submit" class="ec-btn ec-btn--primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><polyline points="20 6 9 17 4 12"/></svg>
+            Chiudi e registra uscita cassa
+          </button>
+        </form>
+      </div>
+      {{end}}
     </main>
   </div>
 </div>

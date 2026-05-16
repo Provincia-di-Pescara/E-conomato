@@ -61,6 +61,11 @@
           <div class="ec-stat__value mono" style="font-size:18px;margin-top:8px">€ {{printf "%.2f" .TotaleStanziato}}</div>
           <div class="ec-stat__delta">somma capitoli attivi</div>
         </div>
+        <div class="ec-stat">
+          <div class="ec-stat__label">{{t "economale.label.saldo_cassa"}}</div>
+          <div class="ec-stat__value mono" style="font-size:18px;margin-top:8px{{if lt .SaldoCassa 0.0}};color:var(--ec-red-600,#dc2626){{end}}">€ {{printf "%.2f" .SaldoCassa}}</div>
+          <div class="ec-stat__delta">movimenti cassa {{.Anno}}</div>
+        </div>
       </div>
 
       {{if .Capitoli}}

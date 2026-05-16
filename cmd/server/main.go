@@ -2763,6 +2763,12 @@ mux.HandleFunc("GET /spese", app.requireAuth(app.handleListSpese))
 mux.HandleFunc("GET /spese/nuova", app.requireAuth(app.handleNewSpesaForm))
 mux.HandleFunc("POST /spese", app.requireAuth(app.handleCreateSpesa))
 mux.HandleFunc("GET /spese/{id}", app.requireAuth(app.handleSpesaDetail))
+mux.HandleFunc("POST /spese/{id}/autorizza",    app.requireRole("funzionario")(app.handleAutorizzaSpesa))
+mux.HandleFunc("POST /spese/{id}/rifiuta-funz", app.requireRole("funzionario")(app.handleRifiutaSpesaFunz))
+mux.HandleFunc("POST /spese/{id}/impegna",      app.requireRole("economo")(app.handleImpegnaSpesa))
+mux.HandleFunc("POST /spese/{id}/rifiuta-econ", app.requireRole("economo")(app.handleRifiutaSpesaEcon))
+mux.HandleFunc("POST /spese/{id}/rendiconta",   app.requireAuth(app.handleRendicontaSpesa))
+mux.HandleFunc("POST /spese/{id}/chiudi",       app.requireRole("economo")(app.handleChiudiSpesa))
 
 if cfg.LDAPHost == "mock" {
 logger.Warn("RUNNING IN MOCK MODE - any credentials accepted")
@@ -2794,6 +2800,7 @@ func (a *App) handleDashboardEconomo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	speseInApprov, _ := a.db.GetSpeseConStato("in_approvazione")
+	saldoCassa, _ := a.db.GetSaldoCassa(anno)
 	totaleStanziato := 0.0
 	numAttivi := 0
 	for _, c := range capitoli {
@@ -2810,6 +2817,7 @@ func (a *App) handleDashboardEconomo(w http.ResponseWriter, r *http.Request) {
 		"Anno":                anno,
 		"NumCapitoliAttivi":   numAttivi,
 		"TotaleStanziato":     totaleStanziato,
+		"SaldoCassa":          saldoCassa,
 		"Capitoli":            capitoli,
 		"SpeseInApprovazione": speseInApprov,
 	}))
@@ -3054,25 +3062,33 @@ func (a *App) handleSpesaDetail(w http.ResponseWriter, r *http.Request) {
 	username := a.getUsername(r)
 	role := a.getRole(r)
 	// Access control: utente proprio, funzionario stesso settore, economo/admin tutto.
-	allowed := false
-	switch role {
-	case "economo", "admin":
-		allowed = true
-	case "funzionario":
+	isEconomo := hasRole(role, "economo") || role == "admin"
+	isFunzionario := hasRole(role, "funzionario") || role == "admin"
+	isOwner := spesa.UtenteUsername == username
+	allowed := isEconomo
+	if !allowed {
 		settoreID, _ := a.db.GetSettoreIDByUsername(username)
-		allowed = (settoreID != "" && settoreID == spesa.SettoreID)
-	default:
-		allowed = (spesa.UtenteUsername == username)
+		if isFunzionario {
+			allowed = (settoreID != "" && settoreID == spesa.SettoreID)
+		} else {
+			allowed = isOwner
+		}
 	}
 	if !allowed {
 		http.Error(w, "Accesso negato", http.StatusForbidden)
 		return
 	}
+	anno := time.Now().Year()
+	capitoli, _ := a.db.GetCapitoliConSaldi(anno)
 	a.render(w, r, "spesa-detail", a.viewData(r, map[string]any{
-		"Username":  username,
-		"Role":      role,
-		"ActiveNav": "spese",
-		"Spesa":     spesa,
+		"Username":      username,
+		"Role":          role,
+		"ActiveNav":     "spese",
+		"Spesa":         spesa,
+		"Capitoli":      capitoli,
+		"IsEconomo":     isEconomo,
+		"IsFunzionario": isFunzionario,
+		"IsOwner":       isOwner,
 	}))
 }
 
@@ -3085,6 +3101,205 @@ func (a *App) renderSpesaFormErr(w http.ResponseWriter, r *http.Request, s model
 		"Spesa":     s,
 		"Error":     msg,
 	}))
+}
+
+// spesaRedirect reindirizza alla pagina di dettaglio della spesa.
+// Usa HX-Redirect per richieste HTMX, altrimenti redirect standard.
+func spesaRedirect(w http.ResponseWriter, r *http.Request, id int64) {
+	target := fmt.Sprintf("/spese/%d", id)
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Redirect", target)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+// POST /spese/{id}/autorizza
+func (a *App) handleAutorizzaSpesa(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	username := a.getUsername(r)
+	role := a.getRole(r)
+	if role != "admin" {
+		spesa, err := a.db.GetSpesaByID(id)
+		if err != nil {
+			http.Error(w, "spesa non trovata", http.StatusNotFound)
+			return
+		}
+		settoreID, _ := a.db.GetSettoreIDByUsername(username)
+		if settoreID == "" || settoreID != spesa.SettoreID {
+			http.Error(w, "Accesso negato: settore diverso", http.StatusForbidden)
+			return
+		}
+	}
+	if err := a.db.AutorizzaSpesa(id, username); err != nil {
+		logger.Error("autorizza spesa %d: %v", id, err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	logger.Info("spesa %d autorizzata da %s", id, username)
+	spesaRedirect(w, r, id)
+}
+
+// POST /spese/{id}/rifiuta-funz
+func (a *App) handleRifiutaSpesaFunz(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	username := a.getUsername(r)
+	role := a.getRole(r)
+	if role != "admin" {
+		spesa, err := a.db.GetSpesaByID(id)
+		if err != nil {
+			http.Error(w, "spesa non trovata", http.StatusNotFound)
+			return
+		}
+		settoreID, _ := a.db.GetSettoreIDByUsername(username)
+		if settoreID == "" || settoreID != spesa.SettoreID {
+			http.Error(w, "Accesso negato: settore diverso", http.StatusForbidden)
+			return
+		}
+	}
+	note := strings.TrimSpace(r.FormValue("note"))
+	if err := a.db.RifiutaSpesaFunz(id, username, note); err != nil {
+		logger.Error("rifiuta spesa funz %d: %v", id, err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	logger.Info("spesa %d rifiutata (funz) da %s", id, username)
+	spesaRedirect(w, r, id)
+}
+
+// POST /spese/{id}/impegna
+func (a *App) handleImpegnaSpesa(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	capitoloID, err := strconv.ParseInt(r.FormValue("capitolo_id"), 10, 64)
+	if err != nil || capitoloID <= 0 {
+		http.Error(w, "capitolo non valido", http.StatusBadRequest)
+		return
+	}
+	username := a.getUsername(r)
+	if err := a.db.ImpegnaSpesa(id, capitoloID, username); err != nil {
+		logger.Error("impegna spesa %d: %v", id, err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	logger.Info("spesa %d impegnata su capitolo %d da %s", id, capitoloID, username)
+	spesaRedirect(w, r, id)
+}
+
+// POST /spese/{id}/rifiuta-econ
+func (a *App) handleRifiutaSpesaEcon(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	username := a.getUsername(r)
+	note := strings.TrimSpace(r.FormValue("note"))
+	if err := a.db.RifiutaSpesaEcon(id, username, note); err != nil {
+		logger.Error("rifiuta spesa econ %d: %v", id, err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	logger.Info("spesa %d rifiutata (econ) da %s", id, username)
+	spesaRedirect(w, r, id)
+}
+
+// POST /spese/{id}/rendiconta
+func (a *App) handleRendicontaSpesa(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	spesa, err := a.db.GetSpesaByID(id)
+	if err != nil {
+		http.Error(w, "spesa non trovata", http.StatusNotFound)
+		return
+	}
+	username := a.getUsername(r)
+	role := a.getRole(r)
+	isEconomo := hasRole(role, "economo") || role == "admin"
+	isFunzionario := hasRole(role, "funzionario") || role == "admin"
+	isOwner := spesa.UtenteUsername == username
+	allowed := isEconomo || isOwner
+	if !allowed && isFunzionario {
+		settoreID, _ := a.db.GetSettoreIDByUsername(username)
+		allowed = (settoreID != "" && settoreID == spesa.SettoreID)
+	}
+	if !allowed {
+		http.Error(w, "Accesso negato", http.StatusForbidden)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	fornitore := strings.TrimSpace(r.FormValue("fornitore"))
+	estremiDoc := strings.TrimSpace(r.FormValue("estremi_documento"))
+	importoStr := strings.TrimSpace(r.FormValue("importo_effettivo"))
+	dataDocStr := strings.TrimSpace(r.FormValue("data_documento"))
+	if fornitore == "" || estremiDoc == "" || dataDocStr == "" || importoStr == "" {
+		http.Error(w, "tutti i campi sono obbligatori", http.StatusBadRequest)
+		return
+	}
+	importoEff, err := strconv.ParseFloat(strings.ReplaceAll(importoStr, ",", "."), 64)
+	if err != nil || importoEff <= 0 {
+		http.Error(w, "importo effettivo non valido", http.StatusBadRequest)
+		return
+	}
+	dataDoc, err := time.Parse("2006-01-02", dataDocStr)
+	if err != nil {
+		http.Error(w, "data documento non valida (formato: AAAA-MM-GG)", http.StatusBadRequest)
+		return
+	}
+	if err := a.db.RendicontaSpesa(id, fornitore, estremiDoc, dataDoc, importoEff); err != nil {
+		logger.Error("rendiconta spesa %d: %v", id, err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	logger.Info("spesa %d rendicontata da %s", id, username)
+	spesaRedirect(w, r, id)
+}
+
+// POST /spese/{id}/chiudi
+func (a *App) handleChiudiSpesa(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	username := a.getUsername(r)
+	if err := a.db.ChiudiSpesa(id, username); err != nil {
+		logger.Error("chiudi spesa %d: %v", id, err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	logger.Info("spesa %d chiusa da %s, movimento_cassa uscita registrato", id, username)
+	spesaRedirect(w, r, id)
 }
 
 func parseSpesaForm(r *http.Request) (models.SpesaEconomale, error) {

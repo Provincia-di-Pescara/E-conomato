@@ -2378,6 +2378,221 @@ func (db *DB) GetSpeseConStato(stato string) ([]models.SpesaEconomale, error) {
 	return db.querySpese("s.stato = ?", stato)
 }
 
+// AutorizzaSpesa transita da 'in_approvazione' a 'autorizzata'.
+func (db *DB) AutorizzaSpesa(id int64, funzionarioUsername string) error {
+	res, err := db.conn.Exec(`
+		UPDATE spese_economali
+		SET stato = 'autorizzata',
+		    funzionario_username = ?,
+		    data_autorizzazione = datetime('now')
+		WHERE id = ? AND stato = 'in_approvazione'`,
+		funzionarioUsername, id,
+	)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("spesa %d non trovata o non in stato 'in_approvazione'", id)
+	}
+	return nil
+}
+
+// RifiutaSpesaFunz transita da 'in_approvazione' a 'rifiutata_funz'. Note obbligatorie.
+func (db *DB) RifiutaSpesaFunz(id int64, funzionarioUsername, note string) error {
+	note = strings.TrimSpace(note)
+	if note == "" {
+		return fmt.Errorf("note obbligatorie per il rifiuto")
+	}
+	res, err := db.conn.Exec(`
+		UPDATE spese_economali
+		SET stato = 'rifiutata_funz',
+		    funzionario_username = ?,
+		    note_funzionario = ?,
+		    data_autorizzazione = datetime('now')
+		WHERE id = ? AND stato = 'in_approvazione'`,
+		funzionarioUsername, note, id,
+	)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("spesa %d non trovata o non in stato 'in_approvazione'", id)
+	}
+	return nil
+}
+
+// ImpegnaSpesa assegna capitolo e transita da 'autorizzata' a 'impegnata'.
+// Verifica capienza dentro la stessa transazione (CLAUDE.md "Capienza Capitolo").
+func (db *DB) ImpegnaSpesa(id int64, capitoloID int64, economoUsername string) error {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var importoPresunto float64
+	err = tx.QueryRow(
+		`SELECT importo_presunto FROM spese_economali WHERE id = ? AND stato = 'autorizzata'`, id,
+	).Scan(&importoPresunto)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("spesa %d non trovata o non in stato 'autorizzata'", id)
+		}
+		return err
+	}
+	var stanziato, impegnato, speso float64
+	err = tx.QueryRow(`
+		SELECT c.importo_stanziato,
+		       COALESCE((SELECT SUM(s.importo_presunto) FROM spese_economali s
+		                 WHERE s.capitolo_id = c.id AND s.stato IN ('impegnata','rendicontata')), 0),
+		       COALESCE((SELECT SUM(s.importo_effettivo) FROM spese_economali s
+		                 WHERE s.capitolo_id = c.id AND s.stato = 'chiusa'), 0)
+		FROM capitoli_spesa c WHERE c.id = ? AND c.attivo = 1`, capitoloID,
+	).Scan(&stanziato, &impegnato, &speso)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("capitolo %d non trovato o non attivo", capitoloID)
+		}
+		return err
+	}
+	residuo := stanziato - impegnato - speso
+	if importoPresunto > residuo {
+		return fmt.Errorf("capienza insufficiente: residuo %.2f € < importo presunto %.2f €", residuo, importoPresunto)
+	}
+	if _, err = tx.Exec(`
+		UPDATE spese_economali
+		SET stato = 'impegnata',
+		    capitolo_id = ?,
+		    economo_username = ?,
+		    data_impegno = datetime('now')
+		WHERE id = ? AND stato = 'autorizzata'`,
+		capitoloID, economoUsername, id,
+	); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// RifiutaSpesaEcon transita da 'autorizzata' a 'rifiutata_econ'. Note obbligatorie.
+func (db *DB) RifiutaSpesaEcon(id int64, economoUsername, note string) error {
+	note = strings.TrimSpace(note)
+	if note == "" {
+		return fmt.Errorf("note obbligatorie per il rifiuto")
+	}
+	res, err := db.conn.Exec(`
+		UPDATE spese_economali
+		SET stato = 'rifiutata_econ',
+		    economo_username = ?,
+		    note_economo = ?
+		WHERE id = ? AND stato = 'autorizzata'`,
+		economoUsername, note, id,
+	)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("spesa %d non trovata o non in stato 'autorizzata'", id)
+	}
+	return nil
+}
+
+// RendicontaSpesa registra i dati fiscali e transita da 'impegnata' a 'rendicontata'.
+// fornitore, estremiDoc e dataDoc sono obbligatori: vincolo normativo (Corte dei Conti).
+func (db *DB) RendicontaSpesa(id int64, fornitore, estremiDoc string, dataDoc time.Time, importoEff float64) error {
+	if fornitore == "" || estremiDoc == "" || dataDoc.IsZero() {
+		return fmt.Errorf("fornitore, data_documento ed estremi_documento sono obbligatori")
+	}
+	if importoEff <= 0 {
+		return fmt.Errorf("importo effettivo deve essere maggiore di zero")
+	}
+	res, err := db.conn.Exec(`
+		UPDATE spese_economali
+		SET stato = 'rendicontata',
+		    fornitore = ?,
+		    data_documento = ?,
+		    estremi_documento = ?,
+		    importo_effettivo = ?,
+		    data_rendicontazione = datetime('now')
+		WHERE id = ? AND stato = 'impegnata'`,
+		fornitore, dataDoc, estremiDoc, importoEff, id,
+	)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("spesa %d non trovata o non in stato 'impegnata'", id)
+	}
+	return nil
+}
+
+// ChiudiSpesa transita da 'rendicontata' a 'chiusa' e inserisce atomicamente
+// un movimento_cassa di tipo 'uscita' (CLAUDE.md "Saldo cassa").
+func (db *DB) ChiudiSpesa(id int64, economoUsername string) error {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var importoEff sql.NullFloat64
+	var fornitore, estremiDoc sql.NullString
+	var dataDoc sql.NullTime
+	err = tx.QueryRow(`
+		SELECT importo_effettivo, fornitore, data_documento, estremi_documento
+		FROM spese_economali WHERE id = ? AND stato = 'rendicontata'`, id,
+	).Scan(&importoEff, &fornitore, &dataDoc, &estremiDoc)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("spesa %d non trovata o non in stato 'rendicontata'", id)
+		}
+		return err
+	}
+	if !importoEff.Valid || importoEff.Float64 <= 0 ||
+		!fornitore.Valid || fornitore.String == "" ||
+		!dataDoc.Valid ||
+		!estremiDoc.Valid || estremiDoc.String == "" {
+		return fmt.Errorf("campi fiscali obbligatori mancanti: impossibile chiudere")
+	}
+	if _, err = tx.Exec(`
+		UPDATE spese_economali
+		SET stato = 'chiusa',
+		    economo_username = ?,
+		    data_chiusura = datetime('now')
+		WHERE id = ? AND stato = 'rendicontata'`,
+		economoUsername, id,
+	); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`
+		INSERT INTO movimenti_cassa (data, tipo, descrizione, importo, riferimento_spesa_id, creato_da)
+		VALUES (datetime('now'), 'uscita', ?, ?, ?, ?)`,
+		fmt.Sprintf("Spesa economale #%d — %s", id, fornitore.String),
+		importoEff.Float64, id, economoUsername,
+	); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// GetSaldoCassa calcola il saldo del fondo per l'anno dato on-demand:
+// SUM(anticipazioni + reintegri) − SUM(uscite + restituzioni). Mai materializzato.
+func (db *DB) GetSaldoCassa(anno int) (float64, error) {
+	var entrate, uscite float64
+	err := db.conn.QueryRow(`
+		SELECT
+		    COALESCE(SUM(CASE WHEN tipo IN ('anticipazione','reintegro') THEN importo ELSE 0 END), 0),
+		    COALESCE(SUM(CASE WHEN tipo IN ('uscita','restituzione_tesoreria') THEN importo ELSE 0 END), 0)
+		FROM movimenti_cassa
+		WHERE strftime('%Y', data) = ?`, fmt.Sprintf("%d", anno),
+	).Scan(&entrate, &uscite)
+	if err != nil {
+		return 0, err
+	}
+	return entrate - uscite, nil
+}
+
 func boolToInt(b bool) int {
 	if b {
 		return 1
