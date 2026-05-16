@@ -89,9 +89,15 @@ img { display: block; max-width: 100%; }
   position: sticky; top: 0;
   height: 100vh;
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.12) transparent;
   display: flex; flex-direction: column;
   gap: 4px;
 }
+.ec-side::-webkit-scrollbar { width: 4px; }
+.ec-side::-webkit-scrollbar-track { background: transparent; }
+.ec-side::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
 .ec-side__brand {
   display: flex; align-items: center;
   padding: 4px 8px 14px;
