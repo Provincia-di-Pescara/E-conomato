@@ -127,15 +127,15 @@
 
 ### 12.4 Repo methods (`internal/database/sqlite.go`)
 - [x] **CRUD capitoli:** `CreaCapitolo`, `AggiornaCapitolo`, `DisattivaCapitolo`, `GetCapitoloByID`, `GetCapitoliConSaldi`, `GetCapitoliAttivi`.
-- [~] **Workflow spese:** `CreaSpesa` ✓ — `AutorizzaSpesa`, `RifiutaSpesaFunzionario`, `ImpegnaSpesa` (transazione + validazione capienza capitolo), `RifiutaSpesaEconomo`, `AllegaPezzaAppoggio`, `RendicontaSpesa` (richiede `fornitore` + `data_documento` + `estremi_documento` obbligatori), `ChiudiSpesa` (scrive `importo_effettivo`, libera residuo, inserisce riga `movimenti_cassa` di tipo `uscita`) — da completare.
-- [~] **Liste:** `GetSpeseSettore` ✓, `GetSpeseUtente` ✓, `GetSpeseAll` ✓, `GetSpeseConStato` ✓ — `GetSpeseDaImpegnare`, `GetSpeseDaChiudere`, `GetAllegato` da completare.
-- [ ] **Movimenti cassa:** `RegistraAnticipazione`, `RegistraReintegro` (join con spese chiuse del periodo selezionato), `RegistraRestituzioneTesoreria`, `GetSaldoCassa`, `GetGiornaleCassa(da, a)`.
+- [x] **Workflow spese:** `CreaSpesa`, `AutorizzaSpesa`, `RifiutaSpesaFunz`, `ImpegnaSpesa` (transazione atomica + validazione capienza capitolo), `RifiutaSpesaEcon`, `RendicontaSpesa` (`fornitore` + `data_documento` + `estremi_documento` obbligatori — normativo Corte dei Conti), `ChiudiSpesa` (inserisce riga `movimenti_cassa` tipo `uscita` atomicamente).
+- [x] **Liste:** `GetSpeseSettore`, `GetSpeseUtente`, `GetSpeseAll`, `GetSpeseConStato`, `GetAllegatiBySpesa`, `GetAllegatoBlob`, `CreaAllegato`, `EliminaAllegato`.
+- [~] **Movimenti cassa:** `GetSaldoCassa` ✓ (saldo on-demand per anno, alimentato da `ChiudiSpesa`); `RegistraAnticipazione`, `RegistraReintegro`, `RegistraRestituzioneTesoreria`, `GetGiornaleCassa(da, a)` — da completare (Fase 4).
 - [ ] **Reportistica:** `BuildRichiestaReintegro(periodo)` → `[]RigaReintegro` raggruppate per capitolo; `BuildContoGiudiziale(anno)` → `SezioneContoGiudiziale`.
 
 ### 12.5 Handler & Routing (`cmd/server/main.go`)
 - [x] **Rotte utente/funzionario:** `GET /spese`, `GET /spese/nuova`, `POST /spese`, `GET /spese/{id}` (scoping ruolo-aware nei handler; economo vede tutte, funzionario vede settore, utente vede proprie).
-- [ ] **Transizioni:** `POST /spese/{id}/autorizza|rifiuta-funz|impegna|rifiuta-econ|rendiconta|chiudi`.
-- [ ] **Allegati:** `POST /spese/{id}/allegato`, `GET /spese/{id}/allegato/{aid}` (check accesso ruolo-aware).
+- [x] **Transizioni:** `POST /spese/{id}/autorizza`, `rifiuta-funz`, `impegna`, `rifiuta-econ`, `rendiconta`, `chiudi` — tutti implementati con access-check, HX-Redirect e validazioni normative.
+- [x] **Allegati:** `POST /spese/{id}/allegati`, `GET /spese/{id}/allegati/{aid}`, `POST /spese/{id}/allegati/{aid}/elimina` — MIME whitelist server-side (PDF/JPEG/PNG via `http.DetectContentType`), cap 10 MB, access-check ruolo-aware, `Content-Disposition: attachment`.
 - [x] **CRUD capitoli:** `GET /capitoli`, `GET /capitoli/nuovo`, `POST /capitoli`, `GET /capitoli/{id}/edit`, `POST /capitoli/{id}`, `POST /capitoli/{id}/disattiva` (solo economo).
 - [x] **Dashboard:** `GET /dashboard-economo` con KPI capitoli attivi, spese in approvazione, totale stanziato + lista capitoli con saldi + ultime spese pending. `GET /dashboard/magazzino-economo` per utenti con ruolo composito.
 - [ ] **Reportistica:** `GET /economo/giornale-cassa` (filtro periodo, output HTML/CSV/PDF); `GET /economo/reintegro/nuovo`, `POST /economo/reintegro`, `GET /economo/reintegro/{id}`, `GET /economo/reintegro/{id}/pdf|csv|allegati.zip`; `GET /economo/conto-giudiziale?anno=YYYY` (HTML/PDF/CSV).
@@ -160,18 +160,18 @@
 - [x] **Coerenza UI:** design system `ec-*` riusato, sidebar partial `_sidebar-economo` / `_sidebar-magazzino-economo` parsati per i template economo, topbar bell e drawer mobile inclusi.
 
 ### 12.8 Upload allegati
-- [ ] **Multipart:** `r.ParseMultipartForm(10 << 20)` (limite 10 MB).
-- [ ] **Whitelist MIME:** `application/pdf`, `image/jpeg`, `image/png`.
-- [ ] **Salvataggio:** BLOB in `allegati_spesa` con `mime_type` e `dimensione`.
-- [ ] **Serving:** `Content-Disposition: inline; filename=...` con verifica accesso (richiedente, funzionario settore, economo, admin).
+- [x] **Multipart:** `r.ParseMultipartForm(10 << 20)` (limite 10 MB).
+- [x] **Whitelist MIME:** `application/pdf`, `image/jpeg`, `image/png` via `http.DetectContentType` server-side.
+- [x] **Salvataggio:** BLOB in `allegati_spesa` con `mime_type`, `dimensione`, `filename`, `caricato_da`.
+- [x] **Serving:** `Content-Disposition: attachment; filename=...` con verifica accesso (richiedente, funzionario settore, economo, admin). Eliminazione allegato: solo uploader o economo, non ammessa dopo `chiusa`.
 
 ### 12.9 Calcolo saldi (real-time)
 - [x] **Per capitolo:** `residuo = importo_stanziato − impegnato − speso` calcolato on-demand in `GetCapitoliConSaldi` con subquery correlate (`impegnato = SUM(importo_presunto WHERE stato IN ('impegnata','rendicontata'))`, `speso = SUM(importo_effettivo WHERE stato='chiusa')`).
-- [ ] **Saldo cassa:** `SUM(entrate movimenti_cassa) − SUM(uscite movimenti_cassa)` (richiede `GetSaldoCassa`, slice futuro).
+- [x] **Saldo cassa:** `GetSaldoCassa(anno)` on-demand (SUM entrate − SUM uscite da `movimenti_cassa`). Widget saldo in `dashboard-economo.html`, evidenziato in rosso se negativo.
 - [x] **Nessuna materializzazione:** query on-demand confermata, nessun campo cache aggiunto allo schema.
 
 ### 12.10 i18n
-- [ ] **Chiavi `economale.*`** aggiunte per `it` (autoritativa) e `en` (le altre locale fanno fallback su `en` tramite `i18n.T`). Coprono: menu sidebar, dashboard, capitoli (lista + form), spese (lista + form + dettaglio), stati spesa. Mancano: chiavi per intestazioni report giudiziale.
+- [~] **Chiavi `economale.*`** per `it` e `en`: menu sidebar, dashboard, capitoli (lista + form), spese (lista + form + dettaglio + stati), azioni workflow (`economale.azione.*`), errori (`economale.errore.*`), saldo cassa. Mancano: chiavi per intestazioni report giudiziale (Fase 4).
 
 ### 12.11 Reportistica giudiziale (Fase 4)
 - [ ] **CSV writer** `internal/report/csv.go`: BOM UTF-8 per Excel italiano, separatore `;`, formato numerico `1.234,56`, date `gg/mm/aaaa`.

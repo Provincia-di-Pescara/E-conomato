@@ -148,6 +148,65 @@
       </div>
       {{end}}
 
+      {{/* ── Pezze d'appoggio (allegati) ── */}}
+      <div class="ec-card" style="padding:20px;max-width:760px;margin-top:16px">
+        <h3 style="font-size:15px;font-weight:600;margin:0 0 14px;color:var(--ec-navy-900)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;vertical-align:-2px"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          Pezze d'appoggio
+          {{if .Allegati}}<span style="font-size:12px;font-weight:400;color:var(--ec-ink-500);margin-left:6px">({{len .Allegati}})</span>{{end}}
+        </h3>
+        {{if .Allegati}}
+        <table class="ec-table" style="margin-bottom:16px">
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Tipo</th>
+              <th>Caricato il</th>
+              <th>Da</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Allegati}}
+            <tr>
+              <td>
+                <a href="/spese/{{$.Spesa.ID}}/allegati/{{.ID}}" target="_blank" style="color:var(--ec-navy-700);text-decoration:none;display:flex;align-items:center;gap:6px">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  {{.Filename}}
+                </a>
+              </td>
+              <td style="font-size:12px;color:var(--ec-ink-500)">{{.MimeType}}</td>
+              <td style="font-size:12px;color:var(--ec-ink-500)">{{fmtDate .CaricatoIl}}</td>
+              <td style="font-size:12px;color:var(--ec-ink-500)">{{.CaricatoDa}}</td>
+              <td>
+                {{if .CanDelete}}
+                <form method="POST" action="/spese/{{$.Spesa.ID}}/allegati/{{.ID}}/elimina" style="display:inline" onsubmit="return confirm('Eliminare questo allegato?')">
+                  <button type="submit" style="background:none;border:none;cursor:pointer;color:var(--ec-red-600,#dc2626);font-size:12px;padding:2px 6px;border-radius:4px" title="Elimina allegato">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                  </button>
+                </form>
+                {{end}}
+              </td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+        {{else}}
+        <p style="font-size:13px;color:var(--ec-ink-400);margin:0 0 16px">Nessun allegato caricato.</p>
+        {{end}}
+        {{if .CanUpload}}
+        <form method="POST" action="/spese/{{.Spesa.ID}}/allegati" enctype="multipart/form-data" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <label style="font-size:13px;color:var(--ec-ink-700);font-weight:500">Carica allegato</label>
+          <input type="file" name="allegato" accept=".pdf,.jpg,.jpeg,.png" required style="font-size:13px;flex:1;min-width:200px" />
+          <button type="submit" class="ec-btn" style="white-space:nowrap;font-size:13px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+            Carica
+          </button>
+          <span style="font-size:11px;color:var(--ec-ink-400)">PDF, JPEG, PNG · max 10 MB</span>
+        </form>
+        {{end}}
+      </div>
+
       {{if and (eq .Spesa.Stato "rendicontata") .IsEconomo}}
       <div class="ec-card" style="padding:20px;max-width:760px;margin-top:16px">
         <h3 style="font-size:15px;font-weight:600;margin:0 0 4px;color:var(--ec-navy-900)">Chiudi spesa</h3>

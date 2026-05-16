@@ -2576,6 +2576,57 @@ func (db *DB) ChiudiSpesa(id int64, economoUsername string) error {
 	return tx.Commit()
 }
 
+// CreaAllegato salva una pezza d'appoggio come BLOB in allegati_spesa.
+func (db *DB) CreaAllegato(a models.AllegatoSpesa) (int64, error) {
+	res, err := db.conn.Exec(`
+		INSERT INTO allegati_spesa (spesa_id, filename, mime_type, dimensione, blob_data, caricato_da)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		a.SpesaID, a.Filename, a.MimeType, a.Dimensione, nullableBlob(a.BlobData), a.CaricatoDa,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// GetAllegatiBySpesa restituisce la lista allegati di una spesa SENZA blob_data
+// per evitare di caricare tutti i BLOB in memoria.
+func (db *DB) GetAllegatiBySpesa(spesaID int64) ([]models.AllegatoSpesa, error) {
+	rows, err := db.conn.Query(`
+		SELECT id, spesa_id, filename, mime_type, dimensione, caricato_da, caricato_il
+		FROM allegati_spesa WHERE spesa_id = ? ORDER BY caricato_il ASC`, spesaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.AllegatoSpesa
+	for rows.Next() {
+		var a models.AllegatoSpesa
+		if err := rows.Scan(&a.ID, &a.SpesaID, &a.Filename, &a.MimeType,
+			&a.Dimensione, &a.CaricatoDa, &a.CaricatoIl); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// GetAllegatoBlob restituisce blob_data + mime_type + filename.
+// Verifica spesa_id per evitare accesso cross-spesa.
+func (db *DB) GetAllegatoBlob(allegatoID, spesaID int64) (blob []byte, mimeType, filename string, err error) {
+	err = db.conn.QueryRow(`
+		SELECT blob_data, mime_type, filename
+		FROM allegati_spesa WHERE id = ? AND spesa_id = ?`, allegatoID, spesaID,
+	).Scan(&blob, &mimeType, &filename)
+	return
+}
+
+// EliminaAllegato cancella un allegato. La policy (uploader/economo/admin) è nel handler.
+func (db *DB) EliminaAllegato(allegatoID int64) error {
+	_, err := db.conn.Exec(`DELETE FROM allegati_spesa WHERE id = ?`, allegatoID)
+	return err
+}
+
 // GetSaldoCassa calcola il saldo del fondo per l'anno dato on-demand:
 // SUM(anticipazioni + reintegri) − SUM(uscite + restituzioni). Mai materializzato.
 func (db *DB) GetSaldoCassa(anno int) (float64, error) {

@@ -2768,7 +2768,10 @@ mux.HandleFunc("POST /spese/{id}/rifiuta-funz", app.requireRole("funzionario")(a
 mux.HandleFunc("POST /spese/{id}/impegna",      app.requireRole("economo")(app.handleImpegnaSpesa))
 mux.HandleFunc("POST /spese/{id}/rifiuta-econ", app.requireRole("economo")(app.handleRifiutaSpesaEcon))
 mux.HandleFunc("POST /spese/{id}/rendiconta",   app.requireAuth(app.handleRendicontaSpesa))
-mux.HandleFunc("POST /spese/{id}/chiudi",       app.requireRole("economo")(app.handleChiudiSpesa))
+mux.HandleFunc("POST /spese/{id}/chiudi",              app.requireRole("economo")(app.handleChiudiSpesa))
+mux.HandleFunc("POST /spese/{id}/allegati",            app.requireAuth(app.handleUploadAllegato))
+mux.HandleFunc("GET /spese/{id}/allegati/{aid}",       app.requireAuth(app.handleServeAllegato))
+mux.HandleFunc("POST /spese/{id}/allegati/{aid}/elimina", app.requireAuth(app.handleEliminaAllegato))
 
 if cfg.LDAPHost == "mock" {
 logger.Warn("RUNNING IN MOCK MODE - any credentials accepted")
@@ -3080,6 +3083,13 @@ func (a *App) handleSpesaDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	anno := time.Now().Year()
 	capitoli, _ := a.db.GetCapitoliConSaldi(anno)
+	allegatiRaw, _ := a.db.GetAllegatiBySpesa(spesa.ID)
+	allegati := make([]AllegatoConPermesso, len(allegatiRaw))
+	for i, al := range allegatiRaw {
+		allegati[i] = AllegatoConPermesso{al, al.CaricatoDa == username || isEconomo}
+	}
+	terminalStato := map[string]bool{"chiusa": true, "rifiutata_funz": true, "rifiutata_econ": true}
+	canUpload := !terminalStato[spesa.Stato] && (isOwner || isFunzionario || isEconomo)
 	a.render(w, r, "spesa-detail", a.viewData(r, map[string]any{
 		"Username":      username,
 		"Role":          role,
@@ -3089,6 +3099,8 @@ func (a *App) handleSpesaDetail(w http.ResponseWriter, r *http.Request) {
 		"IsEconomo":     isEconomo,
 		"IsFunzionario": isFunzionario,
 		"IsOwner":       isOwner,
+		"Allegati":      allegati,
+		"CanUpload":     canUpload,
 	}))
 }
 
@@ -3299,6 +3311,193 @@ func (a *App) handleChiudiSpesa(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	logger.Info("spesa %d chiusa da %s, movimento_cassa uscita registrato", id, username)
+	spesaRedirect(w, r, id)
+}
+
+// AllegatoConPermesso arricchisce AllegatoSpesa con il flag di eliminazione per la view.
+type AllegatoConPermesso struct {
+	models.AllegatoSpesa
+	CanDelete bool
+}
+
+// mimeWhitelistAllegati contiene i MIME type accettati per le pezze d'appoggio.
+var mimeWhitelistAllegati = map[string]bool{
+	"application/pdf": true,
+	"image/jpeg":      true,
+	"image/png":       true,
+}
+
+// spesaAccessCheck verifica che l'utente possa accedere a una spesa.
+// Restituisce isEconomo, isFunzionario, isOwner, settoreID e allowed.
+func (a *App) spesaAccessCheck(username, role string, spesa models.SpesaEconomale) (isEconomo, isFunzionario, isOwner, allowed bool) {
+	isEconomo = hasRole(role, "economo") || role == "admin"
+	isFunzionario = hasRole(role, "funzionario") || role == "admin"
+	isOwner = spesa.UtenteUsername == username
+	if isEconomo {
+		allowed = true
+		return
+	}
+	if isFunzionario {
+		settoreID, _ := a.db.GetSettoreIDByUsername(username)
+		allowed = settoreID != "" && settoreID == spesa.SettoreID
+		return
+	}
+	allowed = isOwner
+	return
+}
+
+// POST /spese/{id}/allegati
+func (a *App) handleUploadAllegato(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	spesa, err := a.db.GetSpesaByID(id)
+	if err != nil {
+		http.Error(w, "spesa non trovata", http.StatusNotFound)
+		return
+	}
+	username := a.getUsername(r)
+	role := a.getRole(r)
+	_, _, _, allowed := a.spesaAccessCheck(username, role, spesa)
+	if !allowed {
+		http.Error(w, "Accesso negato", http.StatusForbidden)
+		return
+	}
+	terminalStato := map[string]bool{"chiusa": true, "rifiutata_funz": true, "rifiutata_econ": true}
+	if terminalStato[spesa.Stato] {
+		http.Error(w, "impossibile aggiungere allegati a una spesa in stato "+spesa.Stato, http.StatusBadRequest)
+		return
+	}
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		http.Error(w, "file troppo grande o richiesta non valida (max 10 MB)", http.StatusBadRequest)
+		return
+	}
+	fhs := r.MultipartForm.File["allegato"]
+	if len(fhs) == 0 {
+		http.Error(w, "nessun file allegato", http.StatusBadRequest)
+		return
+	}
+	fh := fhs[0]
+	f, err := fh.Open()
+	if err != nil {
+		http.Error(w, "apertura file fallita", http.StatusInternalServerError)
+		return
+	}
+	defer f.Close()
+	blob, err := io.ReadAll(f)
+	if err != nil {
+		http.Error(w, "lettura file fallita", http.StatusInternalServerError)
+		return
+	}
+	// MIME whitelist server-side: non fidarsi del Content-Type client.
+	detected := http.DetectContentType(blob)
+	if !mimeWhitelistAllegati[detected] {
+		http.Error(w, "tipo file non ammesso (sono accettati: PDF, JPEG, PNG)", http.StatusBadRequest)
+		return
+	}
+	filename := filepath.Base(fh.Filename)
+	if filename == "" || filename == "." {
+		filename = "allegato"
+	}
+	if _, err := a.db.CreaAllegato(models.AllegatoSpesa{
+		SpesaID:    id,
+		Filename:   filename,
+		MimeType:   detected,
+		Dimensione: int64(len(blob)),
+		BlobData:   blob,
+		CaricatoDa: username,
+	}); err != nil {
+		logger.Error("crea allegato spesa %d: %v", id, err)
+		http.Error(w, "errore salvataggio allegato", http.StatusInternalServerError)
+		return
+	}
+	logger.Info("allegato caricato su spesa %d da %s (%d byte, %s)", id, username, len(blob), detected)
+	spesaRedirect(w, r, id)
+}
+
+// GET /spese/{id}/allegati/{aid}
+func (a *App) handleServeAllegato(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	aid, err := strconv.ParseInt(r.PathValue("aid"), 10, 64)
+	if err != nil {
+		http.Error(w, "id allegato non valido", http.StatusBadRequest)
+		return
+	}
+	spesa, err := a.db.GetSpesaByID(id)
+	if err != nil {
+		http.Error(w, "spesa non trovata", http.StatusNotFound)
+		return
+	}
+	username := a.getUsername(r)
+	role := a.getRole(r)
+	_, _, _, allowed := a.spesaAccessCheck(username, role, spesa)
+	if !allowed {
+		http.Error(w, "Accesso negato", http.StatusForbidden)
+		return
+	}
+	blob, mimeType, filename, err := a.db.GetAllegatoBlob(aid, id)
+	if err != nil || len(blob) == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", mimeType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	w.Write(blob) //nolint:errcheck
+}
+
+// POST /spese/{id}/allegati/{aid}/elimina
+func (a *App) handleEliminaAllegato(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	aid, err := strconv.ParseInt(r.PathValue("aid"), 10, 64)
+	if err != nil {
+		http.Error(w, "id allegato non valido", http.StatusBadRequest)
+		return
+	}
+	spesa, err := a.db.GetSpesaByID(id)
+	if err != nil {
+		http.Error(w, "spesa non trovata", http.StatusNotFound)
+		return
+	}
+	username := a.getUsername(r)
+	role := a.getRole(r)
+	isEconomo := hasRole(role, "economo") || role == "admin"
+	// Carica allegato per verificare uploader.
+	allegatiList, _ := a.db.GetAllegatiBySpesa(id)
+	var uploaderUsername string
+	for _, al := range allegatiList {
+		if al.ID == aid {
+			uploaderUsername = al.CaricatoDa
+			break
+		}
+	}
+	if uploaderUsername == "" {
+		http.NotFound(w, r)
+		return
+	}
+	if uploaderUsername != username && !isEconomo {
+		http.Error(w, "Accesso negato: solo l'uploader o l'economo può eliminare", http.StatusForbidden)
+		return
+	}
+	if spesa.Stato == "chiusa" {
+		http.Error(w, "impossibile eliminare allegati da una spesa chiusa", http.StatusBadRequest)
+		return
+	}
+	if err := a.db.EliminaAllegato(aid); err != nil {
+		logger.Error("elimina allegato %d spesa %d: %v", aid, id, err)
+		http.Error(w, "errore eliminazione", http.StatusInternalServerError)
+		return
+	}
+	logger.Info("allegato %d eliminato da spesa %d da %s", aid, id, username)
 	spesaRedirect(w, r, id)
 }
 
