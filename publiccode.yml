@@ -1,9 +1,9 @@
 publiccodeYmlVersion: 0.5.0
 name: E-conomato
 url: https://github.com/Provincia-di-Pescara/E-conomato
-softwareVersion: '0.6.0'
-releaseDate: 2026-05-15
-logo: https://github.com/Provincia-di-Pescara/E-conomato/blob/main/web/static/img/logo.png
+softwareVersion: '0.6.6'
+releaseDate: 2026-05-16
+logo: https://raw.githubusercontent.com/Provincia-di-Pescara/E-conomato/main/web/static/img/logo-wordmark.svg
 platforms:
   - web
 categories:
@@ -33,11 +33,12 @@ description:
       costi tramite logica FIFO.
 
 
-      Il modulo **Cassa Economale** (in roadmap) estende la piattaforma alla
-      gestione del Fondo Economale per le piccole spese urgenti in contanti o
-      con carta dipartimentale, in conformità con il TUEL (D.Lgs. 267/2000) e
-      con i requisiti di Resa del Conto verso la Corte dei Conti (Modello 21
-      D.P.R. 194/1996).
+      Il modulo **Cassa Economale** estende la piattaforma alla gestione del
+      Fondo Economale per le piccole spese urgenti in contanti o con carta
+      dipartimentale, in conformità con il TUEL (D.Lgs. 267/2000) e con i
+      requisiti di Resa del Conto verso la Corte dei Conti (Modello 21
+      D.P.R. 194/1996). Schema DB, ruolo Economo, dashboard e capitoli di
+      spesa sono operativi (v0.6.x).
     features:
       - economato
       - magazzino

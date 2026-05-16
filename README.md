@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="web/static/img/favicon.svg" alt="E-conomato Logo" width="120" />
+<img src="web/static/img/logo-wordmark.svg" alt="E-conomato" height="72" />
 
 # E-conomato
 

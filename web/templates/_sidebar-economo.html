@@ -1,11 +1,8 @@
-{{define "sidebar-economo"}}
+﻿{{define "sidebar-economo"}}
 {{if eq .Role "magazziniere+economo"}}{{template "sidebar-magazzino-economo" .}}{{else}}
 <nav class="ec-side">
   <div class="ec-side__brand">
-    <span class="ec-brandmark" aria-label="E-conomato">
-      <img src="/static/img/favicon.svg" alt="" class="ec-brandmark__icon" />
-      <span class="ec-brandmark__word">-conomato</span>
-    </span>
+    <img src="/static/img/logo-wordmark-onnavy.svg" alt="E-conomato" class="ec-wordmark" />
   </div>
 
   <div class="ec-side__ente">

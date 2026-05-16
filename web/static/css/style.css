@@ -99,24 +99,14 @@ img { display: block; max-width: 100%; }
   display: flex; align-items: center;
   padding: 4px 8px 14px;
 }
-.ec-brandmark {
-  display: inline-flex; align-items: center; gap: 0;
-  color: #fff;
-  font-family: var(--font-display);
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  font-size: 22px;
-  line-height: 1;
-}
-.ec-brandmark__icon {
+.ec-wordmark {
   height: 28px;
-  width: 28px;
+  width: auto;
+  display: block;
   flex-shrink: 0;
-  object-fit: contain;
 }
-.ec-brandmark__word {
-  color: #fff;
-  line-height: 28px; /* match icon height for perfect vertical alignment */
+.ec-auth__brand .ec-wordmark {
+  height: 34px;
 }
 
 .ec-side__ente {
