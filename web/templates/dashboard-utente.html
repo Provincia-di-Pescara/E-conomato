@@ -44,6 +44,11 @@
       <span>I miei ordini</span>
       {{if .Ordini}}<span class="ec-side__badge">{{len .Ordini}}</span>{{end}}
     </button>
+    <button class="ec-side__link" data-view="spese">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M16 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M2 10h20"/></svg>
+      <span>Le mie spese</span>
+      {{if .MieSpese}}<span class="ec-side__badge">{{len .MieSpese}}</span>{{end}}
+    </button>
 
     <div class="ec-side__group-label">Generale</div>
     <a href="/notifiche" class="ec-side__link">
@@ -258,11 +263,24 @@
           </div>
         </header>
 
+        <!-- Filtri storico ordini -->
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+          <input type="search" id="ordini-search" placeholder="Cerca per #ordine o prodotto…"
+                 style="flex:1;min-width:180px;padding:8px 12px;border:1px solid var(--ec-line);border-radius:8px;font-size:13px;font-family:inherit;background:var(--ec-bg);color:var(--ec-ink-900)"
+                 oninput="filterOrdini()">
+          <div class="ec-tabs" style="margin-bottom:0;border-bottom:none;gap:4px">
+            <button class="ec-tab is-active" data-stato-filter="" onclick="setOrdiniFilter(this,'')">Tutti</button>
+            <button class="ec-tab" data-stato-filter="attivi" onclick="setOrdiniFilter(this,'attivi')">Attivi</button>
+            <button class="ec-tab" data-stato-filter="ritirato" onclick="setOrdiniFilter(this,'ritirato')">Completati</button>
+            <button class="ec-tab" data-stato-filter="rifiutato" onclick="setOrdiniFilter(this,'rifiutato')">Rifiutati</button>
+          </div>
+        </div>
+
         {{if .Ordini}}
-        <div class="ec-stack">
+        <div class="ec-stack" id="ordini-list">
           {{range .Ordini}}
           {{$stato := .Ordine.Stato}}
-          <div class="ec-order">
+          <div class="ec-order" data-ordine-stato="{{$stato}}" data-ordine-text="{{.Ordine.ID}} {{range .Righe}}{{.ProdottoNome}} {{end}}">
             <header class="ec-order__head">
               <span class="ec-order__id">#{{.Ordine.ID}}</span>
               <span class="ec-order__meta">
@@ -350,6 +368,72 @@
         {{end}}
       </section>
 
+      <section data-view-section="spese" style="display:none">
+        <header class="ec-secthead">
+          <div>
+            <div class="ec-secthead__kicker">Cassa Economale</div>
+            <h1 class="ec-secthead__title">Le mie spese</h1>
+            <p class="ec-secthead__sub">Richieste di spesa urgente fuori catalogo e il loro stato di avanzamento.</p>
+          </div>
+          <div class="ec-secthead__right">
+            <a href="/spese/nuova" class="ec-btn ec-btn--primary ec-btn--sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              Nuova spesa
+            </a>
+          </div>
+        </header>
+
+        {{if .MieSpese}}
+        <div class="ec-stack">
+          {{range .MieSpese}}
+          <div class="ec-order">
+            <header class="ec-order__head">
+              <span class="ec-order__id">#{{.ID}}</span>
+              <span class="ec-order__meta">{{fmtDate .DataCreazione}}</span>
+              {{if eq .Stato "in_approvazione"}}<span class="ec-pill ec-pill--amber">In approvazione</span>
+              {{else if eq .Stato "autorizzata"}}<span class="ec-pill ec-pill--blue">Autorizzata</span>
+              {{else if eq .Stato "impegnata"}}<span class="ec-pill ec-pill--blue">Impegnata</span>
+              {{else if eq .Stato "rendicontata"}}<span class="ec-pill ec-pill--teal">Rendicontata</span>
+              {{else if eq .Stato "chiusa"}}<span class="ec-pill ec-pill--teal">Chiusa</span>
+              {{else if eq .Stato "rifiutata_funz"}}<span class="ec-pill ec-pill--red">Rifiutata</span>
+              {{else if eq .Stato "rifiutata_econ"}}<span class="ec-pill ec-pill--red">Rifiutata (economo)</span>
+              {{else}}<span class="ec-pill">{{.Stato}}</span>{{end}}
+            </header>
+            <div class="ec-order__body">
+              <div class="ec-order__rows">
+                <div class="ec-order__row">
+                  <div style="flex:1;min-width:0">
+                    <div class="ec-order__row-name">{{.Motivazione}}</div>
+                    <div class="ec-order__row-meta">
+                      {{if eq .TipoPagamento "contanti"}}Contanti{{else}}Carta{{end}}
+                      · Importo presunto: <b>€ {{printf "%.2f" .ImportoPresunto}}</b>
+                      {{if .ImportoEffettivo}} · Effettivo: <b>€ {{printf "%.2f" (deref .ImportoEffettivo)}}</b>{{end}}
+                    </div>
+                  </div>
+                  <a href="/spese/{{.ID}}" class="ec-btn ec-btn--ghost ec-btn--sm">Dettaglio</a>
+                </div>
+              </div>
+            </div>
+            {{if .NoteFunzionario}}
+            <div class="ec-note {{if eq .Stato "rifiutata_funz"}}ec-note--warning{{else}}ec-note--info{{end}}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8v.5"/></svg>
+              <div><b>Note funzionario:</b> {{.NoteFunzionario}}</div>
+            </div>
+            {{end}}
+          </div>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="ec-empty">
+          <div class="ec-empty__icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M16 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M2 10h20"/></svg>
+          </div>
+          <div class="ec-empty__title">Nessuna spesa effettuata</div>
+          <div class="ec-empty__hint">Usa il pulsante in alto per richiedere una spesa urgente.</div>
+        </div>
+        {{end}}
+      </section>
+
     </main>
   </div>
 </div>
@@ -363,7 +447,7 @@
 <script src="/static/js/htmx.min.js"></script>
 <script>
   (function () {
-    var titles = { catalogo: "Catalogo", ordini: "I miei ordini" };
+    var titles = { catalogo: "Catalogo", ordini: "I miei ordini", spese: "Le mie spese" };
     function setView(view, opts) {
       opts = opts || {};
       document.querySelectorAll('[data-view-section]').forEach(function (s) {
@@ -392,6 +476,32 @@
       var v = parseHashView();
       if (v && titles[v]) setView(v, {updateHash: false});
     });
+
+    // Storico ordini: filter by stato + text search
+    var _ordiniFilter = '';
+    function filterOrdini() {
+      var q = (document.getElementById('ordini-search') || {value:''}).value.toLowerCase();
+      var list = document.getElementById('ordini-list');
+      if (!list) return;
+      var shown = 0;
+      list.querySelectorAll('.ec-order').forEach(function(el) {
+        var stato = el.getAttribute('data-ordine-stato') || '';
+        var text  = (el.getAttribute('data-ordine-text') || '').toLowerCase();
+        var passFilter = !_ordiniFilter ||
+          (_ordiniFilter === 'attivi' && ['in_approvazione','in_preparazione','pronto'].indexOf(stato) >= 0) ||
+          stato === _ordiniFilter;
+        var passSearch = !q || text.indexOf(q) >= 0;
+        el.style.display = (passFilter && passSearch) ? '' : 'none';
+        if (passFilter && passSearch) shown++;
+      });
+    }
+    function setOrdiniFilter(btn, val) {
+      _ordiniFilter = val;
+      document.querySelectorAll('[data-stato-filter]').forEach(function(b) {
+        b.classList.toggle('is-active', b.getAttribute('data-stato-filter') === val);
+      });
+      filterOrdini();
+    }
 
     function showToast(msg) {
       var t = document.createElement('div');

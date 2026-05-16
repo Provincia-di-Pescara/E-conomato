@@ -85,6 +85,21 @@
 </html>
 
 {{define "prodotti-partial"}}
+<div style="display:flex;gap:10px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
+  <form method="GET" action="/prodotti" style="flex:1;display:flex;gap:8px;min-width:200px">
+    <input type="search" name="q" value="{{.Q}}" placeholder="Cerca prodotto, codice, categoria…"
+           style="flex:1;padding:8px 12px;border:1px solid var(--ec-line);border-radius:8px;font-size:13px;font-family:inherit;background:var(--ec-bg);color:var(--ec-ink-900)">
+    <button type="submit" class="ec-btn ec-btn--ghost ec-btn--sm">Cerca</button>
+  </form>
+  {{if .FilterSottoSoglia}}
+  <a href="/prodotti" class="ec-btn ec-btn--sm" style="background:var(--ec-red-50,#fff0f0);color:var(--ec-red-700);border:1px solid var(--ec-red-200,#fcc)">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
+    Solo sotto soglia
+  </a>
+  {{else}}
+  <a href="/prodotti?filter=sotto_soglia" class="ec-btn ec-btn--ghost ec-btn--sm">Solo sotto soglia</a>
+  {{end}}
+</div>
 {{if .Prodotti}}
 <table class="ec-table">
   <thead>

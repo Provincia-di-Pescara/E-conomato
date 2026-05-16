@@ -82,8 +82,8 @@
           <div class="ec-alert__title">{{len .Scorte}} articoli sotto la soglia minima</div>
           <div class="ec-alert__sub">Valuta nuovi lotti di acquisto prima che le scorte si esauriscano.</div>
         </div>
-        <a href="/prodotti" class="ec-btn ec-btn--gold ec-btn--sm">
-          Vai ai prodotti
+        <a href="/prodotti?filter=sotto_soglia" class="ec-btn ec-btn--gold ec-btn--sm">
+          Mostra sotto soglia
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
         </a>
       </div>
@@ -137,7 +137,7 @@
             </div>
           </div>
 
-          <footer class="ec-order__foot">
+          <footer class="ec-order__foot" style="position:relative">
             <div style="font-size:12px;color:var(--ec-ink-500)">
               {{len .Righe}} articoli · <b class="mono" style="color:var(--ec-ink-900)">{{$tot}} pz</b> da evadere
             </div>
@@ -157,6 +157,31 @@
                 Prepara (FIFO)
               </button>
             </form>
+            <details class="ec-parziale" style="margin:0">
+              <summary class="ec-btn ec-btn--ghost ec-btn--sm" style="list-style:none;cursor:pointer">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                Parziale
+              </summary>
+              <div style="position:absolute;right:0;bottom:calc(100% + 8px);background:var(--ec-surface);border:1px solid var(--ec-line);border-radius:var(--r-lg);padding:16px;min-width:320px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:10">
+                <p style="font-size:12px;font-weight:600;color:var(--ec-ink-500);margin:0 0 12px">Quantità da consegnare per riga</p>
+                <form method="POST" action="/ordini/{{.Ordine.ID}}/evadi-parziale">
+                  <div style="display:flex;flex-direction:column;gap:8px">
+                    {{range .Righe}}
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px">
+                      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{.ProdottoNome}}</span>
+                      <span style="color:var(--ec-ink-400);font-size:11px;white-space:nowrap">max {{if .QtaApprovata}}{{.QtaApprovata}}{{else}}{{.QtaRichiesta}}{{end}}</span>
+                      <input type="number" name="riga_{{.ID}}" min="0" max="{{if .QtaApprovata}}{{derefInt .QtaApprovata}}{{else}}{{.QtaRichiesta}}{{end}}" value="0"
+                             style="width:60px;padding:4px 6px;border:1px solid var(--ec-line);border-radius:var(--r-sm);font-size:13px;text-align:right">
+                    </label>
+                    {{end}}
+                  </div>
+                  <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
+                    <button type="button" class="ec-btn ec-btn--ghost ec-btn--sm" onclick="this.closest('details').removeAttribute('open')">Annulla</button>
+                    <button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">Conferma consegna parziale</button>
+                  </div>
+                </form>
+              </div>
+            </details>
             {{else if eq .Ordine.Stato "in_preparazione"}}
             <button type="button" class="ec-btn ec-btn--ghost ec-btn--sm"
                     hx-get="/ordini/{{.Ordine.ID}}/anteprima-fifo"

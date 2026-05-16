@@ -454,7 +454,8 @@ img { display: block; max-width: 100%; }
   background: var(--ec-surface);
   border: 1px solid var(--ec-line);
   border-radius: var(--r-lg);
-  position: sticky; top: 90px;
+  position: sticky; top: 16px;
+  max-height: calc(100vh - 32px);
   display: flex; flex-direction: column;
   overflow: hidden;
 }

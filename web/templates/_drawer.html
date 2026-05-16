@@ -5,3 +5,5 @@
 
 {{define "drawer-backdrop"}}<div id="drawer-bg" class="ec-drawer-bg"
    onclick="this.classList.remove('is-open');document.querySelector('.ec-side').classList.remove('is-open');"></div>{{end}}
+
+{{define "drawer"}}{{template "drawer-backdrop" .}}{{end}}

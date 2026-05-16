@@ -252,6 +252,7 @@ return template.FuncMap{
 "brandLogoSrc": brandLogoSrc,
 "initials":     initials,
 "derefInt":     derefInt,
+"deref":        deref,
 "statoLabel":   statoLabel,
 "statoTone":    statoTone,
 "add":          func(a, b int) int { return a + b },
@@ -799,6 +800,7 @@ func (a *App) handleDashboardUtente(w http.ResponseWriter, r *http.Request) {
 	catID, _ := strconv.ParseInt(r.URL.Query().Get("cat"), 10, 64)
 	prodotti, _ := a.db.GetCatalogo(r.URL.Query().Get("q"), catID)
 	ordini, _ := a.db.GetOrdiniUtente(username)
+	mieSpese, _ := a.db.GetSpeseUtente(username)
 	a.render(w, r, "dashboard-utente", a.viewData(r, map[string]any{
 		"Username":    username,
 		"Role":        a.getRole(r),
@@ -807,6 +809,7 @@ func (a *App) handleDashboardUtente(w http.ResponseWriter, r *http.Request) {
 		"CategoriaID": catID,
 		"Prodotti":    prodotti,
 		"Ordini":      ordini,
+		"MieSpese":    mieSpese,
 		"SettoreNome": a.settoreNomeFor(username),
 	}))
 }
@@ -1094,17 +1097,28 @@ func (a *App) handleDashboardFunzionario(w http.ResponseWriter, r *http.Request)
 	catID, _ := strconv.ParseInt(r.URL.Query().Get("cat"), 10, 64)
 	prodotti, _ := a.db.GetCatalogo(r.URL.Query().Get("q"), catID)
 	mieiOrdini, _ := a.db.GetOrdiniUtente(username)
+	mieSpese, _ := a.db.GetSpeseUtente(username)
+	speseSettore, _ := a.db.GetSpeseSettore(settoreID)
+	var speseDaAutorizzare []models.SpesaEconomale
+	for _, s := range speseSettore {
+		if s.Stato == "in_approvazione" {
+			speseDaAutorizzare = append(speseDaAutorizzare, s)
+		}
+	}
 	a.render(w, r, "dashboard-funzionario", a.viewData(r, map[string]any{
-		"Username":       username,
-		"Role":           a.getRole(r),
-		"DaApprovare":    daApprovare,
-		"StoricoSettore": storicoSettore,
-		"Bozza":          bozza,
-		"Categorie":      categorie,
-		"CategoriaID":    catID,
-		"Prodotti":       prodotti,
-		"MieiOrdini":     mieiOrdini,
-		"SettoreNome":    a.settoreNomeFor(username),
+		"Username":            username,
+		"Role":                a.getRole(r),
+		"DaApprovare":         daApprovare,
+		"StoricoSettore":      storicoSettore,
+		"SpeseSettore":        speseSettore,
+		"Bozza":               bozza,
+		"Categorie":           categorie,
+		"CategoriaID":         catID,
+		"Prodotti":            prodotti,
+		"MieiOrdini":          mieiOrdini,
+		"MieSpese":            mieSpese,
+		"SpeseDaAutorizzare":  speseDaAutorizzare,
+		"SettoreNome":         a.settoreNomeFor(username),
 	}))
 }
 
@@ -1343,6 +1357,60 @@ func (a *App) handlePreparaOrdine(w http.ResponseWriter, r *http.Request) {
 				Destinatari:   []string{utente},
 				Mittente:      a.getUsername(r),
 				Messaggio:     fmt.Sprintf("Ordine #%d in preparazione.", ordineID),
+			})
+		}
+		for _, s := range scorte {
+			a.notifier.EmitScorta(s)
+		}
+	}
+	http.Redirect(w, r, "/dashboard/magazzino", http.StatusSeeOther)
+}
+
+func (a *App) handleEvadiParziale(w http.ResponseWriter, r *http.Request) {
+	ordineID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", 400)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "form non valido", 400)
+		return
+	}
+	qtaPerRiga := map[int64]int{}
+	for k, vals := range r.Form {
+		if strings.HasPrefix(k, "riga_") {
+			rigaID, err := strconv.ParseInt(strings.TrimPrefix(k, "riga_"), 10, 64)
+			if err != nil {
+				continue
+			}
+			qty, err := strconv.Atoi(vals[0])
+			if err != nil || qty <= 0 {
+				continue
+			}
+			qtaPerRiga[rigaID] = qty
+		}
+	}
+	if len(qtaPerRiga) == 0 {
+		http.Error(w, "nessuna quantità specificata", 400)
+		return
+	}
+	scorte, err := a.db.EvadiOrdineParziale(ordineID, qtaPerRiga)
+	if err != nil {
+		logger.Error("evadi parziale ordine %d: %v", ordineID, err)
+		http.Error(w, "errore interno", 500)
+		return
+	}
+	logger.Info("ordine %d evaso parzialmente da %s", ordineID, a.getUsername(r))
+	if a.notifier != nil {
+		utente, settID, _, err := a.db.GetOrdineMeta(ordineID)
+		if err == nil && utente != "" {
+			a.notifier.EmitOrdine(notify.EventoOrdineParams{
+				Tipo:          "ordine_in_preparazione",
+				OrdineID:      ordineID,
+				OrdineSettore: settID,
+				Destinatari:   []string{utente},
+				Mittente:      a.getUsername(r),
+				Messaggio:     fmt.Sprintf("Ordine #%d in preparazione (consegna parziale).", ordineID),
 			})
 		}
 		for _, s := range scorte {
@@ -1619,6 +1687,19 @@ p.ScortaMinima,
 fmt.Fprint(w, `</tbody></table>`)
 }
 
+// GET /scorte — pagina standalone scorte sotto soglia (magazziniere)
+func (a *App) handleScortePage(w http.ResponseWriter, r *http.Request) {
+	scorte, _ := a.db.GetProdottiSottoSoglia()
+	ordini, _ := a.db.GetOrdiniAttivi()
+	a.render(w, r, "scorte", a.viewData(r, map[string]any{
+		"Username":  a.getUsername(r),
+		"Role":      a.getRole(r),
+		"Scorte":    scorte,
+		"Ordini":    ordini,
+		"ActiveNav": "scorte",
+	}))
+}
+
 // ── Categorie ────────────────────────────────────────────────────────────────
 
 // renderPartial executes a named sub-template from the base template.
@@ -1746,32 +1827,56 @@ a.renderCategorieListInner(w, r)
 
 // GET /prodotti — HTMX partial table o full page.
 func (a *App) handleMagazzino(w http.ResponseWriter, r *http.Request) {
-prodotti, err := a.db.GetAllProdotti()
-if err != nil {
-logger.Error("get prodotti: %v", err)
-prodotti = nil
-}
-if r.Header.Get("HX-Request") == "true" {
-a.renderPartial(w, r, "magazzino", "prodotti-partial", map[string]any{
-"Prodotti": prodotti,
-})
-return
-}
-categorie, err := a.db.GetAllCategorie()
-if err != nil {
-logger.Error("get categorie: %v", err)
-categorie = nil
-}
-a.render(w, r, "magazzino", a.viewData(r, map[string]any{
-"Partial":     "prodotti",
-"Prodotti":    prodotti,
-"Categorie":   categorie,
-"Username":    a.getUsername(r),
-"Role":        a.getRole(r),
-"ActiveNav":   "prodotti",
-"SectionName": "Anagrafica prodotti",
-"IconePicker": IconePicker,
-}))
+	q := r.URL.Query().Get("q")
+	filterSottoSoglia := r.URL.Query().Get("filter") == "sotto_soglia"
+	var prodotti []database.ProdottoRow
+	var err error
+	if filterSottoSoglia {
+		prodotti, err = a.db.GetProdottiSottoSoglia()
+	} else {
+		prodotti, err = a.db.GetAllProdotti()
+		if err == nil && q != "" {
+			ql := strings.ToLower(q)
+			filtered := prodotti[:0]
+			for _, p := range prodotti {
+				if strings.Contains(strings.ToLower(p.Nome), ql) ||
+					strings.Contains(strings.ToLower(p.CodiceArticolo), ql) ||
+					strings.Contains(strings.ToLower(p.CategoriaName), ql) {
+					filtered = append(filtered, p)
+				}
+			}
+			prodotti = filtered
+		}
+	}
+	if err != nil {
+		logger.Error("get prodotti: %v", err)
+		prodotti = nil
+	}
+	if r.Header.Get("HX-Request") == "true" {
+		a.renderPartial(w, r, "magazzino", "prodotti-partial", map[string]any{
+			"Prodotti":          prodotti,
+			"FilterSottoSoglia": filterSottoSoglia,
+			"Q":                 q,
+		})
+		return
+	}
+	categorie, err := a.db.GetAllCategorie()
+	if err != nil {
+		logger.Error("get categorie: %v", err)
+		categorie = nil
+	}
+	a.render(w, r, "magazzino", a.viewData(r, map[string]any{
+		"Partial":           "prodotti",
+		"Prodotti":          prodotti,
+		"Categorie":         categorie,
+		"Username":          a.getUsername(r),
+		"Role":              a.getRole(r),
+		"ActiveNav":         "prodotti",
+		"SectionName":       "Anagrafica prodotti",
+		"IconePicker":       IconePicker,
+		"FilterSottoSoglia": filterSottoSoglia,
+		"Q":                 q,
+	}))
 }
 
 // GET /prodotti/new — full-page form
@@ -2686,6 +2791,7 @@ mux.HandleFunc("/dashboard", app.requireRole("user", "funzionario")(app.handleDa
 mux.HandleFunc("/dashboard/funzionario", app.requireRole("funzionario")(app.handleDashboardFunzionario))
 mux.HandleFunc("/dashboard/magazzino", app.requireRole("magazziniere")(app.handleDashboardMagazzino))
 mux.HandleFunc("/dashboard/scorte", app.requireRole("magazziniere")(app.handleDashboardScorte))
+mux.HandleFunc("/scorte", app.requireRole("magazziniere")(app.handleScortePage))
 
 // Bozza / carrello
 mux.HandleFunc("GET /carrello/badge", app.requireRole("user", "funzionario")(app.handleCartBadge))
@@ -2702,6 +2808,7 @@ mux.HandleFunc("GET /storico-ordini", app.requireRole("magazziniere")(app.handle
 mux.HandleFunc("GET /prodotti/{id}/storico", app.requireRole("magazziniere")(app.handleProdottoStorico))
 mux.HandleFunc("GET /ordini/{id}/anteprima-fifo", app.requireRole("magazziniere")(app.handleAnteprimaFIFO))
 mux.HandleFunc("POST /ordini/{id}/prepara", app.requireRole("magazziniere")(app.handlePreparaOrdine))
+mux.HandleFunc("POST /ordini/{id}/evadi-parziale", app.requireRole("magazziniere")(app.handleEvadiParziale))
 mux.HandleFunc("POST /ordini/{id}/pronto", app.requireRole("magazziniere")(app.handleSegnaPronte))
 mux.HandleFunc("POST /ordini/{id}/consegna", app.requireRole("magazziniere")(app.handleConsegnaOrdine))
 
@@ -3206,6 +3313,10 @@ func (a *App) handleAutorizzaSpesa(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
+	if next := r.FormValue("next"); next != "" && r.Header.Get("HX-Request") == "" {
+		http.Redirect(w, r, next, http.StatusSeeOther)
+		return
+	}
 	spesaRedirect(w, r, id)
 }
 
@@ -3253,6 +3364,10 @@ func (a *App) handleRifiutaSpesaFunz(w http.ResponseWriter, r *http.Request) {
 			NoteExtra:    note,
 			Messaggio:    fmt.Sprintf("La tua spesa #%d è stata rifiutata dal funzionario.", id),
 		})
+	}
+	if next := r.FormValue("next"); next != "" && r.Header.Get("HX-Request") == "" {
+		http.Redirect(w, r, next, http.StatusSeeOther)
+		return
 	}
 	spesaRedirect(w, r, id)
 }

@@ -42,7 +42,7 @@
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h11l3 4h4v6H3z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg>
     <span>Fornitori</span>
   </a>
-  <a href="/dashboard/scorte" class="ec-side__link {{if eq .ActiveNav "scorte"}}is-active{{end}}" hx-get="/dashboard/scorte" hx-target="#scorte-table" hx-swap="innerHTML">
+  <a href="/scorte" class="ec-side__link {{if eq .ActiveNav "scorte"}}is-active{{end}}">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V8"/><path d="M10 20V4"/><path d="M16 20v-8"/><path d="M22 20H2"/></svg>
     <span>Scorte</span>
     {{if .Scorte}}<span class="ec-side__badge">{{len .Scorte}}</span>{{end}}

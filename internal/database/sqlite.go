@@ -1127,6 +1127,168 @@ func (db *DB) PreparaOrdineFIFO(ordineID int64) ([]models.ScortaSottoSoglia, err
 	return attraversate, nil
 }
 
+// EvadiOrdineParziale esegue uno scarico FIFO limitato: per ogni riga consegna
+// al massimo la quantità indicata in qtaPerRiga (capped a qta_approvata/qta_richiesta).
+// Righe assenti dalla mappa vengono saltate (lasciate in_attesa).
+// L'ordine transita sempre a 'in_preparazione'; il magazziniere segna 'pronto' dopo.
+func (db *DB) EvadiOrdineParziale(ordineID int64, qtaPerRiga map[int64]int) ([]models.ScortaSottoSoglia, error) {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.Query(`
+		SELECT id, prodotto_id, COALESCE(qta_approvata, qta_richiesta)
+		FROM righe_ordine WHERE ordine_id = ?
+	`, ordineID)
+	if err != nil {
+		return nil, err
+	}
+	type riga struct {
+		id         int64
+		prodottoID int64
+		qtaMax     int
+	}
+	var righe []riga
+	for rows.Next() {
+		var r riga
+		if err := rows.Scan(&r.id, &r.prodottoID, &r.qtaMax); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		righe = append(righe, r)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	type stockSnap struct {
+		nome       string
+		soglia     int
+		preScarico int
+	}
+	pre := map[int64]stockSnap{}
+	for _, r := range righe {
+		if _, ok := pre[r.prodottoID]; ok {
+			continue
+		}
+		var s stockSnap
+		if err := tx.QueryRow(`
+			SELECT p.nome, p.scorta_minima,
+			       COALESCE((SELECT SUM(quantita_rimanente) FROM lotti_acquisto WHERE prodotto_id = p.id AND quantita_rimanente > 0), 0)
+			FROM prodotti p WHERE p.id = ?
+		`, r.prodottoID).Scan(&s.nome, &s.soglia, &s.preScarico); err != nil {
+			return nil, err
+		}
+		pre[r.prodottoID] = s
+	}
+
+	for _, r := range righe {
+		qtaRichiesta, ok := qtaPerRiga[r.id]
+		if !ok || qtaRichiesta <= 0 {
+			continue
+		}
+		if qtaRichiesta > r.qtaMax {
+			qtaRichiesta = r.qtaMax
+		}
+
+		qtaResidua := qtaRichiesta
+		qtaEvasa := 0
+
+		lotti, err := tx.Query(`
+			SELECT id, quantita_rimanente, costo_unitario FROM lotti_acquisto
+			WHERE prodotto_id = ? AND quantita_rimanente > 0
+			ORDER BY data_acquisto ASC
+		`, r.prodottoID)
+		if err != nil {
+			return nil, err
+		}
+		type lotto struct {
+			id        int64
+			rimanente int
+			costoUnit float64
+		}
+		var ls []lotto
+		for lotti.Next() {
+			var l lotto
+			if err := lotti.Scan(&l.id, &l.rimanente, &l.costoUnit); err != nil {
+				lotti.Close()
+				return nil, err
+			}
+			ls = append(ls, l)
+		}
+		lotti.Close()
+
+		for _, l := range ls {
+			if qtaResidua <= 0 {
+				break
+			}
+			prelevato := l.rimanente
+			if prelevato > qtaResidua {
+				prelevato = qtaResidua
+			}
+			costo := float64(prelevato) * l.costoUnit
+			if _, err = tx.Exec(
+				`INSERT INTO movimenti_magazzino (riga_ordine_id, lotto_id, quantita_prelevata, costo_totale) VALUES (?,?,?,?)`,
+				r.id, l.id, prelevato, costo,
+			); err != nil {
+				return nil, err
+			}
+			if _, err = tx.Exec(
+				`UPDATE lotti_acquisto SET quantita_rimanente = quantita_rimanente - ? WHERE id = ?`,
+				prelevato, l.id,
+			); err != nil {
+				return nil, err
+			}
+			qtaResidua -= prelevato
+			qtaEvasa += prelevato
+		}
+
+		statoRiga := "evasa"
+		if qtaEvasa == 0 {
+			statoRiga = "in_attesa"
+		} else if qtaEvasa < r.qtaMax {
+			statoRiga = "evasa_parziale"
+		}
+		if _, err = tx.Exec(
+			`UPDATE righe_ordine SET qta_evasa = qta_evasa + ?, stato_riga = ? WHERE id = ?`,
+			qtaEvasa, statoRiga, r.id,
+		); err != nil {
+			return nil, err
+		}
+	}
+
+	if _, err = tx.Exec(`UPDATE ordini SET stato = 'in_preparazione' WHERE id = ?`, ordineID); err != nil {
+		return nil, err
+	}
+
+	var attraversate []models.ScortaSottoSoglia
+	for prodID, snap := range pre {
+		var post int
+		if err := tx.QueryRow(`
+			SELECT COALESCE(SUM(quantita_rimanente), 0) FROM lotti_acquisto
+			WHERE prodotto_id = ? AND quantita_rimanente > 0
+		`, prodID).Scan(&post); err != nil {
+			return nil, err
+		}
+		if snap.preScarico >= snap.soglia && post < snap.soglia {
+			attraversate = append(attraversate, models.ScortaSottoSoglia{
+				ProdottoID:   prodID,
+				ProdottoNome: snap.nome,
+				Rimanente:    post,
+				SogliaMinima: snap.soglia,
+			})
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return attraversate, nil
+}
+
 // SimulaOrdineFIFO esegue una simulazione non distruttiva dello scarico
 // FIFO per un ordine: legge le righe, scorre i lotti in ORDER BY data_acquisto
 // ASC e calcola quali prelievi avverrebbero, senza scrivere su

@@ -34,13 +34,12 @@
     <div class="ec-side__group-label">Funzionario</div>
     <button class="ec-side__link is-active" data-view="approva">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6v3H9z"/><path d="M7 5H5v16h14V5h-2"/><path d="M8 11h8"/><path d="M8 15h6"/></svg>
-      <span>Da approvare</span>
-      {{if .DaApprovare}}<span class="ec-side__badge">{{len .DaApprovare}}</span>{{end}}
+      <span>Approvazioni</span>
+      {{$tot := 0}}{{if .DaApprovare}}{{$tot = len .DaApprovare}}{{end}}{{if .SpeseDaAutorizzare}}{{$tot = add $tot (len .SpeseDaAutorizzare)}}{{end}}{{if gt $tot 0}}<span class="ec-side__badge">{{$tot}}</span>{{end}}
     </button>
     <button class="ec-side__link" data-view="storico">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v5h5"/><path d="M12 7v5l3 3"/></svg>
       <span>Storico settore</span>
-      {{if .StoricoSettore}}<span class="ec-side__badge">{{len .StoricoSettore}}</span>{{end}}
     </button>
     <button class="ec-side__link" data-view="nuovo">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
@@ -51,6 +50,15 @@
       <span>I miei ordini</span>
       {{if .MieiOrdini}}<span class="ec-side__badge">{{len .MieiOrdini}}</span>{{end}}
     </button>
+    <button class="ec-side__link" data-view="mie-spese">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M16 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M2 10h20"/></svg>
+      <span>Le mie spese</span>
+      {{if .MieSpese}}<span class="ec-side__badge">{{len .MieSpese}}</span>{{end}}
+    </button>
+    <a href="/spese/nuova" class="ec-side__link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M12 10v6"/><path d="M9 13h6"/></svg>
+      <span>Nuova spesa</span>
+    </a>
 
     <div class="ec-side__group-label">Generale</div>
     <a href="/notifiche" class="ec-side__link">
@@ -92,30 +100,218 @@
 
     <main class="ec-content">
 
-      <!-- ─── Vista: Da approvare ─── -->
+      <!-- ─── Vista: Approvazioni (Ordini + Spese, tabulata) ─── -->
       <section data-view-section="approva">
         <header class="ec-secthead">
           <div>
             <div class="ec-secthead__kicker">Area funzionario</div>
-            <h1 class="ec-secthead__title">Richieste da approvare</h1>
-            <p class="ec-secthead__sub">Esamina le richieste del tuo settore. Puoi approvare, ridurre le quantità (mai aumentarle) o rifiutare con motivazione obbligatoria.</p>
+            <h1 class="ec-secthead__title">Approvazioni</h1>
+            <p class="ec-secthead__sub">Richieste di materiale e spese economali in attesa di approvazione/autorizzazione dal tuo settore.</p>
           </div>
         </header>
 
-        {{if .DaApprovare}}
-        <div class="ec-stack">
-          {{range .DaApprovare}}
-          {{$tot := 0}}{{range .Righe}}{{$tot = add $tot .QtaRichiesta}}{{end}}
-          <div class="ec-order" data-order-card>
-            <header class="ec-order__head">
-              <span class="ec-order__id">#{{.Ordine.ID}}</span>
-              <span class="ec-order__meta">
-                <b>{{.Ordine.UtenteUsername}}</b> · {{fmtDate .Ordine.DataCreazione}}
-              </span>
-              <span class="ec-pill ec-pill--{{statoTone .Ordine.Stato}}">{{statoLabel .Ordine.Stato}}</span>
-            </header>
+        <!-- Tab strip -->
+        <div class="ec-tabs" style="margin-bottom:20px">
+          <button class="ec-tab is-active" data-inner-tab="approva-tutti">Tutti</button>
+          <button class="ec-tab" data-inner-tab="approva-ordini">Ordini {{if .DaApprovare}}<span class="ec-tab__badge">{{len .DaApprovare}}</span>{{end}}</button>
+          <button class="ec-tab" data-inner-tab="approva-spese">Spese {{if .SpeseDaAutorizzare}}<span class="ec-tab__badge">{{len .SpeseDaAutorizzare}}</span>{{end}}</button>
+        </div>
 
-            <form method="POST" action="/ordini/{{.Ordine.ID}}/approva" data-approve-form>
+        <!-- Sotto-sezione: Ordini in attesa -->
+        <div data-inner-section="approva-ordini">
+          {{if .DaApprovare}}
+          <div class="ec-stack">
+            {{range .DaApprovare}}
+            {{$tot := 0}}{{range .Righe}}{{$tot = add $tot .QtaRichiesta}}{{end}}
+            <div class="ec-order" data-order-card data-approva-type="ordine">
+              <header class="ec-order__head">
+                <span class="ec-order__id">#{{.Ordine.ID}}</span>
+                <span class="ec-order__meta">
+                  <b>{{.Ordine.UtenteUsername}}</b> · {{fmtDate .Ordine.DataCreazione}}
+                </span>
+                <span class="ec-pill ec-pill--{{statoTone .Ordine.Stato}}">{{statoLabel .Ordine.Stato}}</span>
+              </header>
+
+              <form method="POST" action="/ordini/{{.Ordine.ID}}/approva" data-approve-form>
+                <div class="ec-order__body">
+                  <div class="ec-order__rows">
+                    {{range .Righe}}
+                    <div class="ec-order__row">
+                      <div class="ec-prod-img ec-prod-img--sm ec-prod-img--cat-default">
+                        <img src="/prodotti/{{.ProdottoID}}/immagine" alt="" onerror="this.style.display='none'">
+                      </div>
+                      <div>
+                        <div class="ec-order__row-name">
+                          {{.ProdottoNome}}
+                          {{if .Prenotazione}}<span class="ec-pill ec-pill--amber" style="margin-left:6px;font-size:10px">Prenotazione</span>{{end}}
+                        </div>
+                        <div class="ec-order__row-meta">Riga #{{.ID}}{{if .NotaUtente}} · <em>{{.NotaUtente}}</em>{{end}}</div>
+                      </div>
+                      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                        <div style="font-size:11px;color:var(--ec-ink-500)">Richiesto</div>
+                        <span class="ec-order__row-qty">{{.QtaRichiesta}} pz</span>
+                      </div>
+                      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                        <div style="font-size:11px;color:var(--ec-ink-500)">Approva</div>
+                        <input type="number" name="riga_{{.ID}}"
+                               min="0" max="{{.QtaRichiesta}}" value="{{.QtaRichiesta}}"
+                               class="ec-order__row-qty-input">
+                      </div>
+                    </div>
+                    {{end}}
+                  </div>
+                </div>
+
+                <div class="ec-note ec-note--gold" style="display:none" data-reject-panel>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2L12 3Z"/><path d="M12 10v5"/><path d="M12 18v.5"/></svg>
+                  <div style="flex:1">
+                    <div style="font-weight:600;margin-bottom:6px">Stai rifiutando l'ordine #{{.Ordine.ID}}</div>
+                    <div style="font-size:12.5px;margin-bottom:8px">Inserisci una motivazione: sarà visibile all'utente e inviata via email.</div>
+                  </div>
+                </div>
+
+                <footer class="ec-order__foot">
+                  <div style="font-size:12px;color:var(--ec-ink-500)">
+                    {{len .Righe}} articoli · <b class="mono" style="color:var(--ec-ink-900)">{{$tot}} pz</b> richiesti
+                  </div>
+                  <div class="ec-order__foot-spacer"></div>
+                  <button type="button" class="ec-btn ec-btn--danger ec-btn--sm" data-toggle-reject>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
+                    Rifiuta
+                  </button>
+                  <button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg>
+                    Approva ordine
+                  </button>
+                </footer>
+              </form>
+
+              <form method="POST" action="/ordini/{{.Ordine.ID}}/rifiuta" data-reject-form style="display:none;border-top:1px solid var(--ec-line);padding:14px 18px 18px;background:var(--ec-bg-soft)">
+                <label class="ec-label" for="note-{{.Ordine.ID}}">Motivazione del rifiuto *</label>
+                <textarea id="note-{{.Ordine.ID}}" name="note" class="ec-textarea" rows="3" required
+                          placeholder="Es. quantità eccessiva, si invita a riformulare con un massimo di…"></textarea>
+                <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px">
+                  <button type="button" class="ec-btn ec-btn--ghost ec-btn--sm" data-cancel-reject>Annulla</button>
+                  <button type="submit" class="ec-btn ec-btn--danger ec-btn--sm">Conferma rifiuto</button>
+                </div>
+              </form>
+            </div>
+            {{end}}
+          </div>
+          {{else}}
+          <div class="ec-empty">
+            <div class="ec-empty__icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg></div>
+            <div class="ec-empty__title">Nessun ordine in attesa</div>
+            <div class="ec-empty__hint">Nessuna richiesta di materiale da approvare nel tuo settore.</div>
+          </div>
+          {{end}}
+        </div>
+
+        <!-- Sotto-sezione: Spese in attesa -->
+        <div data-inner-section="approva-spese" style="display:none">
+          {{if .SpeseDaAutorizzare}}
+          <div class="ec-stack">
+            {{range .SpeseDaAutorizzare}}
+            <div class="ec-order" data-order-card data-approva-type="spesa">
+              <header class="ec-order__head">
+                <span class="ec-order__id">#{{.ID}}</span>
+                <span class="ec-order__meta">
+                  <b>{{.UtenteUsername}}</b> · {{fmtDate .DataCreazione}}
+                </span>
+                <span class="ec-pill ec-pill--amber">In approvazione</span>
+              </header>
+
+              <form method="POST" action="/spese/{{.ID}}/autorizza" data-approve-form>
+                <input type="hidden" name="next" value="/dashboard/funzionario">
+                <div class="ec-order__body">
+                  <div class="ec-order__rows">
+                    <div class="ec-order__row">
+                      <div style="flex:1;min-width:0">
+                        <div class="ec-order__row-name">{{.Motivazione}}</div>
+                        <div class="ec-order__row-meta">
+                          {{if eq .TipoPagamento "contanti"}}Contanti{{else}}Carta{{end}}
+                          · Importo presunto: <b>€ {{printf "%.2f" .ImportoPresunto}}</b>
+                          {{if .SettoreNome}} · Settore: {{.SettoreNome}}{{end}}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="ec-note ec-note--gold" style="display:none" data-reject-panel>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2L12 3Z"/><path d="M12 10v5"/><path d="M12 18v.5"/></svg>
+                  <div style="flex:1">
+                    <div style="font-weight:600;margin-bottom:6px">Stai rifiutando la spesa #{{.ID}}</div>
+                    <div style="font-size:12.5px">Inserisci una motivazione obbligatoria: sarà visibile al richiedente.</div>
+                  </div>
+                </div>
+
+                <footer class="ec-order__foot">
+                  <a href="/spese/{{.ID}}" class="ec-btn ec-btn--ghost ec-btn--sm">Dettaglio</a>
+                  <div class="ec-order__foot-spacer"></div>
+                  <button type="button" class="ec-btn ec-btn--danger ec-btn--sm" data-toggle-reject>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
+                    Rifiuta
+                  </button>
+                  <button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg>
+                    Autorizza
+                  </button>
+                </footer>
+              </form>
+
+              <form method="POST" action="/spese/{{.ID}}/rifiuta-funz" data-reject-form style="display:none;border-top:1px solid var(--ec-line);padding:14px 18px 18px;background:var(--ec-bg-soft)">
+                <input type="hidden" name="next" value="/dashboard/funzionario">
+                <label class="ec-label" for="note-spesa-{{.ID}}">Motivazione del rifiuto *</label>
+                <textarea id="note-spesa-{{.ID}}" name="note" class="ec-textarea" rows="3" required
+                          placeholder="Es. spesa non autorizzabile in questa categoria, si invita a riformulare…"></textarea>
+                <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px">
+                  <button type="button" class="ec-btn ec-btn--ghost ec-btn--sm" data-cancel-reject>Annulla</button>
+                  <button type="submit" class="ec-btn ec-btn--danger ec-btn--sm">Conferma rifiuto</button>
+                </div>
+              </form>
+            </div>
+            {{end}}
+          </div>
+          {{else}}
+          <div class="ec-empty">
+            <div class="ec-empty__icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg></div>
+            <div class="ec-empty__title">Nessuna spesa in attesa</div>
+            <div class="ec-empty__hint">Non ci sono spese economali da autorizzare nel tuo settore.</div>
+          </div>
+          {{end}}
+        </div>
+      </section>
+
+      <!-- ─── Vista: Storico settore (Ordini + Spese, tabulata) ─── -->
+      <section data-view-section="storico" style="display:none">
+        <header class="ec-secthead">
+          <div>
+            <div class="ec-secthead__kicker">Settore {{if .SettoreNome}}{{.SettoreNome}}{{end}}</div>
+            <h1 class="ec-secthead__title">Storico settore</h1>
+            <p class="ec-secthead__sub">Tutti gli ordini e le spese del tuo settore, in qualsiasi stato.</p>
+          </div>
+        </header>
+
+        <!-- Tab strip -->
+        <div class="ec-tabs" style="margin-bottom:20px">
+          <button class="ec-tab is-active" data-inner-tab="storico-ordini">Ordini</button>
+          <button class="ec-tab" data-inner-tab="storico-spese">Spese</button>
+        </div>
+
+        <!-- Sotto-sezione: Ordini settore -->
+        <div data-inner-section="storico-ordini">
+          {{if .StoricoSettore}}
+          <div class="ec-stack">
+            {{range .StoricoSettore}}
+            <div class="ec-order">
+              <header class="ec-order__head">
+                <span class="ec-order__id">#{{.Ordine.ID}}</span>
+                <span class="ec-order__meta">
+                  <b>{{.Ordine.UtenteUsername}}</b> · {{fmtDate .Ordine.DataCreazione}}
+                </span>
+                <span class="ec-pill ec-pill--{{statoTone .Ordine.Stato}}">{{statoLabel .Ordine.Stato}}</span>
+              </header>
               <div class="ec-order__body">
                 <div class="ec-order__rows">
                   {{range .Righe}}
@@ -128,130 +324,74 @@
                         {{.ProdottoNome}}
                         {{if .Prenotazione}}<span class="ec-pill ec-pill--amber" style="margin-left:6px;font-size:10px">Prenotazione</span>{{end}}
                       </div>
-                      <div class="ec-order__row-meta">Riga #{{.ID}}{{if .NotaUtente}} · <em>{{.NotaUtente}}</em>{{end}}</div>
+                      <div class="ec-order__row-meta">Stato riga: {{.StatoRiga}}</div>
                     </div>
-                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-                      <div style="font-size:11px;color:var(--ec-ink-500)">Richiesto</div>
-                      <span class="ec-order__row-qty">{{.QtaRichiesta}} pz</span>
-                    </div>
-                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-                      <div style="font-size:11px;color:var(--ec-ink-500)">Approva</div>
-                      <input type="number" name="riga_{{.ID}}"
-                             min="0" max="{{.QtaRichiesta}}" value="{{.QtaRichiesta}}"
-                             class="ec-order__row-qty-input">
-                    </div>
+                    <span class="ec-order__row-qty">{{if .QtaApprovata}}{{.QtaApprovata}}{{else}}{{.QtaRichiesta}}{{end}} pz</span>
+                    <span style="width:90px;text-align:right">
+                      {{if eq .StatoRiga "evasa"}}<span class="ec-pill ec-pill--teal">Evasa</span>
+                      {{else if eq .StatoRiga "evasa_parziale"}}<span class="ec-pill ec-pill--amber">Parziale</span>{{end}}
+                    </span>
                   </div>
                   {{end}}
                 </div>
               </div>
-
-              <div class="ec-note ec-note--gold" style="display:none" data-reject-panel>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2L12 3Z"/><path d="M12 10v5"/><path d="M12 18v.5"/></svg>
-                <div style="flex:1">
-                  <div style="font-weight:600;margin-bottom:6px">Stai rifiutando l'ordine #{{.Ordine.ID}}</div>
-                  <div style="font-size:12.5px;margin-bottom:8px">Inserisci una motivazione: sarà visibile all'utente e inviata via email.</div>
-                </div>
+              {{if .Ordine.NoteFunzionario}}
+              <div class="ec-note ec-note--info">
+                <i class="fa-solid fa-circle-info" style="margin-right:8px"></i>
+                <div>{{.Ordine.NoteFunzionario}}</div>
               </div>
-
-              <footer class="ec-order__foot">
-                <div style="font-size:12px;color:var(--ec-ink-500)">
-                  {{len .Righe}} articoli · <b class="mono" style="color:var(--ec-ink-900)">{{$tot}} pz</b> richiesti
-                </div>
-                <div class="ec-order__foot-spacer"></div>
-                <button type="button" class="ec-btn ec-btn--danger ec-btn--sm" data-toggle-reject>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M6 18 18 6"/></svg>
-                  Rifiuta
-                </button>
-                <button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg>
-                  Approva ordine
-                </button>
-              </footer>
-            </form>
-
-            <form method="POST" action="/ordini/{{.Ordine.ID}}/rifiuta" data-reject-form style="display:none;border-top:1px solid var(--ec-line);padding:14px 18px 18px;background:var(--ec-bg-soft)">
-              <label class="ec-label" for="note-{{.Ordine.ID}}">Motivazione del rifiuto *</label>
-              <textarea id="note-{{.Ordine.ID}}" name="note" class="ec-textarea" rows="3" required
-                        placeholder="Es. quantità eccessiva, si invita a riformulare con un massimo di…"></textarea>
-              <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px">
-                <button type="button" class="ec-btn ec-btn--ghost ec-btn--sm" data-cancel-reject>Annulla</button>
-                <button type="submit" class="ec-btn ec-btn--danger ec-btn--sm">Conferma rifiuto</button>
-              </div>
-            </form>
-          </div>
-          {{end}}
-        </div>
-        {{else}}
-        <div class="ec-empty">
-          <div class="ec-empty__icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg>
-          </div>
-          <div class="ec-empty__title">Tutto in ordine</div>
-          <div class="ec-empty__hint">Non ci sono richieste in attesa di approvazione nel tuo settore.</div>
-        </div>
-        {{end}}
-      </section>
-
-      <!-- ─── Vista: Storico settore ─── -->
-      <section data-view-section="storico" style="display:none">
-        <header class="ec-secthead">
-          <div>
-            <div class="ec-secthead__kicker">Settore {{if .SettoreNome}}{{.SettoreNome}}{{end}}</div>
-            <h1 class="ec-secthead__title">Storico ordini del settore</h1>
-            <p class="ec-secthead__sub">Tutti gli ordini dei tuoi utenti, in qualsiasi stato. Le tue richieste personali sono nella vista "I miei ordini".</p>
-          </div>
-        </header>
-
-        {{if .StoricoSettore}}
-        <div class="ec-stack">
-          {{range .StoricoSettore}}
-          <div class="ec-order">
-            <header class="ec-order__head">
-              <span class="ec-order__id">#{{.Ordine.ID}}</span>
-              <span class="ec-order__meta">
-                <b>{{.Ordine.UtenteUsername}}</b> · {{fmtDate .Ordine.DataCreazione}}
-              </span>
-              <span class="ec-pill ec-pill--{{statoTone .Ordine.Stato}}">{{statoLabel .Ordine.Stato}}</span>
-            </header>
-            <div class="ec-order__body">
-              <div class="ec-order__rows">
-                {{range .Righe}}
-                <div class="ec-order__row">
-                  <div class="ec-prod-img ec-prod-img--sm ec-prod-img--cat-default">
-                    <img src="/prodotti/{{.ProdottoID}}/immagine" alt="" onerror="this.style.display='none'">
-                  </div>
-                  <div>
-                    <div class="ec-order__row-name">
-                      {{.ProdottoNome}}
-                      {{if .Prenotazione}}<span class="ec-pill ec-pill--amber" style="margin-left:6px;font-size:10px">Prenotazione</span>{{end}}
-                    </div>
-                    <div class="ec-order__row-meta">Stato riga: {{.StatoRiga}}</div>
-                  </div>
-                  <span class="ec-order__row-qty">{{if .QtaApprovata}}{{.QtaApprovata}}{{else}}{{.QtaRichiesta}}{{end}} pz</span>
-                  <span style="width:90px;text-align:right">
-                    {{if eq .StatoRiga "evasa"}}<span class="ec-pill ec-pill--teal">Evasa</span>
-                    {{else if eq .StatoRiga "evasa_parziale"}}<span class="ec-pill ec-pill--amber">Parziale</span>{{end}}
-                  </span>
-                </div>
-                {{end}}
-              </div>
-            </div>
-            {{if .Ordine.NoteFunzionario}}
-            <div class="ec-note ec-note--info">
-              <i class="fa-solid fa-circle-info" style="margin-right:8px"></i>
-              <div>{{.Ordine.NoteFunzionario}}</div>
+              {{end}}
             </div>
             {{end}}
           </div>
+          {{else}}
+          <div class="ec-empty">
+            <div class="ec-empty__icon"><i class="fa-solid fa-folder-open" style="font-size:28px;color:var(--ec-ink-400)"></i></div>
+            <div class="ec-empty__title">Nessun ordine nel settore</div>
+            <div class="ec-empty__hint">Quando un utente del tuo settore invierà una richiesta, comparirà qui.</div>
+          </div>
           {{end}}
         </div>
-        {{else}}
-        <div class="ec-empty">
-          <div class="ec-empty__icon"><i class="fa-solid fa-folder-open" style="font-size:28px;color:var(--ec-ink-400)"></i></div>
-          <div class="ec-empty__title">Nessun ordine nel settore</div>
-          <div class="ec-empty__hint">Quando un utente del tuo settore invierà una richiesta, comparirà qui.</div>
+
+        <!-- Sotto-sezione: Spese settore -->
+        <div data-inner-section="storico-spese" style="display:none">
+          {{if .SpeseSettore}}
+          <div class="ec-stack">
+            {{range .SpeseSettore}}
+            <div class="ec-order">
+              <header class="ec-order__head">
+                <span class="ec-order__id">#{{.ID}}</span>
+                <span class="ec-order__meta">
+                  <b>{{.UtenteUsername}}</b> · {{fmtDate .DataCreazione}}
+                </span>
+                <span class="ec-pill ec-pill--{{statoTone .Stato}}">{{t (printf "economale.spesa.stato.%s" .Stato)}}</span>
+              </header>
+              <div class="ec-order__body">
+                <div class="ec-order__rows">
+                  <div class="ec-order__row">
+                    <div style="flex:1;min-width:0">
+                      <div class="ec-order__row-name">{{.Motivazione}}</div>
+                      <div class="ec-order__row-meta">
+                        {{if eq .TipoPagamento "contanti"}}Contanti{{else}}Carta{{end}}
+                        · Importo presunto: <b>€ {{printf "%.2f" .ImportoPresunto}}</b>
+                        {{if .ImportoEffettivo}} · Effettivo: <b>€ {{printf "%.2f" (deref .ImportoEffettivo)}}</b>{{end}}
+                      </div>
+                    </div>
+                    <a href="/spese/{{.ID}}" class="ec-btn ec-btn--ghost ec-btn--sm">Dettaglio</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {{end}}
+          </div>
+          {{else}}
+          <div class="ec-empty">
+            <div class="ec-empty__icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/></svg></div>
+            <div class="ec-empty__title">Nessuna spesa nel settore</div>
+            <div class="ec-empty__hint">Le spese economali del tuo settore compariranno qui.</div>
+          </div>
+          {{end}}
         </div>
-        {{end}}
       </section>
 
       <!-- ─── Vista: Nuovo ordine personale ─── -->
@@ -459,6 +599,59 @@
         {{end}}
       </section>
 
+      <!-- ─── Vista: Le mie spese ─── -->
+      <section data-view-section="mie-spese" style="display:none">
+        <header class="ec-secthead">
+          <div>
+            <div class="ec-secthead__kicker">Cassa Economale</div>
+            <h1 class="ec-secthead__title">Le mie spese</h1>
+            <p class="ec-secthead__sub">Le tue richieste di spesa economale e il loro stato.</p>
+          </div>
+          <div class="ec-secthead__right">
+            <a href="/spese/nuova" class="ec-btn ec-btn--primary ec-btn--sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              Nuova spesa
+            </a>
+          </div>
+        </header>
+
+        {{if .MieSpese}}
+        <div class="ec-stack">
+          {{range .MieSpese}}
+          <div class="ec-order">
+            <header class="ec-order__head">
+              <span class="ec-order__id">#{{.ID}}</span>
+              <span class="ec-order__meta">{{fmtDate .DataCreazione}}</span>
+              <span class="ec-pill ec-pill--{{statoTone .Stato}}">{{t (printf "economale.spesa.stato.%s" .Stato)}}</span>
+            </header>
+            <div class="ec-order__body">
+              <div class="ec-order__rows">
+                <div class="ec-order__row">
+                  <div style="flex:1;min-width:0">
+                    <div class="ec-order__row-name">{{.Motivazione}}</div>
+                    <div class="ec-order__row-meta">
+                      {{if eq .TipoPagamento "contanti"}}Contanti{{else}}Carta{{end}}
+                      · Importo presunto: <b>€ {{printf "%.2f" .ImportoPresunto}}</b>
+                      {{if .ImportoEffettivo}} · Effettivo: <b>€ {{printf "%.2f" (deref .ImportoEffettivo)}}</b>{{end}}
+                    </div>
+                  </div>
+                  <a href="/spese/{{.ID}}" class="ec-btn ec-btn--ghost ec-btn--sm">Dettaglio</a>
+                </div>
+              </div>
+            </div>
+          </div>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="ec-empty">
+          <div class="ec-empty__icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M16 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M2 10h20"/></svg></div>
+          <div class="ec-empty__title">Nessuna spesa</div>
+          <div class="ec-empty__hint">Le tue richieste di spesa economale compariranno qui.</div>
+          <a href="/spese/nuova" class="ec-btn ec-btn--primary" style="margin-top:12px">Nuova spesa</a>
+        </div>
+        {{end}}
+      </section>
+
     </main>
   </div>
 </div>
@@ -473,10 +666,11 @@
 <script>
   (function () {
     var titles = {
-      approva: "Richieste da approvare",
-      storico: "Storico settore",
-      nuovo:   "Nuovo ordine personale",
-      miei:    "I miei ordini"
+      approva:      "Approvazioni",
+      storico:      "Storico settore",
+      nuovo:        "Nuovo ordine personale",
+      miei:         "I miei ordini",
+      "mie-spese":  "Le mie spese"
     };
     function setView(view, opts) {
       opts = opts || {};
@@ -505,6 +699,22 @@
     window.addEventListener('hashchange', function () {
       var v = parseHashView();
       if (v && titles[v]) setView(v, {updateHash: false});
+    });
+
+    // Inner tab switching (within approva / storico sections)
+    function setInnerTab(tabId) {
+      var parent = document.querySelector('[data-inner-tab="' + tabId + '"]');
+      if (!parent) return;
+      var container = parent.closest('.ec-tabs').parentNode;
+      container.querySelectorAll('[data-inner-tab]').forEach(function(b) {
+        b.classList.toggle('is-active', b.getAttribute('data-inner-tab') === tabId);
+      });
+      container.querySelectorAll('[data-inner-section]').forEach(function(s) {
+        s.style.display = s.getAttribute('data-inner-section') === tabId ? '' : 'none';
+      });
+    }
+    document.querySelectorAll('[data-inner-tab]').forEach(function(b) {
+      b.addEventListener('click', function() { setInnerTab(b.getAttribute('data-inner-tab')); });
     });
 
     document.querySelectorAll('[data-order-card]').forEach(function (card) {
