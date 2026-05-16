@@ -51,6 +51,11 @@
         <button type="button" class="ec-tab" data-imp-tab="sistema">
           <i class="fa-solid fa-server" style="margin-right:4px"></i> Sistema
         </button>
+        {{if eq .Role "admin"}}
+        <button type="button" class="ec-tab" data-imp-tab="utenti">
+          <i class="fa-solid fa-users" style="margin-right:4px"></i> Utenti
+        </button>
+        {{end}}
       </div>
 
       <form method="POST" action="/impostazioni" enctype="multipart/form-data">
@@ -181,21 +186,75 @@
         </div>
       </form>
 
+      {{if eq .Role "admin"}}
+      <!-- ─── Utenti (solo admin) ─── -->
+      <section data-imp-section="utenti" class="ec-card" style="padding:24px;margin-top:18px;display:none">
+        <h2 style="font-size:16px;font-weight:600;margin:0 0 16px">Gestione ruoli utenti</h2>
+        {{if .Utenti}}
+        <table class="ec-table">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Ruolo attuale</th>
+              <th>Cambia ruolo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Utenti}}
+            <tr>
+              <td class="mono">{{.Username}}</td>
+              <td>
+                {{if .RuoloSecondario}}
+                  <span class="ec-pill ec-pill--navy">{{.Ruolo}}</span>
+                  <span class="ec-pill ec-pill--teal" style="margin-left:4px">{{.RuoloSecondario}}</span>
+                {{else}}
+                  <span class="ec-pill ec-pill--navy">{{.Ruolo}}</span>
+                {{end}}
+              </td>
+              <td>
+                <form method="POST" action="/impostazioni/utenti/{{.Username}}/ruolo" style="display:flex;gap:8px;align-items:center">
+                  <select name="ruolo" class="ec-input" style="width:auto;min-width:180px">
+                    {{$ruoloCorrente := .Ruolo}}{{if .RuoloSecondario}}{{$ruoloCorrente = "magazziniere+economo"}}{{end}}
+                    <option value="user"                 {{if eq $ruoloCorrente "user"}}selected{{end}}>user</option>
+                    <option value="funzionario"          {{if eq $ruoloCorrente "funzionario"}}selected{{end}}>funzionario</option>
+                    <option value="magazziniere"         {{if eq $ruoloCorrente "magazziniere"}}selected{{end}}>magazziniere</option>
+                    <option value="economo"              {{if eq $ruoloCorrente "economo"}}selected{{end}}>economo</option>
+                    <option value="magazziniere+economo" {{if eq $ruoloCorrente "magazziniere+economo"}}selected{{end}}>magazziniere + economo</option>
+                    <option value="admin"                {{if eq $ruoloCorrente "admin"}}selected{{end}}>admin</option>
+                  </select>
+                  <button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">Salva</button>
+                </form>
+              </td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+        {{else}}
+        <div class="ec-empty"><div class="ec-empty__title">Nessun utente nel sistema.</div></div>
+        {{end}}
+      </section>
+      {{end}}
+
     </main>
   </div>
 </div>
 
 <script src="/static/js/htmx.min.js"></script>
 <script>
-  document.querySelectorAll('[data-imp-tab]').forEach(function (tab) {
-    tab.addEventListener('click', function () {
-      var target = tab.getAttribute('data-imp-tab');
-      document.querySelectorAll('[data-imp-tab]').forEach(function (t) { t.classList.toggle('is-active', t === tab); });
-      document.querySelectorAll('[data-imp-section]').forEach(function (s) {
-        s.style.display = s.getAttribute('data-imp-section') === target ? '' : 'none';
-      });
+  function impSetTab(target) {
+    document.querySelectorAll('[data-imp-tab]').forEach(function (t) {
+      t.classList.toggle('is-active', t.getAttribute('data-imp-tab') === target);
     });
+    document.querySelectorAll('[data-imp-section]').forEach(function (s) {
+      s.style.display = s.getAttribute('data-imp-section') === target ? '' : 'none';
+    });
+  }
+  document.querySelectorAll('[data-imp-tab]').forEach(function (tab) {
+    tab.addEventListener('click', function () { impSetTab(tab.getAttribute('data-imp-tab')); });
   });
+  // Attiva tab da query string (?tab=utenti)
+  var urlTab = new URLSearchParams(window.location.search).get('tab');
+  if (urlTab) { impSetTab(urlTab); }
 </script>
 {{template "drawer-backdrop" .}}
 </body>

@@ -10,12 +10,14 @@ type Settore struct {
 }
 
 // Utente rappresenta un utente del sistema, sincronizzato con LDAP.
-// Ruoli possibili: "user", "funzionario", "magazzino", "admin".
+// Ruoli possibili: "user", "funzionario", "magazziniere", "economo", "admin".
+// RuoloSecondario è "" per utenti single-role; "economo" quando Ruolo="magazziniere" e l'utente ha entrambi i ruoli.
 type Utente struct {
-	Username  string
-	Email     string
-	Ruolo     string
-	SettoreID string
+	Username        string
+	Email           string
+	Ruolo           string
+	RuoloSecondario string
+	SettoreID       string
 }
 
 // Categoria raggruppa i prodotti del catalogo.

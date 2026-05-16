@@ -75,6 +75,7 @@
               <th style="text-align:right">{{t "economale.capitolo.impegnato"}}</th>
               <th style="text-align:right">{{t "economale.capitolo.speso"}}</th>
               <th style="text-align:right">{{t "economale.capitolo.residuo"}}</th>
+              <th style="min-width:100px">Utilizzo</th>
               <th></th>
             </tr>
           </thead>
@@ -87,6 +88,12 @@
               <td class="mono" style="text-align:right;color:var(--ec-ink-700)">€ {{printf "%.2f" .Impegnato}}</td>
               <td class="mono" style="text-align:right;color:var(--ec-ink-700)">€ {{printf "%.2f" .Speso}}</td>
               <td class="mono" style="text-align:right;font-weight:700;color:var(--ec-teal-700)">€ {{printf "%.2f" .Residuo}}</td>
+              <td>
+                <div style="background:var(--ec-line);border-radius:4px;height:6px;overflow:hidden">
+                  <div style="background:var(--ec-navy-700);height:100%;width:{{sub 100 (percent .Residuo .ImportoStanziato)}}%;border-radius:4px"></div>
+                </div>
+                <div style="font-size:11px;color:var(--ec-ink-500);margin-top:3px">{{sub 100 (percent .Residuo .ImportoStanziato)}}%</div>
+              </td>
               <td>{{if not .Attivo}}<span class="ec-pill ec-pill--neutral">{{t "economale.capitolo.disattivato"}}</span>{{end}}</td>
             </tr>
             {{end}}

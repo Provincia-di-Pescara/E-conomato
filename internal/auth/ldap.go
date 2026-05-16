@@ -37,6 +37,11 @@ func Authenticate(username, password string, cfg *config.Config) (bool, string, 
 		isMag := strings.HasSuffix(u, ".magazziniere") || strings.HasSuffix(u, ".magazzino")
 		isEco := strings.HasSuffix(u, ".economo")
 		isFun := strings.HasSuffix(u, ".funzionario")
+		// .dual simula un utente presente in entrambi i gruppi magazziniere ed economo.
+		if strings.HasSuffix(u, ".dual") {
+			isMag = true
+			isEco = true
+		}
 		return true, resolveRole(isMag, isEco, isFun), nil
 	}
 
@@ -251,11 +256,16 @@ func Authenticate(username, password string, cfg *config.Config) (bool, string, 
 	return true, role, nil
 }
 
-// resolveRole maps LDAP group flags to a single role string.
-// Precedence: magazziniere > economo > funzionario > user.
+// resolveRole maps LDAP group flags to a role string.
+// Se l'utente è in entrambi i gruppi magazziniere ed economo restituisce la
+// stringa composita "magazziniere+economo"; altrimenti usa la precedenza:
+// magazziniere > economo > funzionario > user.
 // Note: 'admin' is NOT assigned here — admin bypass is enforced in the
 // requireRole middleware, not derived from LDAP.
 func resolveRole(isMagazziniere, isEconomo, isFunzionario bool) string {
+	if isMagazziniere && isEconomo {
+		return "magazziniere+economo"
+	}
 	switch {
 	case isMagazziniere:
 		return "magazziniere"

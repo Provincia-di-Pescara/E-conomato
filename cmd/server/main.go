@@ -174,14 +174,19 @@ economoTemplates := map[string]bool{
 "spesa-form":        true,
 "spesa-detail":      true,
 }
+// Template con doppia sidebar (magazziniere + economo).
+combinedTemplates := map[string]bool{
+"dashboard-magazzino-economo": true,
+}
 sidebarMagazzino := filepath.Join(baseDir, "_sidebar-magazzino.html")
 sidebarEconomo := filepath.Join(baseDir, "_sidebar-economo.html")
+sidebarCombinata := filepath.Join(baseDir, "_sidebar-magazzino-economo.html")
 prenotPartial := filepath.Join(baseDir, "_prenotazione-form.html")
 topbarBell := filepath.Join(baseDir, "_topbar-bell.html")
 drawerPartial := filepath.Join(baseDir, "_drawer.html")
 notifBody := filepath.Join(baseDir, "_notifiche-body.html")
 
-names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino", "prodotto-form", "lotto-form", "impostazioni", "fornitori", "fornitore-form", "acquisti", "acquisto-detail", "storico-ordini", "notifiche-utente", "notifiche-funzionario", "notifiche-magazzino", "report-magazzino", "dashboard-economo", "capitoli", "capitolo-form", "spese-utente", "spesa-form", "spesa-detail"}
+names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino", "dashboard-magazzino-economo", "prodotto-form", "lotto-form", "impostazioni", "fornitori", "fornitore-form", "acquisti", "acquisto-detail", "storico-ordini", "notifiche-utente", "notifiche-funzionario", "notifiche-magazzino", "report-magazzino", "dashboard-economo", "capitoli", "capitolo-form", "spese-utente", "spesa-form", "spesa-detail"}
 // template senza topbar (e quindi senza bell)
 noTopbar := map[string]bool{"login": true, "dashboard": true}
 notifiche := map[string]bool{
@@ -192,11 +197,15 @@ notifiche := map[string]bool{
 a.templates = make(map[string]*template.Template, len(names))
 for _, name := range names {
 files := []string{filepath.Join(baseDir, name+".html")}
+if combinedTemplates[name] {
+files = append(files, sidebarMagazzino, sidebarEconomo, sidebarCombinata)
+} else {
 if magazzinoTemplates[name] {
 files = append(files, sidebarMagazzino)
 }
 if economoTemplates[name] {
 files = append(files, sidebarEconomo)
+}
 }
 // dashboard-utente e dashboard-funzionario possono includere il form di prenotazione
 if name == "dashboard-utente" || name == "dashboard-funzionario" {
@@ -435,6 +444,18 @@ role, _ := sess.Values["role"].(string)
 return role
 }
 
+// hasRole restituisce true se roleStr è uguale a target oppure se roleStr è
+// il ruolo composto "magazziniere+economo" e target è uno dei due ruoli.
+func hasRole(roleStr, target string) bool {
+if roleStr == target {
+return true
+}
+if roleStr == "magazziniere+economo" {
+return target == "magazziniere" || target == "economo"
+}
+return false
+}
+
 // brandInfo aggrega i campi di branding correnti (DB > env > fallback).
 type brandInfo struct {
 	Name    string
@@ -531,8 +552,12 @@ redirectToLogin(w, r)
 return
 }
 role := a.getRole(r)
+if role == "admin" {
+next(w, r)
+return
+}
 for _, allowed := range roles {
-if role == allowed {
+if hasRole(role, allowed) {
 next(w, r)
 return
 }
@@ -552,6 +577,8 @@ case "magazziniere":
 return "/dashboard/magazzino"
 case "economo":
 return "/dashboard-economo"
+case "magazziniere+economo":
+return "/dashboard/magazzino-economo"
 default:
 return "/dashboard"
 }
@@ -655,9 +682,19 @@ a.renderError(w, r, "login.err_invalid")
 return
 }
 
-// Sync user to SQLite (email not available from LDAP bind-only flow; left empty on first login)
-if err := a.db.UpsertUtente(username, "", role); err != nil {
+// Sync user to SQLite. Per il ruolo composto "magazziniere+economo", splittiamo
+// in primario + secondario per la colonna DB; la sessione mantiene la stringa composita.
+{
+primaryRole := role
+var secondaryRole *string
+if role == "magazziniere+economo" {
+eco := "economo"
+primaryRole = "magazziniere"
+secondaryRole = &eco
+}
+if err := a.db.UpsertUtente(username, "", primaryRole, secondaryRole); err != nil {
 logger.Error("upsert utente %s: %v", username, err)
+}
 }
 
 logger.Info("login successful: %s (role: %s)", username, role)
@@ -1172,6 +1209,41 @@ func (a *App) handleDashboardMagazzino(w http.ResponseWriter, r *http.Request) {
 	}))
 }
 
+// GET /dashboard/magazzino-economo — dashboard unificata per utenti con doppio ruolo magazziniere+economo.
+func (a *App) handleDashboardMagazzinoEconomo(w http.ResponseWriter, r *http.Request) {
+	scorte, _ := a.db.GetProdottiSottoSoglia()
+	ordini, _ := a.db.GetOrdiniAttivi()
+	anno := time.Now().Year()
+	capitoli, err := a.db.GetCapitoliConSaldi(anno)
+	if err != nil {
+		logger.Error("get capitoli con saldi: %v", err)
+		http.Error(w, "Errore DB", http.StatusInternalServerError)
+		return
+	}
+	speseInApprov, _ := a.db.GetSpeseConStato("in_approvazione")
+	totaleStanziato := 0.0
+	numAttivi := 0
+	for _, c := range capitoli {
+		if c.Attivo {
+			totaleStanziato += c.ImportoStanziato
+			numAttivi++
+		}
+	}
+	a.render(w, r, "dashboard-magazzino-economo", a.viewData(r, map[string]any{
+		"Username":            a.getUsername(r),
+		"Role":                a.getRole(r),
+		"ActiveNav":           "ordini",
+		"SectionName":         "Dashboard Operativa",
+		"Scorte":              scorte,
+		"Ordini":              ordini,
+		"Anno":                anno,
+		"NumCapitoliAttivi":   numAttivi,
+		"TotaleStanziato":     totaleStanziato,
+		"Capitoli":            capitoli,
+		"SpeseInApprovazione": speseInApprov,
+	}))
+}
+
 // GET /storico-ordini — vista magazzino dello storico ordini con filtri.
 // HTMX-aware: se HX-Request è presente ritorna solo il partial della lista.
 func (a *App) handleStoricoOrdini(w http.ResponseWriter, r *http.Request) {
@@ -1407,10 +1479,10 @@ func (a *App) handleNotifichePage(w http.ResponseWriter, r *http.Request) {
 	role := a.getRole(r)
 	tmplName := "notifiche-utente"
 	activeNav := "notifiche"
-	switch role {
-	case "funzionario":
+	switch {
+	case role == "funzionario":
 		tmplName = "notifiche-funzionario"
-	case "magazziniere", "admin":
+	case hasRole(role, "magazziniere") || role == "admin":
 		tmplName = "notifiche-magazzino"
 	}
 	data := a.viewData(r, map[string]any{
@@ -2295,20 +2367,27 @@ w.WriteHeader(http.StatusOK)
 
 // ── Impostazioni (magazziniere) ──────────────────────────────────────────────
 
-// GET /impostazioni — pagina con tab Generale / Operatività / Notifiche / Sistema.
+// GET /impostazioni — pagina con tab Generale / Operatività / Notifiche / Sistema / (Utenti per admin).
 func (a *App) handleImpostazioniPage(w http.ResponseWriter, r *http.Request) {
 imp, _ := a.db.GetAllImpostazioni()
 hasLogo, _ := a.db.HasBrandingLogo()
-a.render(w, r, "impostazioni", a.viewData(r, map[string]any{
+role := a.getRole(r)
+data := a.viewData(r, map[string]any{
 "Username":     a.getUsername(r),
-"Role":         a.getRole(r),
+"Role":         role,
 "Impostazioni": imp,
 "HasLogo":      hasLogo,
 "ActiveNav":    "impostazioni",
 "SectionName":  "Impostazioni",
 "LDAPHost":     a.cfg.LDAPHost,
 "SMTPServer":   a.cfg.SMTPServer,
-}))
+})
+if role == "admin" {
+if utenti, err := a.db.GetAllUtenti(); err == nil {
+data["Utenti"] = utenti
+}
+}
+a.render(w, r, "impostazioni", data)
 }
 
 // chiaviImpostazioniText elenca le chiavi testuali editabili dal form Generale/Operatività.
@@ -2380,6 +2459,46 @@ return
 }
 }
 http.Redirect(w, r, "/impostazioni", http.StatusSeeOther)
+}
+
+// POST /impostazioni/utenti/{username}/ruolo — imposta il ruolo di un utente (solo admin).
+func (a *App) handleImpostazioniSetRuolo(w http.ResponseWriter, r *http.Request) {
+if a.getRole(r) != "admin" {
+http.Error(w, "Accesso negato", http.StatusForbidden)
+return
+}
+username := r.PathValue("username")
+if username == "" {
+http.Error(w, "username mancante", 400)
+return
+}
+if err := r.ParseForm(); err != nil {
+http.Error(w, "form non valido", 400)
+return
+}
+newRole := r.FormValue("ruolo")
+validRoles := map[string]bool{
+"user": true, "funzionario": true, "magazziniere": true,
+"economo": true, "magazziniere+economo": true, "admin": true,
+}
+if !validRoles[newRole] {
+http.Error(w, "ruolo non valido", 400)
+return
+}
+primaryRole := newRole
+var secondaryRole *string
+if newRole == "magazziniere+economo" {
+eco := "economo"
+primaryRole = "magazziniere"
+secondaryRole = &eco
+}
+if err := a.db.UpsertUtente(username, "", primaryRole, secondaryRole); err != nil {
+logger.Error("set ruolo %s→%s: %v", username, newRole, err)
+http.Error(w, "errore interno", 500)
+return
+}
+logger.Info("admin %s ha impostato ruolo %s per %s", a.getUsername(r), newRole, username)
+http.Redirect(w, r, "/impostazioni?tab=utenti", http.StatusSeeOther)
 }
 
 // -- Logging middleware --------------------------------------------------------
@@ -2598,9 +2717,10 @@ mux.HandleFunc("GET /acquisti/{id}", app.requireRole("magazziniere")(app.handleA
 mux.HandleFunc("GET /report", app.requireRole("magazziniere")(app.handleReportMagazzino))
 mux.HandleFunc("GET /report.csv", app.requireRole("magazziniere")(app.handleReportCSV))
 
-// Impostazioni (magazziniere)
+// Impostazioni (magazziniere; admin ha bypass implicito)
 mux.HandleFunc("GET /impostazioni", app.requireRole("magazziniere")(app.handleImpostazioniPage))
 mux.HandleFunc("POST /impostazioni", app.requireRole("magazziniere")(app.handleImpostazioniSave))
+mux.HandleFunc("POST /impostazioni/utenti/{username}/ruolo", app.requireRole("magazziniere")(app.handleImpostazioniSetRuolo))
 
 // Prenotazione prodotto esaurito (utente / funzionario)
 mux.HandleFunc("GET /prodotti/{id}/prenota", app.requireRole("user", "funzionario")(app.handlePrenotaProdottoForm))
@@ -2614,6 +2734,7 @@ mux.HandleFunc("POST /notifiche/leggi-tutte", app.requireAuth(app.handleLeggiTut
 
 // ── Cassa Economale (Economo) ─────────────────────────────────────────
 mux.HandleFunc("GET /dashboard-economo", app.requireRole("economo")(app.handleDashboardEconomo))
+mux.HandleFunc("GET /dashboard/magazzino-economo", app.requireRole("magazziniere")(app.handleDashboardMagazzinoEconomo))
 mux.HandleFunc("GET /capitoli", app.requireRole("economo")(app.handleListCapitoli))
 mux.HandleFunc("GET /capitoli/nuovo", app.requireRole("economo")(app.handleNewCapitoloForm))
 mux.HandleFunc("POST /capitoli", app.requireRole("economo")(app.handleCreateCapitolo))

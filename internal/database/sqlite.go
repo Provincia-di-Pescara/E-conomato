@@ -362,6 +362,10 @@ func migrate(conn *sql.DB) error {
 	if err := ensureColumn(conn, "lotti_acquisto", "acquisto_id", `ALTER TABLE lotti_acquisto ADD COLUMN acquisto_id INTEGER`); err != nil {
 		return err
 	}
+	// Supporto multi-ruolo magazziniere+economo.
+	if err := ensureColumn(conn, "utenti", "ruolo_secondario", `ALTER TABLE utenti ADD COLUMN ruolo_secondario TEXT`); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -393,19 +397,23 @@ func ensureColumn(conn *sql.DB, table, column, alter string) error {
 // ── Utenti ───────────────────────────────────────────────────────────────────
 
 // UpsertUtente creates a new user record or updates email and role on conflict.
-func (db *DB) UpsertUtente(username, email, ruolo string) error {
+// ruoloSecondario è nil per utenti single-role; &"economo" per utenti magazziniere+economo.
+func (db *DB) UpsertUtente(username, email, ruoloPrimario string, ruoloSecondario *string) error {
 	_, err := db.conn.Exec(
-		`INSERT INTO utenti (username, email, ruolo)
-		 VALUES (?, ?, ?)
-		 ON CONFLICT(username) DO UPDATE SET email=excluded.email, ruolo=excluded.ruolo`,
-		username, email, ruolo,
+		`INSERT INTO utenti (username, email, ruolo, ruolo_secondario)
+		 VALUES (?, ?, ?, ?)
+		 ON CONFLICT(username) DO UPDATE SET
+		   email=excluded.email,
+		   ruolo=excluded.ruolo,
+		   ruolo_secondario=excluded.ruolo_secondario`,
+		username, email, ruoloPrimario, ruoloSecondario,
 	)
 	return err
 }
 
 // GetAllUtenti returns all users.
 func (db *DB) GetAllUtenti() ([]models.Utente, error) {
-	rows, err := db.conn.Query(`SELECT username, COALESCE(email,''), ruolo, COALESCE(settore_id,'') FROM utenti ORDER BY username`)
+	rows, err := db.conn.Query(`SELECT username, COALESCE(email,''), ruolo, COALESCE(ruolo_secondario,''), COALESCE(settore_id,'') FROM utenti ORDER BY username`)
 	if err != nil {
 		return nil, err
 	}
@@ -413,7 +421,7 @@ func (db *DB) GetAllUtenti() ([]models.Utente, error) {
 	var out []models.Utente
 	for rows.Next() {
 		var u models.Utente
-		if err := rows.Scan(&u.Username, &u.Email, &u.Ruolo, &u.SettoreID); err != nil {
+		if err := rows.Scan(&u.Username, &u.Email, &u.Ruolo, &u.RuoloSecondario, &u.SettoreID); err != nil {
 			return nil, err
 		}
 		out = append(out, u)
@@ -1603,13 +1611,13 @@ func (db *DB) GetAcquistoConRighe(id int64) (models.Acquisto, error) {
 
 // ── Notifiche & Email outbox ────────────────────────────────────────────────
 
-// GetUtente recupera username, email, ruolo e settore di un utente.
+// GetUtente recupera username, email, ruolo, ruolo_secondario e settore di un utente.
 func (db *DB) GetUtente(username string) (models.Utente, error) {
 	var u models.Utente
 	err := db.conn.QueryRow(`
-		SELECT username, COALESCE(email,''), ruolo, COALESCE(settore_id,'')
+		SELECT username, COALESCE(email,''), ruolo, COALESCE(ruolo_secondario,''), COALESCE(settore_id,'')
 		FROM utenti WHERE username = ?
-	`, username).Scan(&u.Username, &u.Email, &u.Ruolo, &u.SettoreID)
+	`, username).Scan(&u.Username, &u.Email, &u.Ruolo, &u.RuoloSecondario, &u.SettoreID)
 	return u, err
 }
 

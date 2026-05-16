@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>E-conomato — Dashboard Operativa</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/fa/css/all.min.css" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+<div class="ec-app">
+
+  {{template "sidebar-magazzino-economo" .}}
+
+  <div class="ec-main">
+
+    <header class="ec-topbar">
+      {{template "drawer-burger" .}}
+      <div class="ec-topbar__title">
+        {{if .BrandName}}{{.BrandName}}{{else}}E-conomato{{end}}
+        <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
+        <b>{{if .SectionName}}{{.SectionName}}{{else}}Dashboard Operativa{{end}}</b>
+      </div>
+      <div class="ec-topbar__right">
+        {{template "topbar-bell" .}}
+        <a href="/lotti/new" class="ec-iconbtn" title="Nuovo carico merce">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+        </a>
+        <a href="/capitoli/nuovo" class="ec-iconbtn" title="{{t "economale.capitolo.nuovo"}}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h12l4 4v12H4z"/><path d="M16 4v4h4"/><path d="M12 10v8"/><path d="M8 14h8"/></svg>
+        </a>
+      </div>
+    </header>
+
+    <main class="ec-content">
+
+      <header class="ec-secthead">
+        <div>
+          <div class="ec-secthead__kicker">Area Operativa</div>
+          <h1 class="ec-secthead__title">Dashboard Magazzino & Cassa Economale</h1>
+          <p class="ec-secthead__sub">Visione unificata: ordini da evadere, scorte critiche e stato del Fondo Economale.</p>
+        </div>
+        <div class="ec-secthead__right">
+          <a href="/lotti/new" class="ec-btn ec-btn--ghost">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            Carico merce
+          </a>
+          <a href="/capitoli/nuovo" class="ec-btn ec-btn--primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            {{t "economale.capitolo.nuovo"}}
+          </a>
+        </div>
+      </header>
+
+      <!-- KPI row -->
+      <div class="ec-stats">
+        <div class="ec-stat">
+          <div class="ec-stat__label">Ordini in coda</div>
+          <div class="ec-stat__value">{{if .Ordini}}{{len .Ordini}}{{else}}0{{end}}</div>
+          <div class="ec-stat__delta">approvati o in lavorazione</div>
+        </div>
+        <div class="ec-stat ec-stat--red">
+          <div class="ec-stat__label">Scorte sotto soglia</div>
+          <div class="ec-stat__value">{{if .Scorte}}{{len .Scorte}}{{else}}0{{end}}</div>
+          <div class="ec-stat__delta">articoli da rifornire</div>
+        </div>
+        <div class="ec-stat">
+          <div class="ec-stat__label">{{t "economale.dashboard.kpi_capitoli"}}</div>
+          <div class="ec-stat__value">{{.NumCapitoliAttivi}}</div>
+          <div class="ec-stat__delta">anno {{.Anno}}</div>
+        </div>
+        <div class="ec-stat ec-stat--gold">
+          <div class="ec-stat__label">{{t "economale.dashboard.kpi_in_approvazione"}}</div>
+          <div class="ec-stat__value">{{len .SpeseInApprovazione}}</div>
+          <div class="ec-stat__delta">in attesa di funzionario</div>
+        </div>
+        <div class="ec-stat ec-stat--teal">
+          <div class="ec-stat__label">{{t "economale.dashboard.kpi_stanziato" .Anno}}</div>
+          <div class="ec-stat__value mono" style="font-size:18px;margin-top:8px">€ {{printf "%.2f" .TotaleStanziato}}</div>
+          <div class="ec-stat__delta">somma capitoli attivi</div>
+        </div>
+      </div>
+
+      <!-- Alert scorte -->
+      {{if .Scorte}}
+      <div class="ec-alert">
+        <div class="ec-alert__icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2L12 3Z"/><path d="M12 10v5"/><path d="M12 18v.5"/></svg>
+        </div>
+        <div style="flex:1">
+          <div class="ec-alert__title">{{len .Scorte}} articoli sotto la soglia minima</div>
+          <div class="ec-alert__sub">Valuta nuovi lotti di acquisto prima che le scorte si esauriscano.</div>
+        </div>
+        <a href="/prodotti" class="ec-btn ec-btn--gold ec-btn--sm">
+          Vai ai prodotti
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+        </a>
+      </div>
+      {{end}}
+
+      <!-- Ordini magazzino -->
+      <section style="margin-top:32px">
+        <h2 style="font-size:18px;font-weight:600;margin:0 0 14px;color:var(--ec-navy-900)">Ordini magazzino</h2>
+        {{if .Ordini}}
+        <div class="ec-stack">
+          {{range .Ordini}}
+          {{$tot := 0}}{{range .Righe}}{{if .QtaApprovata}}{{$tot = add $tot (derefInt .QtaApprovata)}}{{else}}{{$tot = add $tot .QtaRichiesta}}{{end}}{{end}}
+          <div class="ec-order">
+            <header class="ec-order__head">
+              <span class="ec-order__id">#{{.Ordine.ID}}</span>
+              <span class="ec-order__meta">
+                <b>{{.Ordine.UtenteUsername}}</b>
+                {{if .Ordine.SettoreID}} · {{.Ordine.SettoreID}}{{end}}
+                 · {{fmtDate .Ordine.DataCreazione}}
+              </span>
+              <span class="ec-pill ec-pill--{{statoTone .Ordine.Stato}}">{{statoLabel .Ordine.Stato}}</span>
+            </header>
+
+            <div class="ec-order__body">
+              <div class="ec-order__rows">
+                {{range .Righe}}
+                <div class="ec-order__row">
+                  <div class="ec-prod-img ec-prod-img--sm ec-prod-img--cat-default">
+                    <img src="/prodotti/{{.ProdottoID}}/immagine" alt="" onerror="this.style.display='none'">
+                  </div>
+                  <div>
+                    <div class="ec-order__row-name">
+                      {{.ProdottoNome}}
+                      {{if .Prenotazione}}<span class="ec-pill ec-pill--amber" style="margin-left:6px;font-size:10px">Prenotazione</span>{{end}}
+                    </div>
+                    <div class="ec-order__row-meta">Evaso: <b>{{.QtaEvasa}} pz</b></div>
+                  </div>
+                  <span class="ec-order__row-qty">{{if .QtaApprovata}}{{.QtaApprovata}}{{else}}{{.QtaRichiesta}}{{end}} pz</span>
+                  <span style="width:110px;text-align:right">
+                    {{if eq .StatoRiga "evasa"}}
+                      <span class="ec-pill ec-pill--teal">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg>
+                        Evasa
+                      </span>
+                    {{else if eq .StatoRiga "evasa_parziale"}}
+                      <span class="ec-pill ec-pill--amber">Parziale</span>
+                    {{else}}
+                      <span class="ec-pill ec-pill--neutral">In attesa</span>
+                    {{end}}
+                  </span>
+                </div>
+                {{end}}
+              </div>
+            </div>
+
+            <footer class="ec-order__foot">
+              <div style="font-size:12px;color:var(--ec-ink-500)">
+                {{len .Righe}} articoli · <b class="mono" style="color:var(--ec-ink-900)">{{$tot}} pz</b> da evadere
+              </div>
+              <div class="ec-order__foot-spacer"></div>
+
+              {{if eq .Ordine.Stato "approvato"}}
+              <button type="button" class="ec-btn ec-btn--ghost ec-btn--sm"
+                      hx-get="/ordini/{{.Ordine.ID}}/anteprima-fifo"
+                      hx-target="#modal-body" hx-swap="innerHTML"
+                      onclick="document.getElementById('modal').classList.add('is-open')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                Anteprima FIFO
+              </button>
+              <form method="POST" action="/ordini/{{.Ordine.ID}}/prepara" style="margin:0">
+                <button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4V7Z"/></svg>
+                  Prepara (FIFO)
+                </button>
+              </form>
+              {{else if eq .Ordine.Stato "in_preparazione"}}
+              <button type="button" class="ec-btn ec-btn--ghost ec-btn--sm"
+                      hx-get="/ordini/{{.Ordine.ID}}/anteprima-fifo"
+                      hx-target="#modal-body" hx-swap="innerHTML"
+                      onclick="document.getElementById('modal').classList.add('is-open')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                Riepilogo FIFO
+              </button>
+              {{end}}
+              {{if eq .Ordine.Stato "in_preparazione"}}
+              <form method="POST" action="/ordini/{{.Ordine.ID}}/pronto" style="margin:0">
+                <button type="submit" class="ec-btn ec-btn--primary ec-btn--sm">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4V7Z"/></svg>
+                  Segna come pronto
+                </button>
+              </form>
+              {{else if eq .Ordine.Stato "pronto"}}
+              <form method="POST" action="/ordini/{{.Ordine.ID}}/consegna" style="margin:0">
+                <button type="submit" class="ec-btn ec-btn--teal ec-btn--sm">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg>
+                  Consegna effettuata
+                </button>
+              </form>
+              {{end}}
+            </footer>
+          </div>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="ec-empty">
+          <div class="ec-empty__icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L20 6.5"/></svg>
+          </div>
+          <div class="ec-empty__title">Nessun ordine in coda</div>
+          <div class="ec-empty__hint">Quando un funzionario approva una richiesta, l'ordine arriva qui.</div>
+        </div>
+        {{end}}
+      </section>
+
+      <!-- Cassa Economale — Capitoli -->
+      <section style="margin-top:40px">
+        <h2 style="font-size:18px;font-weight:600;margin:0 0 14px;color:var(--ec-navy-900)">Cassa Economale — {{.Anno}}</h2>
+        {{if .Capitoli}}
+        <table class="ec-table">
+          <thead>
+            <tr>
+              <th>{{t "economale.capitolo.codice_peg"}}</th>
+              <th>{{t "economale.capitolo.descrizione"}}</th>
+              <th style="text-align:right">{{t "economale.capitolo.importo_stanziato"}}</th>
+              <th style="text-align:right">{{t "economale.capitolo.residuo"}}</th>
+              <th style="min-width:120px">Utilizzo</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Capitoli}}
+            <tr>
+              <td class="mono"><strong>{{.CodicePEG}}</strong></td>
+              <td>{{.Descrizione}}</td>
+              <td class="mono" style="text-align:right">€ {{printf "%.2f" .ImportoStanziato}}</td>
+              <td class="mono" style="text-align:right;font-weight:700;color:var(--ec-teal-700)">€ {{printf "%.2f" .Residuo}}</td>
+              <td>
+                <div style="background:var(--ec-line);border-radius:4px;height:6px;overflow:hidden">
+                  <div style="background:var(--ec-navy-700);height:100%;width:{{sub 100 (percent .Residuo .ImportoStanziato)}}%;border-radius:4px"></div>
+                </div>
+                <div style="font-size:11px;color:var(--ec-ink-500);margin-top:3px">{{sub 100 (percent .Residuo .ImportoStanziato)}}% utilizzato</div>
+              </td>
+              <td>{{if not .Attivo}}<span class="ec-pill ec-pill--neutral">{{t "economale.capitolo.disattivato"}}</span>{{end}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+        <div style="margin-top:10px;text-align:right">
+          <a href="/capitoli" class="ec-btn ec-btn--ghost ec-btn--sm">Tutti i capitoli →</a>
+        </div>
+        {{else}}
+        <div class="ec-empty">
+          <div class="ec-empty__icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h12l4 4v12H4z"/></svg></div>
+          <div class="ec-empty__title">{{t "economale.capitolo.empty"}}</div>
+          <div class="ec-empty__hint"><a href="/capitoli/nuovo">{{t "economale.capitolo.nuovo"}}</a></div>
+        </div>
+        {{end}}
+      </section>
+
+      <!-- Spese in approvazione -->
+      {{if .SpeseInApprovazione}}
+      <section style="margin-top:32px">
+        <h2 style="font-size:18px;font-weight:600;margin:0 0 14px;color:var(--ec-navy-900)">{{t "economale.dashboard.ultime_spese"}}</h2>
+        <table class="ec-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>{{t "economale.spesa.creata_il"}}</th>
+              <th>{{t "economale.spesa.utente"}}</th>
+              <th>{{t "economale.spesa.settore"}}</th>
+              <th>{{t "economale.spesa.motivazione"}}</th>
+              <th style="text-align:right">{{t "economale.spesa.importo_presunto"}}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .SpeseInApprovazione}}
+            <tr>
+              <td class="mono"><a href="/spese/{{.ID}}">#{{.ID}}</a></td>
+              <td>{{fmtDate .DataCreazione}}</td>
+              <td>{{.UtenteUsername}}</td>
+              <td>{{.SettoreNome}}</td>
+              <td>{{.Motivazione}}</td>
+              <td class="mono" style="text-align:right">€ {{printf "%.2f" .ImportoPresunto}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </section>
+      {{end}}
+
+    </main>
+  </div>
+</div>
+
+<div id="modal" class="ec-modal-bg" onclick="if(event.target===this)this.classList.remove('is-open')">
+  <div class="ec-modal ec-modal--wide" id="modal-body"></div>
+</div>
+
+<script src="/static/js/htmx.min.js"></script>
+{{template "drawer-backdrop" .}}
+</body>
+</html>
+
+{{define "fifo-preview-modal-dual"}}
+<div class="ec-modal__head">
+  <div class="ec-modal__title">
+    <i class="fa-regular fa-eye" style="margin-right:6px"></i>
+    Anteprima FIFO — Ordine #{{.OrdineID}}
+  </div>
+  <div class="ec-modal__sub">
+    Simulazione dei prelievi per lotto. Nessuna scrittura su magazzino fino al click su "Prepara ora".
+    {{if .Utente}}<br><b>{{.Utente}}</b>{{if .Settore}} · settore {{.Settore}}{{end}} · stato <span class="ec-pill ec-pill--{{statoTone .Stato}}">{{statoLabel .Stato}}</span>{{end}}
+  </div>
+</div>
+<div class="ec-modal__body">
+  {{if .Anteprima.Righe}}
+  <div class="ec-stack" style="gap:14px">
+    {{range .Anteprima.Righe}}
+    <div style="border:1px solid var(--ec-line);border-radius:10px;padding:12px 14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <strong style="flex:1">{{.ProdottoNome}}</strong>
+        <span class="ec-pill ec-pill--{{if eq .Esito "evasa"}}teal{{else if eq .Esito "evasa_parziale"}}amber{{else}}neutral{{end}}">
+          {{if eq .Esito "evasa"}}Evasa{{else if eq .Esito "evasa_parziale"}}Parziale{{else}}In attesa{{end}}
+        </span>
+        <span class="mono" style="color:var(--ec-ink-500);font-size:12px">{{.QtaSimulataEvasa}} / {{.QtaDaEvadere}} pz</span>
+      </div>
+      {{if .Picks}}
+      <table class="ec-table" style="margin:0">
+        <thead>
+          <tr>
+            <th>Lotto</th>
+            <th>Acquisto</th>
+            <th style="text-align:right">Qta</th>
+            <th style="text-align:right">Costo unit.</th>
+            <th style="text-align:right">Costo riga</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Picks}}
+          <tr>
+            <td class="mono">#{{.LottoID}}</td>
+            <td class="mono" style="font-size:12px">{{fmtDate .DataAcquisto}}</td>
+            <td class="mono" style="text-align:right">{{.QtaPrelevata}}</td>
+            <td class="mono" style="text-align:right">€ {{printf "%.2f" .CostoUnitario}}</td>
+            <td class="mono" style="text-align:right;font-weight:600">€ {{printf "%.2f" .CostoTotale}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      <div style="text-align:right;margin-top:6px;font-size:12.5px;color:var(--ec-ink-700)">
+        Subtotale riga: <b class="mono">€ {{printf "%.2f" .CostoRiga}}</b>
+      </div>
+      {{else}}
+      <div style="font-size:13px;color:var(--ec-ink-500);font-style:italic">
+        Nessun lotto disponibile per questo prodotto. La riga resterà <b>in attesa</b> finché non entra un nuovo carico.
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+  <div style="margin-top:14px;padding:12px 14px;border-radius:10px;background:var(--ec-bg-soft);display:flex;align-items:center;gap:10px">
+    <span style="flex:1;font-weight:600">Totale costo simulato</span>
+    <span class="mono" style="font-size:18px;font-weight:700;color:var(--ec-navy-900)">€ {{printf "%.2f" .Anteprima.TotaleCosto}}</span>
+  </div>
+  {{else}}
+  <div class="ec-empty" style="margin:0">
+    <div class="ec-empty__title">Nessuna riga sull'ordine</div>
+  </div>
+  {{end}}
+</div>
+<div class="ec-modal__foot">
+  <button type="button" class="ec-btn ec-btn--ghost"
+          onclick="document.getElementById('modal').classList.remove('is-open')">Chiudi</button>
+  {{if eq .Stato "approvato"}}
+  <form method="POST" action="/ordini/{{.OrdineID}}/prepara" style="margin:0"
+        hx-confirm="Confermi la preparazione FIFO dell'ordine #{{.OrdineID}}? L'azione scarica i lotti definitivamente.">
+    <button type="submit" class="ec-btn ec-btn--primary">
+      <i class="fa-solid fa-check" style="margin-right:6px"></i>
+      Prepara ora
+    </button>
+  </form>
+  {{end}}
+</div>
+{{end}}
