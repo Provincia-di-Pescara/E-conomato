@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>E-conomato — {{t "economale.reintegro.titolo_lista"}}</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/fa/css/all.min.css" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+<div class="ec-app">
+  {{template "sidebar-economo" .}}
+  <div class="ec-main">
+    <header class="ec-topbar">
+      {{template "drawer-burger" .}}
+      <div class="ec-topbar__title">
+        {{if .BrandName}}{{.BrandName}}{{else}}E-conomato{{end}}
+        <span style="color:var(--ec-ink-300);margin:0 6px">/</span>
+        <b>{{t "economale.reintegro.titolo_lista"}}</b>
+      </div>
+      <div class="ec-topbar__right">
+        {{template "topbar-bell" .}}
+        <a href="/economo/reintegro/nuovo" class="ec-iconbtn" title="{{t "economale.reintegro.nuovo"}}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+        </a>
+      </div>
+    </header>
+
+    <main class="ec-content">
+      <header class="ec-secthead">
+        <div>
+          <div class="ec-secthead__kicker">Cassa Economale</div>
+          <h1 class="ec-secthead__title">{{t "economale.reintegro.titolo_lista"}}</h1>
+          <p class="ec-secthead__sub">Richieste di rimborso del Fondo Economale inviate alla Ragioneria.</p>
+        </div>
+        <div class="ec-secthead__right">
+          <a href="/economo/reintegro/nuovo" class="ec-btn ec-btn--primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            {{t "economale.reintegro.nuovo"}}
+          </a>
+        </div>
+      </header>
+
+      {{if .Reintegri}}
+      <table class="ec-table">
+        <thead>
+          <tr>
+            <th>{{t "economale.reintegro.numero"}}</th>
+            <th>{{t "economale.reintegro.data_richiesta"}}</th>
+            <th>Economo</th>
+            <th style="text-align:right">{{t "economale.reintegro.importo_totale"}}</th>
+            <th>Stato</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Reintegri}}
+          <tr>
+            <td class="mono"><strong>R-{{.Anno}}/{{.Numero}}</strong></td>
+            <td>{{fmtDate .DataRichiesta}}</td>
+            <td>{{.EconomoUsername}}</td>
+            <td class="mono" style="text-align:right">€ {{printf "%.2f" .ImportoTotale}}</td>
+            <td>
+              {{if eq .Stato "bozza"}}<span class="ec-pill ec-pill--neutral">{{t "economale.reintegro.stato.bozza"}}</span>
+              {{else if eq .Stato "inviata"}}<span class="ec-pill ec-pill--gold">{{t "economale.reintegro.stato.inviata"}}</span>
+              {{else if eq .Stato "liquidata"}}<span class="ec-pill ec-pill--teal">{{t "economale.reintegro.stato.liquidata"}}</span>
+              {{else}}<span class="ec-pill">{{.Stato}}</span>{{end}}
+            </td>
+            <td>
+              <a href="/economo/reintegro/{{.ID}}" class="ec-btn ec-btn--sm ec-btn--ghost">Dettaglio</a>
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="ec-empty">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 9 9"/><path d="M3 12h6"/><path d="M3 12v6"/></svg>
+        <p>{{t "economale.reintegro.empty"}}</p>
+        <a href="/economo/reintegro/nuovo" class="ec-btn ec-btn--primary">{{t "economale.reintegro.nuovo"}}</a>
+      </div>
+      {{end}}
+    </main>
+  </div>
+</div>
+{{template "drawer" .}}
+</body>
+</html>

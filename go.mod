@@ -7,6 +7,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.8
 	github.com/gorilla/sessions v1.3.0
 	github.com/joho/godotenv v1.5.1
+	github.com/jung-kurt/gofpdf v1.16.2
 	github.com/mattn/go-sqlite3 v1.14.22
 	golang.org/x/image v0.40.0
 )

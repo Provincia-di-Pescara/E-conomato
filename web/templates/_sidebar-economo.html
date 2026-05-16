@@ -29,17 +29,17 @@
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10"/><path d="M9 10h4.5a1.5 1.5 0 0 1 0 3H10a1.5 1.5 0 0 0 0 3H15"/></svg>
     <span>{{t "economale.menu.spese"}}</span>
   </a>
-  <a class="ec-side__link is-disabled" title="In arrivo nelle prossime release">
+  <a href="/economo/giornale-cassa" class="ec-side__link {{if eq .ActiveNav "giornale_cassa"}}is-active{{end}}">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M4 9h16"/><path d="M9 4v16"/></svg>
-    <span style="opacity:.55">{{t "economale.menu.giornale_cassa"}}</span>
+    <span>{{t "economale.menu.giornale_cassa"}}</span>
   </a>
-  <a class="ec-side__link is-disabled" title="In arrivo nelle prossime release">
+  <a href="/economo/reintegri" class="ec-side__link {{if eq .ActiveNav "reintegri"}}is-active{{end}}">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 9 9"/><path d="M3 12h6"/><path d="M3 12v6"/></svg>
-    <span style="opacity:.55">{{t "economale.menu.reintegri"}}</span>
+    <span>{{t "economale.menu.reintegri"}}</span>
   </a>
-  <a class="ec-side__link is-disabled" title="In arrivo nelle prossime release">
+  <a href="/economo/conto-giudiziale" class="ec-side__link {{if eq .ActiveNav "conto_giudiziale"}}is-active{{end}}">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M8 8h8"/><path d="M8 12h8"/><path d="M8 16h5"/></svg>
-    <span style="opacity:.55">{{t "economale.menu.conto_giudiziale"}}</span>
+    <span>{{t "economale.menu.conto_giudiziale"}}</span>
   </a>
 
   <div class="ec-side__group-label">Generale</div>

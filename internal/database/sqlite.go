@@ -366,6 +366,13 @@ func migrate(conn *sql.DB) error {
 	if err := ensureColumn(conn, "utenti", "ruolo_secondario", `ALTER TABLE utenti ADD COLUMN ruolo_secondario TEXT`); err != nil {
 		return err
 	}
+	// Collegamento notifiche → spese economali.
+	if err := ensureColumn(conn, "notifiche", "spesa_id", `ALTER TABLE notifiche ADD COLUMN spesa_id INTEGER REFERENCES spese_economali(id)`); err != nil {
+		return err
+	}
+	if _, err = conn.Exec(`CREATE INDEX IF NOT EXISTS idx_notifiche_spesa ON notifiche(spesa_id)`); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1665,17 +1672,20 @@ func (db *DB) GetOrdineMeta(ordineID int64) (utenteUsername, settoreID, stato st
 
 // InsertNotifica crea una nuova riga in notifiche.
 func (db *DB) InsertNotifica(n models.Notifica) (int64, error) {
-	var ordineID, prodottoID interface{}
+	var ordineID, prodottoID, spesaID interface{}
 	if n.OrdineID != nil {
 		ordineID = *n.OrdineID
 	}
 	if n.ProdottoID != nil {
 		prodottoID = *n.ProdottoID
 	}
+	if n.SpesaID != nil {
+		spesaID = *n.SpesaID
+	}
 	res, err := db.conn.Exec(`
-		INSERT INTO notifiche (utente_username, tipo, messaggio, ordine_id, prodotto_id)
-		VALUES (?, ?, ?, ?, ?)
-	`, n.UtenteUsername, n.Tipo, n.Messaggio, ordineID, prodottoID)
+		INSERT INTO notifiche (utente_username, tipo, messaggio, ordine_id, prodotto_id, spesa_id)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, n.UtenteUsername, n.Tipo, n.Messaggio, ordineID, prodottoID, spesaID)
 	if err != nil {
 		return 0, err
 	}
@@ -2642,6 +2652,400 @@ func (db *DB) GetSaldoCassa(anno int) (float64, error) {
 		return 0, err
 	}
 	return entrate - uscite, nil
+}
+
+// RegistraAnticipazione registra una ricezione di fondi dalla tesoreria nel giornale di cassa.
+func (db *DB) RegistraAnticipazione(importo float64, economoUsername, descrizione string) error {
+	if descrizione == "" {
+		descrizione = "Anticipazione fondo economale"
+	}
+	_, err := db.conn.Exec(`
+		INSERT INTO movimenti_cassa (tipo, importo, descrizione, creato_da)
+		VALUES ('anticipazione', ?, ?, ?)
+	`, importo, descrizione, economoUsername)
+	return err
+}
+
+// RegistraRestituzione registra una restituzione di fondi alla tesoreria nel giornale di cassa.
+func (db *DB) RegistraRestituzione(importo float64, economoUsername, descrizione string) error {
+	if descrizione == "" {
+		descrizione = "Restituzione alla tesoreria"
+	}
+	_, err := db.conn.Exec(`
+		INSERT INTO movimenti_cassa (tipo, importo, descrizione, creato_da)
+		VALUES ('restituzione_tesoreria', ?, ?, ?)
+	`, importo, descrizione, economoUsername)
+	return err
+}
+
+// GetGiornaleCassa restituisce i movimenti di cassa in un intervallo con saldo progressivo.
+func (db *DB) GetGiornaleCassa(da, a time.Time) ([]models.RigaGiornaleCassa, error) {
+	rows, err := db.conn.Query(`
+		SELECT
+		    m.id, m.data, m.tipo, m.descrizione, m.importo,
+		    m.riferimento_spesa_id, m.riferimento_reintegro_id, m.creato_da,
+		    COALESCE('#'||CAST(m.riferimento_spesa_id AS TEXT),'') AS numero_pratica,
+		    COALESCE('R-'||CAST(r.anno AS TEXT)||'/'||CAST(r.numero AS TEXT),'') AS numero_reintegro,
+		    CASE WHEN m.tipo IN ('anticipazione','reintegro') THEN m.importo ELSE 0 END AS importo_entrata,
+		    CASE WHEN m.tipo IN ('uscita','restituzione_tesoreria') THEN m.importo ELSE 0 END AS importo_uscita,
+		    SUM(CASE WHEN m.tipo IN ('anticipazione','reintegro') THEN m.importo ELSE -m.importo END)
+		        OVER (ORDER BY m.data ASC, m.id ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+		        AS saldo_progressivo
+		FROM movimenti_cassa m
+		LEFT JOIN reintegri r ON r.id = m.riferimento_reintegro_id
+		WHERE m.data BETWEEN ? AND ?
+		ORDER BY m.data ASC, m.id ASC
+	`, da.Format("2006-01-02"), a.Format("2006-01-02")+" 23:59:59")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.RigaGiornaleCassa
+	for rows.Next() {
+		var riga models.RigaGiornaleCassa
+		var rifSpesa, rifReintegro *int64
+		var dataStr string
+		if err := rows.Scan(
+			&riga.ID, &dataStr, &riga.Tipo, &riga.Descrizione, &riga.Importo,
+			&rifSpesa, &rifReintegro, &riga.CreatoDa,
+			&riga.NumeroPratica, &riga.NumeroReintegro,
+			&riga.ImportoEntrata, &riga.ImportoUscita, &riga.SaldoProgressivo,
+		); err != nil {
+			return nil, err
+		}
+		riga.RiferimentoSpesaID = rifSpesa
+		riga.RiferimentoReintegroID = rifReintegro
+		if t, err := time.Parse("2006-01-02 15:04:05", dataStr); err == nil {
+			riga.Data = t
+		} else if t, err := time.Parse("2006-01-02T15:04:05Z", dataStr); err == nil {
+			riga.Data = t
+		}
+		out = append(out, riga)
+	}
+	return out, rows.Err()
+}
+
+// GetSpeseChiuseNonReintegrate restituisce le spese chiuse non ancora incluse in un reintegro.
+func (db *DB) GetSpeseChiuseNonReintegrate() ([]models.SpesaEconomale, error) {
+	return db.querySpese("s.stato = 'chiusa' AND s.id NOT IN (SELECT spesa_id FROM reintegro_spese)")
+}
+
+// CreaReintegro crea un reintegro transazionale con tutte le spese chiuse non ancora reintegrate.
+func (db *DB) CreaReintegro(economoUsername string) (*models.Reintegro, error) {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	// Carica spese chiuse non reintegrate all'interno della transazione.
+	rows, err := tx.Query(`
+		SELECT id, importo_effettivo FROM spese_economali
+		WHERE stato = 'chiusa' AND id NOT IN (SELECT spesa_id FROM reintegro_spese)
+	`)
+	if err != nil {
+		return nil, err
+	}
+	type spesaMini struct {
+		ID      int64
+		Importo float64
+	}
+	var spese []spesaMini
+	for rows.Next() {
+		var s spesaMini
+		if err := rows.Scan(&s.ID, &s.Importo); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		spese = append(spese, s)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(spese) == 0 {
+		return nil, fmt.Errorf("nessuna spesa chiusa da reintegrare")
+	}
+
+	anno := time.Now().Year()
+	var maxNumero int
+	tx.QueryRow(`SELECT COALESCE(MAX(numero),0) FROM reintegri WHERE anno = ?`, anno).Scan(&maxNumero)
+	numero := maxNumero + 1
+
+	var totale float64
+	for _, s := range spese {
+		totale += s.Importo
+	}
+
+	res, err := tx.Exec(`
+		INSERT INTO reintegri (numero, anno, data_richiesta, importo_totale, stato, economo_username)
+		VALUES (?, ?, date('now'), ?, 'bozza', ?)
+	`, numero, anno, totale, economoUsername)
+	if err != nil {
+		return nil, err
+	}
+	reintegroID, _ := res.LastInsertId()
+
+	for _, s := range spese {
+		if _, err := tx.Exec(`INSERT INTO reintegro_spese (reintegro_id, spesa_id) VALUES (?, ?)`, reintegroID, s.ID); err != nil {
+			return nil, err
+		}
+	}
+
+	if _, err := tx.Exec(`
+		INSERT INTO movimenti_cassa (tipo, importo, descrizione, riferimento_reintegro_id, creato_da)
+		VALUES ('reintegro', ?, ?, ?, ?)
+	`, totale, fmt.Sprintf("Reintegro R-%d/%d", anno, numero), reintegroID, economoUsername); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	r := &models.Reintegro{
+		ID:              reintegroID,
+		Numero:          numero,
+		Anno:            anno,
+		DataRichiesta:   time.Now(),
+		ImportoTotale:   totale,
+		Stato:           "bozza",
+		EconomoUsername: economoUsername,
+	}
+	return r, nil
+}
+
+// BuildRichiestaReintegro restituisce le righe del report Richiesta di Reintegro.
+func (db *DB) BuildRichiestaReintegro(reintegroID int64) ([]models.RigaReintegro, error) {
+	rows, err := db.conn.Query(`
+		SELECT c.id, c.codice_peg, c.descrizione,
+		       s.id, '#'||CAST(s.id AS TEXT),
+		       COALESCE(s.fornitore,''), s.motivazione,
+		       COALESCE(s.data_documento, date('now')),
+		       COALESCE(s.estremi_documento,''),
+		       COALESCE(s.importo_effettivo, 0)
+		FROM reintegro_spese rs
+		JOIN spese_economali s ON s.id = rs.spesa_id
+		JOIN capitoli_spesa c  ON c.id = s.capitolo_id
+		WHERE rs.reintegro_id = ?
+		ORDER BY c.codice_peg ASC, s.data_documento ASC, s.id ASC
+	`, reintegroID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.RigaReintegro
+	for rows.Next() {
+		var r models.RigaReintegro
+		var dataDocStr string
+		if err := rows.Scan(
+			&r.CapitoloID, &r.CodicePEG, &r.DescrizionePEG,
+			&r.SpesaID, &r.NumeroPratica,
+			&r.Fornitore, &r.Oggetto,
+			&dataDocStr, &r.EstremiDocumento, &r.Importo,
+		); err != nil {
+			return nil, err
+		}
+		if t, err := time.Parse("2006-01-02", dataDocStr); err == nil {
+			r.DataDocumento = t
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// GetReintegri restituisce tutti i reintegri ordinati per anno/numero decrescente.
+func (db *DB) GetReintegri() ([]models.Reintegro, error) {
+	rows, err := db.conn.Query(`
+		SELECT id, numero, anno, data_richiesta, data_emissione_mandato,
+		       importo_totale, stato, economo_username
+		FROM reintegri ORDER BY anno DESC, numero DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanReintegri(rows)
+}
+
+// GetReintegro restituisce un singolo reintegro per ID.
+func (db *DB) GetReintegro(id int64) (*models.Reintegro, error) {
+	row := db.conn.QueryRow(`
+		SELECT id, numero, anno, data_richiesta, data_emissione_mandato,
+		       importo_totale, stato, economo_username
+		FROM reintegri WHERE id = ?
+	`, id)
+	var r models.Reintegro
+	var dataRichStr string
+	var dataEmStr *string
+	if err := row.Scan(&r.ID, &r.Numero, &r.Anno, &dataRichStr, &dataEmStr,
+		&r.ImportoTotale, &r.Stato, &r.EconomoUsername); err != nil {
+		return nil, err
+	}
+	if t, err := time.Parse("2006-01-02", dataRichStr); err == nil {
+		r.DataRichiesta = t
+	}
+	if dataEmStr != nil {
+		if t, err := time.Parse("2006-01-02", *dataEmStr); err == nil {
+			r.DataEmissioneMandato = &t
+		}
+	}
+	return &r, nil
+}
+
+// AvanzaStatoReintegro avanza lo stato del reintegro (bozza→inviata, inviata→liquidata).
+func (db *DB) AvanzaStatoReintegro(id int64, nuovoStato string, dataEmissioneMandato *string) error {
+	transitions := map[string]string{
+		"inviata":   "bozza",
+		"liquidata": "inviata",
+	}
+	statoAtteso, ok := transitions[nuovoStato]
+	if !ok {
+		return fmt.Errorf("transizione non valida: %s", nuovoStato)
+	}
+	if nuovoStato == "liquidata" && dataEmissioneMandato != nil && *dataEmissioneMandato != "" {
+		res, err := db.conn.Exec(`
+			UPDATE reintegri SET stato = ?, data_emissione_mandato = ? WHERE id = ? AND stato = ?
+		`, nuovoStato, *dataEmissioneMandato, id, statoAtteso)
+		if err != nil {
+			return err
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			return fmt.Errorf("reintegro %d non in stato '%s'", id, statoAtteso)
+		}
+		return nil
+	}
+	res, err := db.conn.Exec(`UPDATE reintegri SET stato = ? WHERE id = ? AND stato = ?`, nuovoStato, id, statoAtteso)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("reintegro %d non in stato '%s'", id, statoAtteso)
+	}
+	return nil
+}
+
+func scanReintegri(rows *sql.Rows) ([]models.Reintegro, error) {
+	var out []models.Reintegro
+	for rows.Next() {
+		var r models.Reintegro
+		var dataRichStr string
+		var dataEmStr *string
+		if err := rows.Scan(&r.ID, &r.Numero, &r.Anno, &dataRichStr, &dataEmStr,
+			&r.ImportoTotale, &r.Stato, &r.EconomoUsername); err != nil {
+			return nil, err
+		}
+		if t, err := time.Parse("2006-01-02", dataRichStr); err == nil {
+			r.DataRichiesta = t
+		}
+		if dataEmStr != nil {
+			if t, err := time.Parse("2006-01-02", *dataEmStr); err == nil {
+				r.DataEmissioneMandato = &t
+			}
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// BuildContoGiudiziale calcola il riepilogo annuale conforme a Modello 21 (D.P.R. 194/1996).
+func (db *DB) BuildContoGiudiziale(anno int) (models.SezioneContoGiudiziale, error) {
+	annoStr := fmt.Sprintf("%d", anno)
+	prevAnnoStr := fmt.Sprintf("%d", anno-1)
+
+	var s models.SezioneContoGiudiziale
+	s.Anno = anno
+
+	// Fondo iniziale = saldo cumulativo di tutti i movimenti prima dell'anno.
+	db.conn.QueryRow(`
+		SELECT COALESCE(SUM(
+			CASE WHEN tipo IN ('anticipazione','reintegro') THEN importo ELSE -importo END
+		), 0)
+		FROM movimenti_cassa WHERE strftime('%Y', data) <= ?
+	`, prevAnnoStr).Scan(&s.FondoIniziale)
+
+	// Reintegri liquidati nell'anno.
+	db.conn.QueryRow(`
+		SELECT COALESCE(SUM(importo_totale), 0)
+		FROM reintegri WHERE anno = ? AND stato = 'liquidata'
+	`, anno).Scan(&s.TotaleReintegri)
+
+	// Spese chiuse nell'anno.
+	db.conn.QueryRow(`
+		SELECT COALESCE(SUM(importo_effettivo), 0)
+		FROM spese_economali WHERE stato = 'chiusa' AND strftime('%Y', data_chiusura) = ?
+	`, annoStr).Scan(&s.TotaleSpese)
+
+	// Restituito in tesoreria nell'anno.
+	db.conn.QueryRow(`
+		SELECT COALESCE(SUM(importo), 0)
+		FROM movimenti_cassa WHERE tipo = 'restituzione_tesoreria' AND strftime('%Y', data) = ?
+	`, annoStr).Scan(&s.RestituitoInTesoreria)
+
+	s.SaldoFinale = s.FondoIniziale + s.TotaleReintegri - s.TotaleSpese
+	return s, nil
+}
+
+// StreamGiornaleCSV scrive il giornale di cassa come CSV italiano (BOM, ';', ',') direttamente
+// su w senza caricare tutte le righe in memoria.
+func (db *DB) StreamGiornaleCSV(w io.Writer, da, a time.Time) error {
+	if _, err := w.Write([]byte{0xEF, 0xBB, 0xBF}); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, "data;tipo;pratica;reintegro;descrizione;entrata;uscita;saldo\r\n"); err != nil {
+		return err
+	}
+	rows, err := db.conn.Query(`
+		SELECT
+		    m.data, m.tipo, m.descrizione,
+		    COALESCE('#'||CAST(m.riferimento_spesa_id AS TEXT),'') AS numero_pratica,
+		    COALESCE('R-'||CAST(r.anno AS TEXT)||'/'||CAST(r.numero AS TEXT),'') AS numero_reintegro,
+		    CASE WHEN m.tipo IN ('anticipazione','reintegro') THEN m.importo ELSE 0 END AS importo_entrata,
+		    CASE WHEN m.tipo IN ('uscita','restituzione_tesoreria') THEN m.importo ELSE 0 END AS importo_uscita,
+		    SUM(CASE WHEN m.tipo IN ('anticipazione','reintegro') THEN m.importo ELSE -m.importo END)
+		        OVER (ORDER BY m.data ASC, m.id ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+		        AS saldo_progressivo
+		FROM movimenti_cassa m
+		LEFT JOIN reintegri r ON r.id = m.riferimento_reintegro_id
+		WHERE m.data BETWEEN ? AND ?
+		ORDER BY m.data ASC, m.id ASC
+	`, da.Format("2006-01-02"), a.Format("2006-01-02")+" 23:59:59")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var dataStr, tipo, descrizione, pratica, reintegro string
+		var entrata, uscita, saldo float64
+		if err := rows.Scan(&dataStr, &tipo, &descrizione, &pratica, &reintegro, &entrata, &uscita, &saldo); err != nil {
+			return err
+		}
+		var data time.Time
+		if t, e := time.Parse("2006-01-02 15:04:05", dataStr); e == nil {
+			data = t
+		} else if t, e := time.Parse("2006-01-02T15:04:05Z", dataStr); e == nil {
+			data = t
+		}
+		if _, err := fmt.Fprintf(w, "%s;%s;%s;%s;%s;%s;%s;%s\r\n",
+			data.Format("02/01/2006"),
+			csvEscape(tipo),
+			csvEscape(pratica),
+			csvEscape(reintegro),
+			csvEscape(descrizione),
+			csvFmt(entrata),
+			csvFmt(uscita),
+			csvFmt(saldo),
+		); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+func csvFmt(f float64) string {
+	return strings.Replace(strconv.FormatFloat(f, 'f', 2, 64), ".", ",", 1)
 }
 
 func boolToInt(b bool) int {

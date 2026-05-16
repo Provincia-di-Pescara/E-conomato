@@ -34,6 +34,7 @@ _ "golang.org/x/image/webp"
 "github.com/Provincia-di-Pescara/e-conomato/internal/logger"
 "github.com/Provincia-di-Pescara/e-conomato/internal/models"
 "github.com/Provincia-di-Pescara/e-conomato/internal/notify"
+"github.com/Provincia-di-Pescara/e-conomato/internal/report"
 )
 
 // normalizeProductImage decodes raw image bytes (jpeg/png/gif/webp), resizes
@@ -167,12 +168,17 @@ magazzinoTemplates := map[string]bool{
 // I template multi-ruolo (spese-utente, spesa-form, spesa-detail) caricano
 // comunque la sidebar economo perché renderizzano condizionalmente nel template.
 economoTemplates := map[string]bool{
-"dashboard-economo": true,
-"capitoli":          true,
-"capitolo-form":     true,
-"spese-utente":      true,
-"spesa-form":        true,
-"spesa-detail":      true,
+"dashboard-economo":       true,
+"capitoli":                true,
+"capitolo-form":           true,
+"spese-utente":            true,
+"spesa-form":              true,
+"spesa-detail":            true,
+"report-giornale-cassa":   true,
+"reintegri":               true,
+"reintegro-form":          true,
+"reintegro-detail":        true,
+"report-conto-giudiziale": true,
 }
 // Template con doppia sidebar (magazziniere + economo).
 combinedTemplates := map[string]bool{
@@ -186,7 +192,7 @@ topbarBell := filepath.Join(baseDir, "_topbar-bell.html")
 drawerPartial := filepath.Join(baseDir, "_drawer.html")
 notifBody := filepath.Join(baseDir, "_notifiche-body.html")
 
-names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino", "dashboard-magazzino-economo", "prodotto-form", "lotto-form", "impostazioni", "fornitori", "fornitore-form", "acquisti", "acquisto-detail", "storico-ordini", "notifiche-utente", "notifiche-funzionario", "notifiche-magazzino", "report-magazzino", "dashboard-economo", "capitoli", "capitolo-form", "spese-utente", "spesa-form", "spesa-detail"}
+names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino", "dashboard-magazzino-economo", "prodotto-form", "lotto-form", "impostazioni", "fornitori", "fornitore-form", "acquisti", "acquisto-detail", "storico-ordini", "notifiche-utente", "notifiche-funzionario", "notifiche-magazzino", "report-magazzino", "dashboard-economo", "capitoli", "capitolo-form", "spese-utente", "spesa-form", "spesa-detail", "report-giornale-cassa", "reintegri", "reintegro-form", "reintegro-detail", "report-conto-giudiziale"}
 // template senza topbar (e quindi senza bell)
 noTopbar := map[string]bool{"login": true, "dashboard": true}
 notifiche := map[string]bool{
@@ -2772,6 +2778,23 @@ mux.HandleFunc("POST /spese/{id}/chiudi",              app.requireRole("economo"
 mux.HandleFunc("POST /spese/{id}/allegati",            app.requireAuth(app.handleUploadAllegato))
 mux.HandleFunc("GET /spese/{id}/allegati/{aid}",       app.requireAuth(app.handleServeAllegato))
 mux.HandleFunc("POST /spese/{id}/allegati/{aid}/elimina", app.requireAuth(app.handleEliminaAllegato))
+// Movimenti cassa (anticipazione / restituzione tesoreria) e giornale.
+mux.HandleFunc("POST /economo/anticipazione",           app.requireRole("economo")(app.handleAnticipazione))
+mux.HandleFunc("POST /economo/restituzione-tesoreria",  app.requireRole("economo")(app.handleRestituzioneTesoreria))
+mux.HandleFunc("GET /economo/giornale-cassa",           app.requireRole("economo")(app.handleGiornaleCassa))
+// Reintegri.
+mux.HandleFunc("GET /economo/reintegri",                app.requireRole("economo")(app.handleListReintegri))
+mux.HandleFunc("GET /economo/reintegro/nuovo",          app.requireRole("economo")(app.handleNewReintegroForm))
+mux.HandleFunc("POST /economo/reintegro",               app.requireRole("economo")(app.handleCreaReintegro))
+mux.HandleFunc("GET /economo/reintegro/{id}",           app.requireRole("economo")(app.handleReintegroDetail))
+mux.HandleFunc("POST /economo/reintegro/{id}/invia",    app.requireRole("economo")(app.handleInviaReintegro))
+mux.HandleFunc("POST /economo/reintegro/{id}/liquida",  app.requireRole("economo")(app.handleLiquidaReintegro))
+// Export reintegro.
+mux.HandleFunc("GET /economo/reintegro/{id}/pdf",          app.requireRole("economo")(app.handleReintegroPDF))
+mux.HandleFunc("GET /economo/reintegro/{id}/csv",          app.requireRole("economo")(app.handleReintegroCSV))
+mux.HandleFunc("GET /economo/reintegro/{id}/allegati.zip", app.requireRole("economo")(app.handleReintegroZip))
+// Conto Giudiziale.
+mux.HandleFunc("GET /economo/conto-giudiziale",         app.requireRole("economo")(app.handleContoGiudiziale))
 
 if cfg.LDAPHost == "mock" {
 logger.Warn("RUNNING IN MOCK MODE - any credentials accepted")
@@ -3042,10 +3065,22 @@ func (a *App) handleCreateSpesa(w http.ResponseWriter, r *http.Request) {
 	}
 	s.UtenteUsername = username
 	s.SettoreID = settoreID
-	if _, err := a.db.CreaSpesa(s); err != nil {
+	spesaID, err := a.db.CreaSpesa(s)
+	if err != nil {
 		logger.Error("crea spesa: %v", err)
 		a.renderSpesaFormErr(w, r, s, "Errore salvataggio: "+err.Error())
 		return
+	}
+	if funz, ferr := a.db.GetFunzionarioSettore(settoreID); ferr == nil && funz != "" {
+		a.notifier.EmitSpesa(notify.EventoSpesaParams{
+			Tipo:         "spesa_inviata",
+			SpesaID:      spesaID,
+			SpesaSettore: settoreID,
+			Motivazione:  s.Motivazione,
+			Destinatari:  []string{funz},
+			Mittente:     username,
+			Messaggio:    fmt.Sprintf("Nuova spesa #%d da autorizzare (settore %s).", spesaID, settoreID),
+		})
 	}
 	http.Redirect(w, r, "/spese", http.StatusSeeOther)
 }
@@ -3154,6 +3189,23 @@ func (a *App) handleAutorizzaSpesa(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	logger.Info("spesa %d autorizzata da %s", id, username)
+	if economi, err := a.db.GetUtentiByRuolo("economo"); err == nil {
+		dest := make([]string, 0, len(economi))
+		for _, u := range economi {
+			dest = append(dest, u.Username)
+		}
+		if sp, err := a.db.GetSpesaByID(id); err == nil {
+			a.notifier.EmitSpesa(notify.EventoSpesaParams{
+				Tipo:         "spesa_autorizzata",
+				SpesaID:      id,
+				SpesaSettore: sp.SettoreID,
+				Motivazione:  sp.Motivazione,
+				Destinatari:  dest,
+				Mittente:     username,
+				Messaggio:    fmt.Sprintf("Spesa #%d autorizzata, pronta per impegno su capitolo.", id),
+			})
+		}
+	}
 	spesaRedirect(w, r, id)
 }
 
@@ -3183,12 +3235,25 @@ func (a *App) handleRifiutaSpesaFunz(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	note := strings.TrimSpace(r.FormValue("note"))
+	spesaPreRif, _ := a.db.GetSpesaByID(id)
 	if err := a.db.RifiutaSpesaFunz(id, username, note); err != nil {
 		logger.Error("rifiuta spesa funz %d: %v", id, err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	logger.Info("spesa %d rifiutata (funz) da %s", id, username)
+	if spesaPreRif.ID > 0 {
+		a.notifier.EmitSpesa(notify.EventoSpesaParams{
+			Tipo:         "spesa_rifiutata_funz",
+			SpesaID:      id,
+			SpesaSettore: spesaPreRif.SettoreID,
+			Motivazione:  spesaPreRif.Motivazione,
+			Destinatari:  []string{spesaPreRif.UtenteUsername},
+			Mittente:     username,
+			NoteExtra:    note,
+			Messaggio:    fmt.Sprintf("La tua spesa #%d è stata rifiutata dal funzionario.", id),
+		})
+	}
 	spesaRedirect(w, r, id)
 }
 
@@ -3215,6 +3280,17 @@ func (a *App) handleImpegnaSpesa(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	logger.Info("spesa %d impegnata su capitolo %d da %s", id, capitoloID, username)
+	if sp, err := a.db.GetSpesaByID(id); err == nil {
+		a.notifier.EmitSpesa(notify.EventoSpesaParams{
+			Tipo:         "spesa_impegnata",
+			SpesaID:      id,
+			SpesaSettore: sp.SettoreID,
+			Motivazione:  sp.Motivazione,
+			Destinatari:  []string{sp.UtenteUsername},
+			Mittente:     username,
+			Messaggio:    fmt.Sprintf("La tua spesa #%d è stata impegnata su capitolo. Procedi con la rendicontazione.", id),
+		})
+	}
 	spesaRedirect(w, r, id)
 }
 
@@ -3231,12 +3307,25 @@ func (a *App) handleRifiutaSpesaEcon(w http.ResponseWriter, r *http.Request) {
 	}
 	username := a.getUsername(r)
 	note := strings.TrimSpace(r.FormValue("note"))
+	spesaPreRifEcon, _ := a.db.GetSpesaByID(id)
 	if err := a.db.RifiutaSpesaEcon(id, username, note); err != nil {
 		logger.Error("rifiuta spesa econ %d: %v", id, err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	logger.Info("spesa %d rifiutata (econ) da %s", id, username)
+	if spesaPreRifEcon.ID > 0 {
+		a.notifier.EmitSpesa(notify.EventoSpesaParams{
+			Tipo:         "spesa_rifiutata_econ",
+			SpesaID:      id,
+			SpesaSettore: spesaPreRifEcon.SettoreID,
+			Motivazione:  spesaPreRifEcon.Motivazione,
+			Destinatari:  []string{spesaPreRifEcon.UtenteUsername},
+			Mittente:     username,
+			NoteExtra:    note,
+			Messaggio:    fmt.Sprintf("La tua spesa #%d non è stata impegnata dall'economo.", id),
+		})
+	}
 	spesaRedirect(w, r, id)
 }
 
@@ -3294,6 +3383,21 @@ func (a *App) handleRendicontaSpesa(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	logger.Info("spesa %d rendicontata da %s", id, username)
+	if economi, err := a.db.GetUtentiByRuolo("economo"); err == nil {
+		dest := make([]string, 0, len(economi))
+		for _, u := range economi {
+			dest = append(dest, u.Username)
+		}
+		a.notifier.EmitSpesa(notify.EventoSpesaParams{
+			Tipo:         "spesa_rendicontata",
+			SpesaID:      id,
+			SpesaSettore: spesa.SettoreID,
+			Motivazione:  spesa.Motivazione,
+			Destinatari:  dest,
+			Mittente:     username,
+			Messaggio:    fmt.Sprintf("Spesa #%d rendicontata, pronta per chiusura.", id),
+		})
+	}
 	spesaRedirect(w, r, id)
 }
 
@@ -3305,12 +3409,24 @@ func (a *App) handleChiudiSpesa(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username := a.getUsername(r)
+	spesaPreChiudi, _ := a.db.GetSpesaByID(id)
 	if err := a.db.ChiudiSpesa(id, username); err != nil {
 		logger.Error("chiudi spesa %d: %v", id, err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	logger.Info("spesa %d chiusa da %s, movimento_cassa uscita registrato", id, username)
+	if spesaPreChiudi.ID > 0 {
+		a.notifier.EmitSpesa(notify.EventoSpesaParams{
+			Tipo:         "spesa_chiusa",
+			SpesaID:      id,
+			SpesaSettore: spesaPreChiudi.SettoreID,
+			Motivazione:  spesaPreChiudi.Motivazione,
+			Destinatari:  []string{spesaPreChiudi.UtenteUsername},
+			Mittente:     username,
+			Messaggio:    fmt.Sprintf("La tua spesa #%d è stata chiusa e l'uscita è stata registrata.", id),
+		})
+	}
 	spesaRedirect(w, r, id)
 }
 
@@ -3499,6 +3615,411 @@ func (a *App) handleEliminaAllegato(w http.ResponseWriter, r *http.Request) {
 	}
 	logger.Info("allegato %d eliminato da spesa %d da %s", aid, id, username)
 	spesaRedirect(w, r, id)
+}
+
+// POST /economo/anticipazione
+func (a *App) handleAnticipazione(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	importoStr := strings.TrimSpace(r.FormValue("importo"))
+	importo, err := strconv.ParseFloat(strings.ReplaceAll(importoStr, ",", "."), 64)
+	if err != nil || importo <= 0 {
+		http.Error(w, "importo non valido", http.StatusBadRequest)
+		return
+	}
+	descrizione := strings.TrimSpace(r.FormValue("descrizione"))
+	username := a.getUsername(r)
+	if err := a.db.RegistraAnticipazione(importo, username, descrizione); err != nil {
+		logger.Error("registra anticipazione: %v", err)
+		http.Error(w, "errore registrazione: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	logger.Info("anticipazione %.2f registrata da %s", importo, username)
+	target := "/dashboard/economo"
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Redirect", target)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+// POST /economo/restituzione-tesoreria
+func (a *App) handleRestituzioneTesoreria(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	importoStr := strings.TrimSpace(r.FormValue("importo"))
+	importo, err := strconv.ParseFloat(strings.ReplaceAll(importoStr, ",", "."), 64)
+	if err != nil || importo <= 0 {
+		http.Error(w, "importo non valido", http.StatusBadRequest)
+		return
+	}
+	descrizione := strings.TrimSpace(r.FormValue("descrizione"))
+	username := a.getUsername(r)
+	if err := a.db.RegistraRestituzione(importo, username, descrizione); err != nil {
+		logger.Error("registra restituzione: %v", err)
+		http.Error(w, "errore registrazione: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	logger.Info("restituzione %.2f registrata da %s", importo, username)
+	target := "/dashboard/economo"
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Redirect", target)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+// GET /economo/giornale-cassa
+func (a *App) handleGiornaleCassa(w http.ResponseWriter, r *http.Request) {
+	now := time.Now()
+	primoMese := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	daStr := r.URL.Query().Get("da")
+	aStr := r.URL.Query().Get("a")
+	da := primoMese
+	a2 := now
+	if t, err := time.Parse("2006-01-02", daStr); err == nil {
+		da = t
+	}
+	if t, err := time.Parse("2006-01-02", aStr); err == nil {
+		a2 = t
+	}
+	if r.URL.Query().Get("format") == "csv" {
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="giornale-cassa-%s-%s.csv"`, da.Format("2006-01-02"), a2.Format("2006-01-02")))
+		if err := a.db.StreamGiornaleCSV(w, da, a2); err != nil {
+			logger.Error("giornale cassa csv: %v", err)
+		}
+		return
+	}
+	righe, err := a.db.GetGiornaleCassa(da, a2)
+	if err != nil {
+		logger.Error("giornale cassa: %v", err)
+		http.Error(w, "errore caricamento giornale", http.StatusInternalServerError)
+		return
+	}
+	// Calcola KPI dal risultato.
+	var totEntrate, totUscite float64
+	for _, riga := range righe {
+		totEntrate += riga.ImportoEntrata
+		totUscite += riga.ImportoUscita
+	}
+	saldoFinale := totEntrate - totUscite
+	a.render(w, r, "report-giornale-cassa", a.viewData(r, map[string]any{
+		"Username":    a.getUsername(r),
+		"Role":        a.getRole(r),
+		"ActiveNav":   "giornale_cassa",
+		"Righe":       righe,
+		"Da":          da.Format("2006-01-02"),
+		"A":           a2.Format("2006-01-02"),
+		"TotEntrate":  totEntrate,
+		"TotUscite":   totUscite,
+		"SaldoFinale": saldoFinale,
+	}))
+}
+
+// rigaReintegroGruppo raggruppa le righe di un reintegro per capitolo PEG.
+type rigaReintegroGruppo struct {
+	CapitoloID  int64
+	CodicePEG   string
+	Descrizione string
+	Spese       []models.RigaReintegro
+	Subtotale   float64
+}
+
+// GET /economo/reintegri
+func (a *App) handleListReintegri(w http.ResponseWriter, r *http.Request) {
+	reintegri, err := a.db.GetReintegri()
+	if err != nil {
+		logger.Error("list reintegri: %v", err)
+		http.Error(w, "errore caricamento reintegri", http.StatusInternalServerError)
+		return
+	}
+	a.render(w, r, "reintegri", a.viewData(r, map[string]any{
+		"Username":  a.getUsername(r),
+		"Role":      a.getRole(r),
+		"ActiveNav": "reintegri",
+		"Reintegri": reintegri,
+	}))
+}
+
+// GET /economo/reintegro/nuovo
+func (a *App) handleNewReintegroForm(w http.ResponseWriter, r *http.Request) {
+	spese, err := a.db.GetSpeseChiuseNonReintegrate()
+	if err != nil {
+		logger.Error("spese non reintegrate: %v", err)
+		http.Error(w, "errore caricamento spese", http.StatusInternalServerError)
+		return
+	}
+	var totale float64
+	for _, s := range spese {
+		if s.ImportoEffettivo != nil {
+			totale += *s.ImportoEffettivo
+		}
+	}
+	a.render(w, r, "reintegro-form", a.viewData(r, map[string]any{
+		"Username":       a.getUsername(r),
+		"Role":           a.getRole(r),
+		"ActiveNav":      "reintegri",
+		"Spese":          spese,
+		"ImportoTotale":  totale,
+	}))
+}
+
+// POST /economo/reintegro
+func (a *App) handleCreaReintegro(w http.ResponseWriter, r *http.Request) {
+	username := a.getUsername(r)
+	reintegro, err := a.db.CreaReintegro(username)
+	if err != nil {
+		logger.Error("crea reintegro: %v", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	logger.Info("reintegro %d/%d creato da %s, importo %.2f", reintegro.Anno, reintegro.Numero, username, reintegro.ImportoTotale)
+	target := fmt.Sprintf("/economo/reintegro/%d", reintegro.ID)
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Redirect", target)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+// GET /economo/reintegro/{id}
+func (a *App) handleReintegroDetail(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	reintegro, err := a.db.GetReintegro(id)
+	if err != nil {
+		http.Error(w, "reintegro non trovato", http.StatusNotFound)
+		return
+	}
+	righe, err := a.db.BuildRichiestaReintegro(id)
+	if err != nil {
+		logger.Error("build richiesta reintegro %d: %v", id, err)
+		http.Error(w, "errore caricamento righe", http.StatusInternalServerError)
+		return
+	}
+	// Raggruppamento per capitolo PEG.
+	var gruppi []rigaReintegroGruppo
+	for _, riga := range righe {
+		if len(gruppi) == 0 || gruppi[len(gruppi)-1].CapitoloID != riga.CapitoloID {
+			gruppi = append(gruppi, rigaReintegroGruppo{
+				CapitoloID:  riga.CapitoloID,
+				CodicePEG:   riga.CodicePEG,
+				Descrizione: riga.DescrizionePEG,
+			})
+		}
+		g := &gruppi[len(gruppi)-1]
+		g.Spese = append(g.Spese, riga)
+		g.Subtotale += riga.Importo
+	}
+	a.render(w, r, "reintegro-detail", a.viewData(r, map[string]any{
+		"Username":  a.getUsername(r),
+		"Role":      a.getRole(r),
+		"ActiveNav": "reintegri",
+		"Reintegro": reintegro,
+		"Gruppi":    gruppi,
+	}))
+}
+
+// POST /economo/reintegro/{id}/invia
+func (a *App) handleInviaReintegro(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	if err := a.db.AvanzaStatoReintegro(id, "inviata", nil); err != nil {
+		logger.Error("invia reintegro %d: %v", id, err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	logger.Info("reintegro %d inviato a Ragioneria da %s", id, a.getUsername(r))
+	target := fmt.Sprintf("/economo/reintegro/%d", id)
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Redirect", target)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+// POST /economo/reintegro/{id}/liquida
+func (a *App) handleLiquidaReintegro(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	dataEmissione := strings.TrimSpace(r.FormValue("data_emissione_mandato"))
+	if err := a.db.AvanzaStatoReintegro(id, "liquidata", &dataEmissione); err != nil {
+		logger.Error("liquida reintegro %d: %v", id, err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	logger.Info("reintegro %d liquidato da %s", id, a.getUsername(r))
+	target := fmt.Sprintf("/economo/reintegro/%d", id)
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Redirect", target)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+// GET /economo/conto-giudiziale
+func (a *App) handleContoGiudiziale(w http.ResponseWriter, r *http.Request) {
+	annoStr := r.URL.Query().Get("anno")
+	anno := time.Now().Year()
+	if n, err := strconv.Atoi(annoStr); err == nil && n > 2000 {
+		anno = n
+	}
+	sezione, err := a.db.BuildContoGiudiziale(anno)
+	if err != nil {
+		logger.Error("conto giudiziale anno %d: %v", anno, err)
+		http.Error(w, "errore calcolo conto giudiziale", http.StatusInternalServerError)
+		return
+	}
+	switch r.URL.Query().Get("format") {
+	case "pdf":
+		w.Header().Set("Content-Type", "application/pdf")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="conto-giudiziale-%d.pdf"`, anno))
+		if err := report.WriteContoGiudizialePDF(w, sezione, a.brand().Name); err != nil {
+			logger.Error("conto giudiziale pdf: %v", err)
+		}
+		return
+	case "csv":
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="conto-giudiziale-%d.csv"`, anno))
+		if err := report.WriteContoGiudizialeCSV(w, sezione); err != nil {
+			logger.Error("conto giudiziale csv: %v", err)
+		}
+		return
+	}
+	a.render(w, r, "report-conto-giudiziale", a.viewData(r, map[string]any{
+		"Username":  a.getUsername(r),
+		"Role":      a.getRole(r),
+		"ActiveNav": "conto_giudiziale",
+		"Sezione":   sezione,
+		"Anno":      anno,
+	}))
+}
+
+// GET /economo/reintegro/{id}/pdf
+func (a *App) handleReintegroPDF(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	reintegro, err := a.db.GetReintegro(id)
+	if err != nil {
+		http.Error(w, "reintegro non trovato", http.StatusNotFound)
+		return
+	}
+	righe, err := a.db.BuildRichiestaReintegro(id)
+	if err != nil {
+		logger.Error("reintegro pdf build: %v", err)
+		http.Error(w, "errore generazione PDF", http.StatusInternalServerError)
+		return
+	}
+	filename := fmt.Sprintf("reintegro-%d-%d.pdf", reintegro.Anno, reintegro.Numero)
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	if err := report.WriteRichiestaReintegroPDF(w, *reintegro, righe, a.brand().Name); err != nil {
+		logger.Error("reintegro pdf: %v", err)
+	}
+}
+
+// GET /economo/reintegro/{id}/csv
+func (a *App) handleReintegroCSV(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	reintegro, err := a.db.GetReintegro(id)
+	if err != nil {
+		http.Error(w, "reintegro non trovato", http.StatusNotFound)
+		return
+	}
+	righe, err := a.db.BuildRichiestaReintegro(id)
+	if err != nil {
+		logger.Error("reintegro csv build: %v", err)
+		http.Error(w, "errore generazione CSV", http.StatusInternalServerError)
+		return
+	}
+	filename := fmt.Sprintf("reintegro-%d-%d.csv", reintegro.Anno, reintegro.Numero)
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	if err := report.WriteRichiestaReintegroCSV(w, *reintegro, righe); err != nil {
+		logger.Error("reintegro csv: %v", err)
+	}
+}
+
+// GET /economo/reintegro/{id}/allegati.zip
+func (a *App) handleReintegroZip(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "id non valido", http.StatusBadRequest)
+		return
+	}
+	reintegro, err := a.db.GetReintegro(id)
+	if err != nil {
+		http.Error(w, "reintegro non trovato", http.StatusNotFound)
+		return
+	}
+	righe, err := a.db.BuildRichiestaReintegro(id)
+	if err != nil {
+		logger.Error("reintegro zip build: %v", err)
+		http.Error(w, "errore generazione ZIP", http.StatusInternalServerError)
+		return
+	}
+	// Raccoglie spesa IDs univoci.
+	seen := map[int64]bool{}
+	var spesaIDs []int64
+	for _, riga := range righe {
+		if !seen[riga.SpesaID] {
+			seen[riga.SpesaID] = true
+			spesaIDs = append(spesaIDs, riga.SpesaID)
+		}
+	}
+	files := map[string][]byte{}
+	for _, spesaID := range spesaIDs {
+		allegati, err := a.db.GetAllegatiBySpesa(spesaID)
+		if err != nil {
+			logger.Error("reintegro zip allegati spesa %d: %v", spesaID, err)
+			continue
+		}
+		for _, all := range allegati {
+			blob, _, filename, err := a.db.GetAllegatoBlob(all.ID, spesaID)
+			if err != nil {
+				logger.Error("reintegro zip blob %d: %v", all.ID, err)
+				continue
+			}
+			zipName := fmt.Sprintf("pratica-%d__%s", spesaID, filename)
+			files[zipName] = blob
+		}
+	}
+	filename := fmt.Sprintf("reintegro-%d-%d-allegati.zip", reintegro.Anno, reintegro.Numero)
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	if err := report.WriteAllegatiZip(w, files); err != nil {
+		logger.Error("reintegro zip: %v", err)
+	}
 }
 
 func parseSpesaForm(r *http.Request) (models.SpesaEconomale, error) {

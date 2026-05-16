@@ -119,6 +119,73 @@ func (e *Emitter) EmitOrdine(p EventoOrdineParams) {
 	e.wake()
 }
 
+// EventoSpesaParams aggrega ciò che serve a comporre notifica in-app + email per le spese economali.
+type EventoSpesaParams struct {
+	Tipo         string   // valore canonico EventoSpesa (es. "spesa_inviata")
+	SpesaID      int64
+	SpesaSettore string
+	Motivazione  string
+	Destinatari  []string // username dei destinatari
+	Mittente     string
+	Messaggio    string // testo già localizzato per la notifica in-app
+	NoteExtra    string // es. motivazione rifiuto
+}
+
+// EmitSpesa genera una notifica in-app per ciascun destinatario e, se SMTP
+// è configurato e l'utente ha un'email, accoda l'invio email.
+func (e *Emitter) EmitSpesa(p EventoSpesaParams) {
+	if p.SpesaID <= 0 || len(p.Destinatari) == 0 {
+		return
+	}
+	brandName, brandLogo := e.brand()
+	for _, dest := range dedup(p.Destinatari) {
+		if dest == "" {
+			continue
+		}
+		spesaID := p.SpesaID
+		notifID, err := e.db.InsertNotifica(models.Notifica{
+			UtenteUsername: dest,
+			Tipo:           p.Tipo,
+			Messaggio:      p.Messaggio,
+			SpesaID:        &spesaID,
+		})
+		if err != nil {
+			logger.Error("notify: InsertNotifica utente=%s tipo=%s: %v", dest, p.Tipo, err)
+			continue
+		}
+		if e.cfg.SMTPServer == "" {
+			continue
+		}
+		u, err := e.db.GetUtente(dest)
+		if err != nil || strings.TrimSpace(u.Email) == "" {
+			continue
+		}
+		subject, body := email.BuildSpesaEmail(email.SpesaEmailParams{
+			Evento:       email.EventoSpesa(p.Tipo),
+			SpesaID:      p.SpesaID,
+			SpesaSettore: p.SpesaSettore,
+			Motivazione:  p.Motivazione,
+			Destinatario: dest,
+			Mittente:     p.Mittente,
+			NoteExtra:    p.NoteExtra,
+			BrandName:    brandName,
+			BrandLogoURL: brandLogo,
+			AppBaseURL:   e.appBase,
+		})
+		nid := notifID
+		if _, err := e.db.EnqueueEmail(models.EmailOutbox{
+			Destinatario: u.Email,
+			Soggetto:     subject,
+			CorpoHTML:    body,
+			Tipo:         p.Tipo,
+			NotificaID:   &nid,
+		}); err != nil {
+			logger.Error("notify: EnqueueEmail spesa utente=%s: %v", dest, err)
+		}
+	}
+	e.wake()
+}
+
 // EmitScorta notifica i magazzinieri quando un prodotto attraversa scorta_minima.
 func (e *Emitter) EmitScorta(s models.ScortaSottoSoglia) {
 	utenti, err := e.db.GetUtentiByRuolo("magazziniere")

@@ -154,6 +154,7 @@ type Notifica struct {
 	Messaggio      string
 	OrdineID       *int64
 	ProdottoID     *int64
+	SpesaID        *int64
 	Letta          bool
 	CreataIl       time.Time
 }
