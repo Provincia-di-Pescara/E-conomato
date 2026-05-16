@@ -1,8 +1,7 @@
 <div align="center">
 
-<img src="web/static/img/logo-wordmark.svg" alt="E-conomato" height="72" />
-
-# E-conomato
+<img src="web/static/img/logo-wordmark.svg#gh-light-mode-only" alt="E-conomato" height="72" />
+<img src="web/static/img/logo-wordmark-onnavy.svg#gh-dark-mode-only" alt="E-conomato" height="72" />
 
 **Sistema Gestionale di Magazzino e Cancelleria per Ente Pubblico**
 
