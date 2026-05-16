@@ -74,6 +74,18 @@
 - [x] **Avatar — colore deterministico per utente:** template func `avatarHue(username)` (FNV-1a → 0..359) applicata come gradiente inline `hsl(h, 65%, 55%) → hsl(h, 70%, 35%)` su tutti gli `.ec-avatar` di sidebar e header notifiche.
 - [x] **Vista mobile:** sotto 860px la sidebar diventa un drawer scorrevole (`translateX(-100%) → 0`) attivato da un burger in topbar; partial `_drawer.html` con define `drawer-burger` e `drawer-backdrop` inclusi in tutti i template con app-shell tranne `login`.
 
+## 10b. Multi-ruolo `magazziniere+economo`
+*Un utente LDAP membro di entrambi i gruppi `LDAP_MAGAZZINIERE_GROUP` e `LDAP_ECONOMO_GROUP` opera su entrambi i domini nella stessa sessione.*
+
+- [x] **Stringa composita in sessione:** `resolveRole` restituisce `"magazziniere+economo"` quando entrambi i flag LDAP sono attivi; la sessione (`sess.Values["role"]`) conserva la stringa intera.
+- [x] **Helper `hasRole(roleStr, target string) bool`** in `cmd/server/main.go`: sostituisce ogni check di uguaglianza diretta su `role` con lookup che riconosce la stringa composita.
+- [x] **`requireRole` aggiornato:** usa `hasRole` per consentire l'accesso alle rotte sia di magazzino che di economo con un singolo utente composito.
+- [x] **`dashboardURL`:** case `"magazziniere+economo"` → `/dashboard/magazzino-economo`.
+- [x] **Handler `handleDashboardMagazzinoEconomo`:** carica KPI da entrambi i domini (ordini in coda, scorte sotto soglia, capitoli attivi, spese in approvazione, stanziato anno).
+- [x] **Template `dashboard-magazzino-economo.html`** e **`_sidebar-magazzino-economo.html`**: sidebar con sezioni Magazziniere + Cassa Economale, dashboard unificata con sezione ordini e sezione capitoli.
+- [x] **Mock dev:** suffisso `.dual` (es. `mario.dual`) attiva entrambi i flag nel blocco mock di `Authenticate()`.
+- [x] **Fix UI sidebar composita:** `scrollbar-width: none` su `.ec-side` per eliminare barra grigia da scrollbar Windows sulla sidebar combinata.
+
 ## 11. Quality-of-life — dopo test utente
 *Bug e gap di feature emersi durante i test sul campo. La sezione raccoglie sia le fix che sono già state implementate, sia quelle ancora aperte.*
 
@@ -115,20 +127,20 @@
 
 ### 12.4 Repo methods (`internal/database/sqlite.go`)
 - [x] **CRUD capitoli:** `CreaCapitolo`, `AggiornaCapitolo`, `DisattivaCapitolo`, `GetCapitoloByID`, `GetCapitoliConSaldi`, `GetCapitoliAttivi`.
-- [ ] **Workflow spese:** `CreaSpesa` ✓, `AutorizzaSpesa`, `RifiutaSpesaFunzionario`, `ImpegnaSpesa` (transazione + validazione capienza capitolo), `RifiutaSpesaEconomo`, `AllegaPezzaAppoggio`, `RendicontaSpesa` (richiede `fornitore` + `data_documento` + `estremi_documento` obbligatori), `ChiudiSpesa` (scrive `importo_effettivo`, libera residuo, inserisce riga `movimenti_cassa` di tipo `uscita`).
-- [ ] **Liste:** `GetSpeseSettore` ✓, `GetSpeseUtente` ✓, `GetSpeseAll` ✓, `GetSpeseConStato` ✓, `GetSpeseDaImpegnare`, `GetSpeseDaChiudere`, `GetAllegato`.
+- [~] **Workflow spese:** `CreaSpesa` ✓ — `AutorizzaSpesa`, `RifiutaSpesaFunzionario`, `ImpegnaSpesa` (transazione + validazione capienza capitolo), `RifiutaSpesaEconomo`, `AllegaPezzaAppoggio`, `RendicontaSpesa` (richiede `fornitore` + `data_documento` + `estremi_documento` obbligatori), `ChiudiSpesa` (scrive `importo_effettivo`, libera residuo, inserisce riga `movimenti_cassa` di tipo `uscita`) — da completare.
+- [~] **Liste:** `GetSpeseSettore` ✓, `GetSpeseUtente` ✓, `GetSpeseAll` ✓, `GetSpeseConStato` ✓ — `GetSpeseDaImpegnare`, `GetSpeseDaChiudere`, `GetAllegato` da completare.
 - [ ] **Movimenti cassa:** `RegistraAnticipazione`, `RegistraReintegro` (join con spese chiuse del periodo selezionato), `RegistraRestituzioneTesoreria`, `GetSaldoCassa`, `GetGiornaleCassa(da, a)`.
 - [ ] **Reportistica:** `BuildRichiestaReintegro(periodo)` → `[]RigaReintegro` raggruppate per capitolo; `BuildContoGiudiziale(anno)` → `SezioneContoGiudiziale`.
 
 ### 12.5 Handler & Routing (`cmd/server/main.go`)
-- [x] **Rotte utente/funzionario:** `GET /spese`, `GET /spese/nuova`, `POST /spese`, `GET /spese/{id}` (scoping ruolo-aware nei handler).
+- [x] **Rotte utente/funzionario:** `GET /spese`, `GET /spese/nuova`, `POST /spese`, `GET /spese/{id}` (scoping ruolo-aware nei handler; economo vede tutte, funzionario vede settore, utente vede proprie).
 - [ ] **Transizioni:** `POST /spese/{id}/autorizza|rifiuta-funz|impegna|rifiuta-econ|rendiconta|chiudi`.
 - [ ] **Allegati:** `POST /spese/{id}/allegato`, `GET /spese/{id}/allegato/{aid}` (check accesso ruolo-aware).
 - [x] **CRUD capitoli:** `GET /capitoli`, `GET /capitoli/nuovo`, `POST /capitoli`, `GET /capitoli/{id}/edit`, `POST /capitoli/{id}`, `POST /capitoli/{id}/disattiva` (solo economo).
-- [x] **Dashboard:** `GET /dashboard-economo` con KPI capitoli attivi, spese in approvazione, totale stanziato + lista capitoli con saldi + ultime spese pending.
+- [x] **Dashboard:** `GET /dashboard-economo` con KPI capitoli attivi, spese in approvazione, totale stanziato + lista capitoli con saldi + ultime spese pending. `GET /dashboard/magazzino-economo` per utenti con ruolo composito.
 - [ ] **Reportistica:** `GET /economo/giornale-cassa` (filtro periodo, output HTML/CSV/PDF); `GET /economo/reintegro/nuovo`, `POST /economo/reintegro`, `GET /economo/reintegro/{id}`, `GET /economo/reintegro/{id}/pdf|csv|allegati.zip`; `GET /economo/conto-giudiziale?anno=YYYY` (HTML/PDF/CSV).
 - [ ] **Cassa:** `POST /economo/anticipazione`, `POST /economo/restituzione-tesoreria`.
-- [x] **Middleware:** `requireRole("economo")` sulle rotte capitoli + dashboard; `requireAuth` su `/spese*` con check ownership/settore nei handler. Anche post-login redirect mappa `economo` → `/dashboard-economo` in `dashboardURL()`.
+- [x] **Middleware:** `requireRole("economo")` + `hasRole()` sulle rotte capitoli + dashboard; `requireAuth` su `/spese*` con check ownership/settore nei handler. Post-login redirect: `economo` → `/dashboard-economo`, `magazziniere+economo` → `/dashboard/magazzino-economo`.
 
 ### 12.6 Notifiche
 - [ ] **`EventoSpesa` enum:** nuovo `internal/email/spese.go` con stati `inviata`, `autorizzata`, `rifiutata_funz`, `impegnata`, `rifiutata_econ`, `rendicontata`, `chiusa`.
@@ -138,13 +150,14 @@
 
 ### 12.7 Templates (`web/templates/`)
 - [x] **`dashboard-economo.html`:** KPI capitoli attivi, spese in approvazione, totale stanziato anno corrente + tabella capitoli con saldi (impegnato/speso/residuo) + lista ultime spese pending. Mancano progress bar capienza, saldo cassa e ultimi reintegri (slice futuro: dipendono da `GetSaldoCassa` / reintegri).
-- [ ] **`_sidebar-economo.html`** ✓ (Dashboard, Capitoli, Spese cliccabili; Giornale cassa, Reintegri, Conto giudiziale come placeholder disabled). **`notifiche-economo.html`** mancante.
-- [ ] **Liste:** `spese-utente.html` ✓ (template unico ruolo-aware: utente vede proprie, funzionario vede settore, economo vede tutte). `spese-funzionario.html` e `spese-economo.html` non separate (decisione: un singolo template condizionale è sufficiente).
-- [x] **Dettaglio:** `spesa-detail.html` con sezioni role-aware (campi lifecycle mostrati solo se valorizzati).
-- [ ] **Form:** `spesa-form.html` ✓ (creazione: motivazione, importo presunto, tipo pagamento). `spesa-rendiconta-form.html` mancante (slice rendicontazione).
+- [x] **`_sidebar-economo.html`**: Dashboard, Capitoli, Spese cliccabili; Giornale cassa, Reintegri, Conto giudiziale come placeholder disabled. **`notifiche-economo.html`** mancante.
+- [x] **`_sidebar-magazzino-economo.html`** e **`dashboard-magazzino-economo.html`**: sidebar combinata con sezioni Magazziniere + Cassa Economale, dashboard unificata con KPI da entrambi i domini.
+- [x] **Liste:** `spese-utente.html` — template unico ruolo-aware: utente vede proprie, funzionario vede settore, economo/magazziniere+economo vedono tutte. Adeguato anche per il ruolo composito con `or (eq .Role "economo") (eq .Role "magazziniere+economo")`.
+- [x] **Dettaglio:** `spesa-detail.html` con sezioni role-aware (campi lifecycle mostrati solo se valorizzati). Ruolo composito supportato.
+- [x] **Form:** `spesa-form.html` (creazione: motivazione, importo presunto, tipo pagamento). `spesa-rendiconta-form.html` mancante (slice rendicontazione).
 - [x] **Capitoli:** `capitoli.html` e `capitolo-form.html` (anno, codice PEG, descrizione, importo stanziato, toggle attivo in edit).
 - [ ] **Report:** `report-giornale-cassa.html`, `report-reintegro.html`, `report-conto-giudiziale.html` (Modello 21).
-- [x] **Coerenza UI:** design system `ec-*` riusato, sidebar partial `_sidebar-economo` parsato per i template economo, topbar bell e drawer mobile inclusi.
+- [x] **Coerenza UI:** design system `ec-*` riusato, sidebar partial `_sidebar-economo` / `_sidebar-magazzino-economo` parsati per i template economo, topbar bell e drawer mobile inclusi.
 
 ### 12.8 Upload allegati
 - [ ] **Multipart:** `r.ParseMultipartForm(10 << 20)` (limite 10 MB).

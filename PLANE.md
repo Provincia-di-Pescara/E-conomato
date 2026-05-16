@@ -288,7 +288,7 @@ A fine anno finanziario (31/12), il Fondo va chiuso e i contanti non spesi vanno
 
 Per minimizzare l'impatto sugli utenti e garantire un'adozione fluida, l'implementazione segue questo schema:
 
-- **Fase 1 (attuale)** — Consolidamento della gestione del magazzino fisico (ordini a catalogo).
-- **Fase 2 (Estensione silente)** — Rilascio dello schema di database e degli endpoint protetti per i test lato backend, senza esposizione di UI a utenti non autorizzati.
-- **Fase 3 (Go-Live Cassa)** — Attivazione della tab "Richiedi Spesa" lato utente e funzionario, dashboard Economo, formazione mirata all'Ufficio Economato e ai Funzionari per l'uso dei nuovi cruscotti.
-- **Fase 4 (Reportistica Giudiziale)** — Generazione dei tre report ufficiali (Giornale di Cassa, Richiesta di Reintegro, Conto Giudiziale) con export CSV/PDF/ZIP, in modo da rendere la piattaforma immediatamente conforme ai controlli della Corte dei Conti.
+- **Fase 1** ✅ — Consolidamento della gestione del magazzino fisico (ordini a catalogo). Completata e in produzione a partire da v0.5.
+- **Fase 2** ✅ — Schema DB Cassa Economale (`capitoli_spesa`, `spese_economali`, `allegati_spesa`, `movimenti_cassa`, `reintegri`, `reintegro_spese`), ruolo Economo via LDAP, modelli Go, repo methods CRUD capitoli, endpoint dashboard/capitoli protetti da `requireRole("economo")`. Completata in v0.6.0.
+- **Fase 3** 🔄 *(in corso — v0.6.x)* — UI operativa: flusso richiesta spesa utente/funzionario, dashboard Economo con KPI e capienza capitoli in tempo reale, dettaglio pratica role-aware, supporto multi-ruolo `magazziniere+economo`. Da completare: transizioni workflow (autorizza/impegna/rendiconta/chiudi), allegati BLOB, notifiche email spese.
+- **Fase 4** — Generazione dei tre report ufficiali (Giornale di Cassa, Richiesta di Reintegro, Conto Giudiziale) con export CSV/PDF/ZIP, in modo da rendere la piattaforma immediatamente conforme ai controlli della Corte dei Conti.

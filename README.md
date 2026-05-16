@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="web/static/img/logo-icon.svg" alt="E-conomato Logo" width="120" />
+<img src="web/static/img/favicon.svg" alt="E-conomato Logo" width="120" />
 
 # E-conomato
 
@@ -19,7 +19,7 @@
 E-conomato è un gestionale web sviluppato su misura per le pubbliche amministrazioni. È progettato per digitalizzare e tracciare le richieste di cancelleria e materiale di consumo interno.
 Consente agli uffici di effettuare ordini, ai funzionari di approvarli e al magazzino di gestire scorte ed evasioni con scarico automatico dei costi tramite logica FIFO.
 
-Il modulo **Cassa Economale** (in roadmap) estende la piattaforma alla gestione del Fondo Economale per le piccole spese urgenti in contanti o con carta dipartimentale, in conformità con il TUEL (D.Lgs. 267/2000) e con i requisiti di Resa del Conto verso la Corte dei Conti (Modello 21 D.P.R. 194/1996).
+Il modulo **Cassa Economale** estende la piattaforma alla gestione del Fondo Economale per le piccole spese urgenti in contanti o con carta dipartimentale. Lo schema di database, il ruolo Economo, le dashboard, la gestione Capitoli di Spesa e il flusso richiesta/visualizzazione sono operativi; le transizioni di workflow avanzate, gli allegati e la reportistica giudiziale sono in sviluppo attivo. Il modulo è conforme al TUEL (D.Lgs. 267/2000) e ai requisiti di Resa del Conto verso la Corte dei Conti (Modello 21 D.P.R. 194/1996).
 
 ---
 
@@ -34,10 +34,10 @@ Il sistema è un monolita moderno, leggero e ultra-veloce:
 
 ## 👥 Ruoli e Permessi
 L'autenticazione è centralizzata tramite Active Directory (LDAP). I ruoli sono associati in base ai gruppi e ai settori di appartenenza:
-- **Utente Base**: Naviga il catalogo, inserisce richieste nel carrello e visualizza lo storico dei propri ordini. Con il modulo Cassa Economale può inoltre presentare richieste di anticipo di spesa e caricare le pezze d'appoggio.
-- **Funzionario**: Approva, riduce le quantità o rifiuta (motivandolo) le richieste del proprio settore di competenza. Le richieste personali dei funzionari sono invece auto-approvate. Autorizza anche le richieste di spesa economale del settore.
-- **Magazziniere**: Gestisce l'anagrafica, carica fatture/DDT (creando "lotti" di acquisto), evade le richieste, monitora le scorte minime, conclude il flusso di consegna e accede alla reportistica finanziaria (export CSV e grafici Chart.js).
-- **Economo** *(nuovo ruolo, in roadmap)*: Agente Contabile dell'Ente. Gestisce i Capitoli di Spesa (P.E.G.), valida e impegna le richieste di anticipo, chiude le pratiche con importo effettivo e produce i report ufficiali (Giornale di Cassa, Richiesta di Reintegro, Conto Giudiziale).
+- **Utente Base**: Naviga il catalogo, inserisce richieste nel carrello e visualizza lo storico dei propri ordini. Può presentare richieste di spesa economale e seguirne l'iter direttamente dalla propria dashboard.
+- **Funzionario**: Approva, riduce le quantità o rifiuta (motivandolo) le richieste del proprio settore di competenza. Le richieste personali dei funzionari sono invece auto-approvate. Visualizza e autorizza anche le richieste di spesa economale del settore.
+- **Magazziniere**: Gestisce l'anagrafica, carica fatture/DDT (creando "lotti" di acquisto), evade le richieste, monitora le scorte minime, conclude il flusso di consegna e accede alla reportistica finanziaria (export CSV e grafici). Può operare in modo combinato con il ruolo Economo in un'unica sessione (`magazziniere+economo`).
+- **Economo**: Agente Contabile dell'Ente. Gestisce i Capitoli di Spesa (P.E.G.) con controllo capienza in tempo reale, valida e impegna le richieste di anticipo, chiude le pratiche con importo effettivo e produce i report ufficiali (Giornale di Cassa, Richiesta di Reintegro, Conto Giudiziale). Ruolo assegnato via gruppo LDAP (`LDAP_ECONOMO_GROUP`).
 
 ---
 
@@ -48,7 +48,7 @@ L'autenticazione è centralizzata tramite Active Directory (LDAP). I ruoli sono 
 4. **Pronto al Ritiro**: L'ordine viene confezionato e una notifica email avvisa l'utente (Stato: `pronto`).
 5. **Consegna**: Al momento del ritiro fisico, l'ordine viene chiuso (Stato: `ritirato`).
 
-### Iter della Spesa Economale *(modulo Cassa Economale — in roadmap)*
+### Iter della Spesa Economale *(modulo Cassa Economale)*
 1. **Richiesta**: L'utente compila motivazione e importo presunto (Stato: `in_approvazione`).
 2. **Autorizzazione**: Il funzionario del settore approva o rifiuta (Stato: `autorizzata` / `rifiutata_funz`).
 3. **Impegno e Avvallo**: L'Economo assegna il Capitolo di Spesa, verifica la capienza e autorizza l'anticipo (Stato: `impegnata`). L'importo presunto viene scalato come budget impegnato.
@@ -60,15 +60,15 @@ L'autenticazione è centralizzata tramite Active Directory (LDAP). I ruoli sono 
 ## 🚀 Roadmap e Checklist di Sviluppo
 *(Tratta dal documento `TODO.md` interno)*
 - [x] **Setup Iniziale & Database**: Struttura Go, Modelli SQLite, File env.
-- [ ] **Autenticazione e RBAC**: Integrazione Active Directory/LDAP e Middleware ruoli.
-- [ ] **Catalogo & Magazzino**: CRUD Prodotti e Categorie, upload BLOB, caricamento merce.
-- [ ] **Negozio & Carrello**: UI asincrona via HTMX e checkout.
-- [ ] **Workflow Funzionari**: Dashboard di approvazione per settore.
-- [ ] **Motore di Evasione FIFO**: Logica per il prelievo lotti ed eventuale evasione parziale.
-- [ ] **Notifiche Transazionali**: Email asincrone per i cambi di stato dell'ordine.
-- [ ] **Reportistica**: Dashboard direzionale, grafici e export CSV a disposizione del Magazziniere.
-- [ ] **Modulo Cassa Economale**: Gestione del Fondo Economale (richiesta/autorizzazione/impegno/rendicontazione), Capitoli di Spesa PEG con calcolo capienza in tempo reale, nuovo ruolo Economo via gruppo LDAP, allegati scontrini come BLOB in SQLite, reportistica giudiziale (Giornale di Cassa, Richiesta di Reintegro, Conto Giudiziale — Modello 21) con export CSV/PDF e bundle ZIP delle pezze d'appoggio.
-- [ ] **Deploy**: Configurazione Docker multi-stage e script di backup.
+- [x] **Autenticazione e RBAC**: Integrazione Active Directory/LDAP e Middleware ruoli. Supporto ruolo composito `magazziniere+economo`.
+- [x] **Catalogo & Magazzino**: CRUD Prodotti e Categorie, upload BLOB, caricamento merce.
+- [x] **Negozio & Carrello**: UI asincrona via HTMX e checkout.
+- [x] **Workflow Funzionari**: Dashboard di approvazione per settore.
+- [x] **Motore di Evasione FIFO**: Logica per il prelievo lotti ed eventuale evasione parziale.
+- [x] **Notifiche Transazionali**: In-app + email asincrone via outbox durabile con backoff esponenziale.
+- [x] **Reportistica**: Dashboard direzionale, grafici `ec-bar`, export CSV magazziniere.
+- [~] **Modulo Cassa Economale** *(in corso — Fase 3)*: Schema DB, ruolo Economo, dashboard, Capitoli di Spesa con capienza in tempo reale, flusso richiesta/visualizzazione operativo. Mancano: transizioni workflow avanzate (impegno, rendicontazione, chiusura), allegati BLOB, notifiche email spese, reportistica giudiziale (Giornale di Cassa, Reintegri, Conto Giudiziale — Modello 21).
+- [~] **Deploy**: Dockerfile multi-stage ✓, Docker Compose ✓. Manca: script di backup automatico.
 
 ---
 
