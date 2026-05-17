@@ -148,83 +148,46 @@ return t.Format("02 Jan 2006 15:04")
 "avatarHue":  avatarHue,
 }
 
-// I template magazziniere riusano la sidebar tramite il partial _sidebar-magazzino.
-// Lo associamo a parse-time così che {{template "sidebar-magazzino" .}} risolva.
-magazzinoTemplates := map[string]bool{
-"magazzino":             true,
-"dashboard-magazzino":   true,
-"prodotto-form":         true,
-"lotto-form":            true,
-"impostazioni":          true,
-"fornitori":             true,
-"fornitore-form":        true,
-"acquisti":              true,
-"acquisto-detail":       true,
-"storico-ordini":        true,
-"notifiche-magazzino":   true,
-"report-magazzino":      true,
+// Tutti i sidebar partial sono inclusi in ogni template con app-shell.
+// Avere define inutilizzate non costa nulla; dimenticarne una causa bug silenziosi.
+allSidebars := []string{
+filepath.Join(baseDir, "_sidebar-magazzino.html"),
+filepath.Join(baseDir, "_sidebar-economo.html"),
+filepath.Join(baseDir, "_sidebar-magazzino-economo.html"),
+filepath.Join(baseDir, "_sidebar-funzionario.html"),
+filepath.Join(baseDir, "_sidebar-utente.html"),
 }
-// Template del modulo Cassa Economale (sidebar dedicata).
-// I template multi-ruolo (spese-utente, spesa-form, spesa-detail) caricano
-// comunque la sidebar economo perché renderizzano condizionalmente nel template.
-economoTemplates := map[string]bool{
-"dashboard-economo":       true,
-"capitoli":                true,
-"capitolo-form":           true,
-"spese-utente":            true,
-"spesa-form":              true,
-"spesa-detail":            true,
-"report-giornale-cassa":   true,
-"reintegri":               true,
-"reintegro-form":          true,
-"reintegro-detail":        true,
-"report-conto-giudiziale": true,
-}
-// Template con doppia sidebar (magazziniere + economo).
-combinedTemplates := map[string]bool{
-"dashboard-magazzino-economo": true,
-}
-sidebarMagazzino := filepath.Join(baseDir, "_sidebar-magazzino.html")
-sidebarEconomo := filepath.Join(baseDir, "_sidebar-economo.html")
-sidebarCombinata := filepath.Join(baseDir, "_sidebar-magazzino-economo.html")
 prenotPartial := filepath.Join(baseDir, "_prenotazione-form.html")
 topbarBell := filepath.Join(baseDir, "_topbar-bell.html")
 drawerPartial := filepath.Join(baseDir, "_drawer.html")
 notifBody := filepath.Join(baseDir, "_notifiche-body.html")
 
-names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino", "dashboard-magazzino-economo", "prodotto-form", "lotto-form", "impostazioni", "fornitori", "fornitore-form", "acquisti", "acquisto-detail", "storico-ordini", "notifiche-utente", "notifiche-funzionario", "notifiche-magazzino", "report-magazzino", "dashboard-economo", "capitoli", "capitolo-form", "spese-utente", "spesa-form", "spesa-detail", "report-giornale-cassa", "reintegri", "reintegro-form", "reintegro-detail", "report-conto-giudiziale"}
-// template senza topbar (e quindi senza bell)
-noTopbar := map[string]bool{"login": true, "dashboard": true}
+names := []string{"login", "dashboard", "magazzino", "dashboard-utente", "dashboard-funzionario", "dashboard-magazzino", "dashboard-magazzino-economo", "prodotto-form", "lotto-form", "impostazioni", "fornitori", "fornitore-form", "acquisti", "acquisto-detail", "storico-ordini", "notifiche-utente", "notifiche-funzionario", "notifiche-magazzino", "report-magazzino", "dashboard-economo", "capitoli", "capitolo-form", "spese-utente", "spesa-form", "spesa-detail", "report-giornale-cassa", "reintegri", "reintegro-form", "reintegro-detail", "report-conto-giudiziale", "scorte"}
+// login: solo il template, nessun partial
+// dashboard (role-router): drawer sì (usa drawer-burger/backdrop), sidebar/bell no
+noSidebars    := map[string]bool{"login": true, "dashboard": true}
+noTopbarBell  := map[string]bool{"login": true, "dashboard": true}
+noDrawer      := map[string]bool{"login": true}
 notifiche := map[string]bool{
 "notifiche-utente":      true,
 "notifiche-funzionario": true,
 "notifiche-magazzino":   true,
 }
+prenotazione := map[string]bool{"dashboard-utente": true, "dashboard-funzionario": true}
 a.templates = make(map[string]*template.Template, len(names))
 for _, name := range names {
 files := []string{filepath.Join(baseDir, name+".html")}
-if combinedTemplates[name] {
-files = append(files, sidebarMagazzino, sidebarEconomo, sidebarCombinata)
-} else {
-if magazzinoTemplates[name] {
-// Include anche la sidebar combinata: sidebar-magazzino vi delega per ruoli compositi.
-files = append(files, sidebarMagazzino, sidebarCombinata)
+if !noSidebars[name] {
+files = append(files, allSidebars...)
 }
-if economoTemplates[name] {
-// Include anche la sidebar combinata: sidebar-economo vi delega per ruoli compositi.
-files = append(files, sidebarEconomo, sidebarCombinata)
-}
-}
-// dashboard-utente e dashboard-funzionario possono includere il form di prenotazione
-if name == "dashboard-utente" || name == "dashboard-funzionario" {
-files = append(files, prenotPartial)
-}
-if !noTopbar[name] {
+if !noTopbarBell[name] {
 files = append(files, topbarBell)
 }
-// Tutti i template con app-shell (escluso login) caricano il drawer/burger mobile.
-if name != "login" {
+if !noDrawer[name] {
 files = append(files, drawerPartial)
+}
+if prenotazione[name] {
+files = append(files, prenotPartial)
 }
 if notifiche[name] {
 files = append(files, notifBody)

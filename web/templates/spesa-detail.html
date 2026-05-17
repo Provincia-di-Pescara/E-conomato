@@ -12,9 +12,10 @@
   <link rel="stylesheet" href="/static/css/style.css" />
 </head>
 <body>
-<div class="ec-app{{if and (ne .Role "economo") (ne .Role "magazziniere+economo") (ne .Role "funzionario")}} ec-app--solo{{end}}">
+<div class="ec-app{{if and (ne .Role "economo") (ne .Role "magazziniere+economo") (ne .Role "funzionario") (ne .Role "user")}} ec-app--solo{{end}}">
   {{if or (eq .Role "economo") (eq .Role "magazziniere+economo")}}{{template "sidebar-economo" .}}{{end}}
   {{if eq .Role "funzionario"}}{{template "sidebar-funzionario" .}}{{end}}
+  {{if eq .Role "user"}}{{template "sidebar-utente" .}}{{end}}
   <div class="ec-main">
     <header class="ec-topbar">
       {{if or (eq .Role "economo") (eq .Role "magazziniere+economo") (eq .Role "funzionario")}}{{template "drawer-burger" .}}{{end}}
