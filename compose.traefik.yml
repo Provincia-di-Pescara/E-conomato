@@ -1,0 +1,42 @@
+# OPZIONALE: esposizione tramite un Traefik v3 gia' in esecuzione sullo stesso host
+# (provider docker), al posto della porta pubblicata APP_PORT.
+#
+# Uso: docker compose -f compose.yml -f compose.traefik.yml up -d
+# Portainer (stack Git): Compose path compose.yml, Additional paths compose.traefik.yml.
+#
+# Variabili dello stack:
+#   TRAEFIK_HOST          (obbligatoria) hostname dell'applicazione, es. economato.ente.it
+#   TRAEFIK_MIDDLEWARES   middleware gia' definiti in Traefik, separati da virgola
+#                         (es. un ipallowlist per la sola rete interna: lan-only@docker).
+#                         Default: nessuno
+#   TRAEFIK_NETWORK       rete docker esterna condivisa con Traefik (default: proxy)
+#   TRAEFIK_ENTRYPOINT    entrypoint HTTPS di Traefik (default: websecure)
+#   TRAEFIK_ROUTER_PREFIX nome di router e service, unico per istanza se piu' stack
+#                         E-conomato girano sullo stesso Traefik (default: e-conomato)
+#
+# APP_PORT resta la porta su cui l'applicazione ascolta nel container: Traefik la usa
+# come porta del service.
+#
+# TLS: tls=true usa il certificato di default di Traefik (o il resolver configurato
+# sull'entrypoint). APP_BASE_URL va impostata a https://<TRAEFIK_HOST>.
+
+services:
+  e-conomato:
+    # Nessuna porta sull'host: si entra solo da Traefik.
+    ports: !reset []
+    networks:
+      - default
+      - traefik
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-proxy}
+      - traefik.http.routers.${TRAEFIK_ROUTER_PREFIX:-e-conomato}.rule=Host(`${TRAEFIK_HOST:?TRAEFIK_HOST obbligatoria}`)
+      - traefik.http.routers.${TRAEFIK_ROUTER_PREFIX:-e-conomato}.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.${TRAEFIK_ROUTER_PREFIX:-e-conomato}.tls=true
+      - traefik.http.routers.${TRAEFIK_ROUTER_PREFIX:-e-conomato}.middlewares=${TRAEFIK_MIDDLEWARES:-}
+      - traefik.http.services.${TRAEFIK_ROUTER_PREFIX:-e-conomato}.loadbalancer.server.port=${APP_PORT:-8080}
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-proxy}
